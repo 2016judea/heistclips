@@ -63,3 +63,8 @@ test("parseInput reads Kick channels and Kick VOD links", async () => {
   assert.equal(kickRate([{ t: 0 }, { t: 1 }]), 0.4); // under the 25 cap: count over the 5 s window
   assert.equal(kickRate(Array.from({ length: 25 }, (_, i) => ({ t: Math.floor(i / 12) }))), 12); // capped: count over span
 });
+
+test("crude chat lines never become a hook", () => {
+  const h = hooks({ event_type: "funny", chat_ratio: 4, phrase: topPhrase([{ text: "willy bussy" }, { text: "willy bussy" }]) }, "xQc");
+  assert.ok(!h.some((x) => /bussy/i.test(x)));
+});

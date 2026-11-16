@@ -96,7 +96,7 @@ async function analyse(vod, chan) {
   const live = vod.status === "RECORDING";
   say(sourceCard(vod, chan) +
     (live ? `<div class="livebar" id="livebar"><span class="pulse"></span><span id="livetxt">Connecting to chat…</span></div><canvas class="curve" id="livecurve" width="900" height="70"></canvas>` : "") +
-    `<div class="status" id="st"><span>Reading chat${live ? " so far" : ""}…</span><span class="bar"><i id="pb"></i></span><span id="pt"></span></div>
+    `<div class="status" id="st"><span>Reading chat${live ? " so far" : ""}…${vod.platform === "kick" ? " Kick limits how fast chat can be read, so this takes about 2 minutes." : ""}</span><span class="bar"><i id="pb"></i></span><span id="pt"></span></div>
 <canvas class="curve" id="curve" width="900" height="70"></canvas>
 <p class="small"><span class="credit">${creditText()}</span></p>
 <ol class="moments" id="moments"></ol>`);
