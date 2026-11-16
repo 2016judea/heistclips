@@ -2,6 +2,7 @@
 import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitchTime } from "./twitch.js";
 import { Clipper, pickMime } from "./render.js";
 import { LiveChat, recordingStart } from "./live.js";
+import { getKickChannel, getKickVod } from "./kick.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const h = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -45,10 +46,22 @@ let current = { vod: null, chan: null, moments: [], clipper: null, live: null };
 async function start(q) {
   const inp = parseInput(q);
   if (inp.kind === "unknown") return say(`<p>Paste a Twitch channel (like <b>twitch.tv/xqc</b>) or a VOD link (<b>twitch.tv/videos/…</b>).</p>`);
-  if (inp.kind === "kick") return say(`<div class="note">Kick isn’t supported yet; Twitch is. Most GTA streamers simulcast to Twitch: try their Twitch name.</div>`);
   say(`<div class="status">Looking up ${h(inp.login || inp.id)}…</div>`);
   ph("clip_lookup", { kind: inp.kind });
   try {
+    if (inp.kind === "kick") {
+      const chan = await getKickChannel(inp.login);
+      if (!chan) return say(`<p>No Kick channel called <b>${h(inp.login)}</b>.</p>`);
+      current.chan = chan;
+      const vod = chan.live_vod || chan.vods[0];
+      if (!vod) return say(`<div class="note"><b>${h(chan.name)}</b> has no saved Kick streams to read.</div>`);
+      return analyse(vod, chan);
+    }
+    if (inp.kind === "kickvod") {
+      const vod = await getKickVod(inp.id);
+      if (!vod) return say(`<p>That Kick video doesn’t exist or isn’t public.</p>`);
+      return analyse(vod, null);
+    }
     if (inp.kind === "channel") {
       const chan = await getChannel(inp.login);
       if (!chan) return say(`<p>No Twitch channel called <b>${h(inp.login)}</b>.</p>`);
@@ -70,16 +83,16 @@ function say(html) { app.innerHTML = html; }
 function sourceCard(vod, chan) {
   const live = vod.status === "RECORDING";
   const others = chan ? chan.vods.filter((v) => v.id !== vod.id).slice(0, 4) : [];
-  const thumb = live ? `https://static-cdn.jtvnw.net/previews-ttv/live_user_${vod.channel}-640x360.jpg` : vod.thumb;
+  const thumb = live && vod.platform !== "kick" ? `https://static-cdn.jtvnw.net/previews-ttv/live_user_${vod.channel}-640x360.jpg` : vod.thumb;
   return `<div class="src"><img src="${h(thumb || "")}" alt="" onerror="this.style.visibility='hidden'">
 <div class="t"><b>${h(vod.title || "Untitled stream")}</b>
-<span class="small">${h(vod.channel_name)} · ${h(vod.game || "")} · ${clock(vod.length)}${live ? ' · <b class="livedot">LIVE</b>' : ""}</span>
-${others.length ? `<span class="small">Other streams: ${others.map((v) => `<a href="/clip?q=${v.id}">${h(new Date(v.created_at).toUTCString().slice(5, 11))}</a>`).join(" · ")}</span>` : ""}</div></div>`;
+<span class="small">${vod.platform === "kick" ? "Kick · " : ""}${h(vod.channel_name)} · ${h(vod.game || "")} · ${clock(vod.length)}${live ? ' · <b class="livedot">LIVE</b>' : ""}</span>
+${others.length ? `<span class="small">Other streams: ${others.map((v) => `<a href="/clip?q=${encodeURIComponent(v.platform === "kick" ? v.url : v.id)}">${h(new Date(v.created_at).toUTCString().slice(5, 11))}</a>`).join(" · ")}</span>` : ""}</div></div>`;
 }
 
 async function analyse(vod, chan) {
   current.vod = vod;
-  if (!vod.cdn) return say(sourceCard(vod, chan) + `<div class="note">This stream’s video isn’t public (subscriber-only or deleted), so it can’t be cut.</div>`);
+  if (!playlistPath(vod)) return say(sourceCard(vod, chan) + `<div class="note">This stream’s video isn’t public (subscriber-only or deleted), so it can’t be cut.</div>`);
   const live = vod.status === "RECORDING";
   say(sourceCard(vod, chan) +
     (live ? `<div class="livebar" id="livebar"><span class="pulse"></span><span id="livetxt">Connecting to chat…</span></div><canvas class="curve" id="livecurve" width="900" height="70"></canvas>` : "") +
@@ -151,7 +164,7 @@ function momentLi(m, i) {
 <div class="mhead"><b>${clock(m.t_start)} – ${clock(m.t_end)}</b><span class="small">${m.live ? "just now" : "#" + (i + 1)}</span></div>
 <div class="chips">${chips(m)}</div>
 <div class="quote">${topLines(m) || "&nbsp;"}</div>
-<div class="actions"><button class="btn sm" data-act="cut">Cut this</button><a class="btn sm ghost" href="https://www.twitch.tv/videos/${vod.id}?t=${twitchTime(m.t_start)}" target="_blank" rel="noopener">Watch on Twitch</a><button class="btn sm ghost" data-act="hide" title="Not a good pick">✕ Skip</button><a class="reqlink" href="/requests">Missing something? Request it</a></div>
+<div class="actions"><button class="btn sm" data-act="cut">Cut this</button><a class="btn sm ghost" href="${h(m.url)}" target="_blank" rel="noopener">Watch on ${vod.platform === "kick" ? "Kick" : "Twitch"}</a><button class="btn sm ghost" data-act="hide" title="Not a good pick">✕ Skip</button><a class="reqlink" href="/requests">Missing something? Request it</a></div>
 <div class="ed"></div></li>`;
 }
 
@@ -239,10 +252,11 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
   syncCam();
   const url = playlistPath(current.vod, "chunked");
   try {
+    if (current.vod.platform === "kick" && m.live) current.vod.length = (Date.now() - current.vod.start_ms) / 1000;
     await cl.load(url, win.s);
     vstat.textContent = `${cl.video.videoWidth}×${cl.video.videoHeight} source · renders at 1080×1920`;
   } catch (e) {
-    try { await cl.load(playlistPath(current.vod, "720p60"), win.s); vstat.textContent = "720p source"; }
+    try { if (current.vod.platform === "kick") throw e; await cl.load(playlistPath(current.vod, "720p60"), win.s); vstat.textContent = "720p source"; }
     catch (e2) { vstat.textContent = "Couldn’t load the video: " + e.message + (m.live ? " (live moments need ~30 s before the video catches up; try again shortly)" : ""); return; }
   }
   $("#pv", ed).onclick = async () => { ph("clip_preview", { layout: cl.opts.layout }); $("#pv", ed).disabled = true; try { await cl.playWindow(win.s, win.e); } finally { $("#pv", ed).disabled = false; } };
@@ -275,7 +289,8 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
 async function startLive(vod) {
   const url = playlistPath(vod, "chunked");
   let rs;
-  try { rs = await recordingStart(url); } catch (e) { rs = {}; }
+  if (vod.platform === "kick") rs = { start: vod.start_ms };
+  else try { rs = await recordingStart(url); } catch (e) { rs = {}; }
   if (!rs.start) { $("#livetxt").textContent = "Live, but couldn’t sync to the recording; moments from chat so far are below."; return; }
   const lc = new LiveChat(vod.channel, {
     vod, recordingStart: rs.start,

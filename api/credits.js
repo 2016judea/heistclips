@@ -2,7 +2,8 @@
 // licence key; claiming it verifies the session with Stripe and records the pack once.
 // Ledger rows live in Blob under keyed-hash paths (public store, unguessable names).
 import { getJSON, putJSON, secretPath } from "../lib/store.js";
-import { FREE_CLIPS, PACKS } from "../lib/render.js";
+import { FREE_CLIPS } from "../lib/render.js";
+import { grant } from "./stripe-webhook.js";
 
 async function stripeSession(id) {
   const r = await fetch("https://api.stripe.com/v1/checkout/sessions/" + encodeURIComponent(id), { headers: { authorization: "Bearer " + process.env.STRIPE_SECRET_KEY } });
@@ -40,9 +41,8 @@ export default async function handler(req, res) {
     if (existing) { const { state } = await read(d, id); return res.end(JSON.stringify({ key: id, ...state })); }
     const s = await stripeSession(id);
     if (!s || s.payment_status !== "paid") return res.end(JSON.stringify({ error: "payment not confirmed" }));
-    const pack = PACKS.find((p) => p.id === (s.metadata && s.metadata.pack));
-    if (!pack) return res.end(JSON.stringify({ error: "unknown pack" }));
-    await putJSON(secretPath("credits/paid", id), { granted: pack.clips, used: 0, pack: pack.id, at: new Date().toISOString() }, { maxAge: 0 });
+    const g = await grant(s, "claim");
+    if (!g.granted && g.why !== "already granted") return res.end(JSON.stringify({ error: g.why }));
     const { state } = await read(d, id);
     return res.end(JSON.stringify({ key: id, ...state }));
   }

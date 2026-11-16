@@ -7,6 +7,7 @@ test("parseInput tells channels, VODs and Kick apart", () => {
   assert.deepEqual(parseInput("twitch.tv/xQc"), { kind: "channel", login: "xqc" });
   assert.deepEqual(parseInput("xqc"), { kind: "channel", login: "xqc" });
   assert.equal(parseInput("https://kick.com/adinross").kind, "kick");
+  assert.equal(parseInput("https://youtube.com/live/abc").kind, "unknown");
 });
 
 // Synthetic chat: 1 msg/s, then a 20-second burst at 12 msg/s starting at t=1000.
@@ -52,4 +53,13 @@ test("hooks: 3-5 distinct lines, no raw laugh spam", () => {
   const h = hooks({ event_type: "funny", chat_ratio: 6, phrase: topPhrase([{ text: "KKKKKKKK" }, { text: "KKKKKKKK" }]) }, "spkclb");
   assert.ok(h.length >= 3 && h.length <= 5);
   assert.ok(!h.some((x) => /KKKK/.test(x)));
+});
+
+test("parseInput reads Kick channels and Kick VOD links", async () => {
+  assert.deepEqual(parseInput("https://kick.com/xqc"), { kind: "kick", login: "xqc" });
+  assert.deepEqual(parseInput("kick.com/xqc/videos/381c9cde-9247-497f-854c-f498bc3a488e"), { kind: "kickvod", id: "381c9cde-9247-497f-854c-f498bc3a488e" });
+  assert.deepEqual(parseInput("kick:Sxb"), { kind: "kick", login: "sxb" });
+  const { kickRate } = await import("../public/js/kick.js");
+  assert.equal(kickRate([{ t: 0 }, { t: 1 }]), 0.4); // under the 25 cap: count over the 5 s window
+  assert.equal(kickRate(Array.from({ length: 25 }, (_, i) => ({ t: Math.floor(i / 12) }))), 12); // capped: count over span
 });

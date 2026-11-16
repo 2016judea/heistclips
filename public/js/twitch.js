@@ -2,6 +2,8 @@
 // Source and Moment entities in DATA_MODEL.md. gql.twitch.tv answers any origin (CORS *), so
 // moment-finding costs us nothing per stream hour: the visitor's browser does the reading.
 
+import { kickCommentPage, kickRate } from "./kick.js";
+
 const GQL = "https://gql.twitch.tv/gql";
 const CID = "kimne78kx3ncx6brgo4mv6wki5h1ko"; // Twitch's own public web client id
 
@@ -18,11 +20,14 @@ const esc = (s) => String(s).replace(/[^A-Za-z0-9_]/g, "");
 // "https://www.twitch.tv/videos/123", "twitch.tv/xqc", "xqc", "123456789" -> what it is.
 export function parseInput(raw) {
   const s = String(raw || "").trim();
+  let k = s.match(/kick\.com\/(?:video\/|[A-Za-z0-9_-]+\/videos\/)([0-9a-f]{8}-[0-9a-f-]{27})/i);
+  if (k) return { kind: "kickvod", id: k[1].toLowerCase() };
+  k = s.match(/^(?:https?:\/\/)?(?:www\.)?kick\.com\/([A-Za-z0-9_-]{2,40})\/?(?:\?.*)?$/i) || s.match(/^kick:([A-Za-z0-9_-]{2,40})$/i);
+  if (k) return { kind: "kick", login: k[1].toLowerCase() };
   let m = s.match(/videos\/(\d{6,})/) || s.match(/^(\d{8,})$/);
   if (m) return { kind: "vod", id: m[1] };
   m = s.match(/(?:twitch\.tv\/)?@?([A-Za-z0-9_]{3,25})\/?(?:\?.*)?$/);
   if (m && !/kick\.com|youtube|youtu\.be/.test(s)) return { kind: "channel", login: m[1].toLowerCase() };
-  if (/kick\.com/.test(s)) return { kind: "kick", login: (s.match(/kick\.com\/([A-Za-z0-9_-]+)/) || [])[1] };
   return { kind: "unknown" };
 }
 
@@ -66,6 +71,7 @@ function shapeVod(v) {
 // Same-origin path to a VOD rendition, through heistclips' /tv/ rewrite to Twitch's VOD CDN
 // (the CDN sends no CORS header, and a canvas can only read same-origin video).
 export function playlistPath(vod, quality = "chunked") {
+  if (vod.platform === "kick") return vod.source || null; // stream.kick.com sends CORS *
   if (!vod.cdn) return null;
   return `/tv/${vod.cdn.host}/${vod.cdn.dir}/${quality}/index-dvr.m3u8`;
 }
@@ -84,7 +90,9 @@ export function clock(t) {
 
 // ---- chat replay -------------------------------------------------------------------------
 
-async function commentPage(vodId, offset) {
+async function commentPage(vod, offset) {
+  if (vod.platform === "kick") return kickCommentPage(vod, offset);
+  const vodId = vod.id;
   const d = await gql(`query{ video(id:"${esc(vodId)}"){ comments(contentOffsetSeconds:${Math.max(0, Math.floor(offset))}){
     edges{ node{ id contentOffsetSeconds message{ fragments{ text emote{ emoteID } } } } } } } }`);
   const edges = (d.video && d.video.comments && d.video.comments.edges) || [];
@@ -139,7 +147,8 @@ export function topPhrase(msgs) {
   const w = best.s.toLowerCase();
   if (EMOTE_WORDS[w]) return { text: EMOTE_WORDS[w], n: best.n, emote: best.s, words: false };
   if (/^(k{3,}|(ha){2,}h?|(ja){2,}j?|(he){3,}|lo+l+|lmf?a+o+|x+d+|w{2,}|l{2,}|\?+|!+)$/i.test(w)) return { text: best.s, n: best.n, words: false };
-  return { text: best.s, n: best.n, words: /\p{L}{3,}/u.test(best.s) };
+  const emoteName = /^\S+$/.test(best.s) && /[a-z][A-Z]/.test(best.s);
+  return { text: best.s, n: best.n, words: /\p{L}{3,}/u.test(best.s) && !emoteName };
 }
 
 function median(xs) {
@@ -155,14 +164,15 @@ function median(xs) {
 export async function chatCurve(vod, { step = 20, from = 0, to = vod.length, concurrency = 12, onProgress } = {}) {
   const offsets = [];
   for (let t = from; t < to; t += step) offsets.push(t);
-  const pages = await pool(offsets, concurrency, (o) => commentPage(vod.id, o), onProgress);
+  const pages = await pool(offsets, vod.platform === "kick" ? Math.min(6, concurrency) : concurrency, (o) => commentPage(vod, o), onProgress);
   const samples = [];
   const seen = new Map();
   pages.forEach((p, i) => {
-    if (!p || p.length < 2) { samples.push({ t: offsets[i], rate: 0, msgs: [] }); return; }
+    if (!p || p.length < (vod.platform === "kick" ? 1 : 2)) { samples.push({ t: offsets[i], rate: 0, msgs: [] }); return; }
     for (const m of p) seen.set(m.id, m);
     const span = Math.max(1, p[p.length - 1].t - p[0].t);
-    samples.push({ t: (p[0].t + p[p.length - 1].t) / 2, rate: (p.length - 1) / span, msgs: p });
+    const rate = vod.platform === "kick" ? kickRate(p) : (p.length - 1) / span;
+    samples.push({ t: (p[0].t + p[p.length - 1].t) / 2, rate, msgs: p });
   });
   samples.sort((a, b) => a.t - b.t);
   return { samples, messages: [...seen.values()].sort((a, b) => a.t - b.t) };
@@ -172,7 +182,7 @@ export async function chatCurve(vod, { step = 20, from = 0, to = vod.length, con
 export function findPeaks(samples, { k = 12, minRatio = 1.8, gap = 90 } = {}) {
   const scored = samples.map((s) => {
     const near = samples.filter((o) => Math.abs(o.t - s.t) <= 600 && Math.abs(o.t - s.t) > 60).map((o) => o.rate);
-    const base = Math.max(0.05, median(near));
+    const base = Math.max(0.2, median(near));
     const c = classify(s.msgs);
     const ratio = s.rate / base;
     const score = ratio * (1 + 0.6 * Math.min(5, c.counts.clip)) * (1 + Math.min(1, (c.counts.funny + c.counts.hype + c.counts.shock) / Math.max(1, s.msgs.length)));
@@ -190,8 +200,9 @@ export function findPeaks(samples, { k = 12, minRatio = 1.8, gap = 90 } = {}) {
 // Look closely at one peak: exact per-second chat counts, the onset, and the clip window.
 export async function refinePeak(vod, peak, { before = 75, after = 30 } = {}) {
   const offs = [];
-  for (let t = Math.max(0, peak.t - before); t <= Math.min(vod.length, peak.t + after); t += 6) offs.push(t);
-  const pages = await pool(offs, 8, (o) => commentPage(vod.id, o));
+  const stepR = vod.platform === "kick" ? 5 : 6; // Kick pages are 5-second windows: tile them
+  for (let t = Math.max(0, peak.t - before); t <= Math.min(vod.length, peak.t + after); t += stepR) offs.push(t);
+  const pages = await pool(offs, vod.platform === "kick" ? 4 : 8, (o) => commentPage(vod, o));
   const byId = new Map();
   for (const p of pages) if (p) for (const m of p) byId.set(m.id, m);
   const msgs = [...byId.values()].sort((a, b) => a.t - b.t);
@@ -207,7 +218,7 @@ export function momentFromMessages(vod, msgs, peak) {
   let peakT = peak.t, peakR = 0;
   for (let t = lo + 5; t <= hi; t++) { const r = rate(t); if (r > peakR) { peakR = r; peakT = t; } }
   const pre = []; for (let t = lo; t < peakT - 30; t += 5) pre.push(rate(t));
-  const base = Math.max(0.05, median(pre), peak.base || 0);
+  const base = Math.max(0.2, median(pre), peak.base || 0);
   let onset = peakT;
   for (let t = peakT; t > peakT - 45; t--) { if (rate(t) <= base * 1.5) { onset = t; break; } onset = t; }
   // Chat reacts 5-10 s after the thing happens; start with the build-up, end on the reaction.
@@ -223,7 +234,7 @@ export function momentFromMessages(vod, msgs, peak) {
     clip_requests: kind.counts.clip,
     music_risk: music,
     chat: msgs.filter((m) => m.t >= start && m.t <= end + 6).slice(0, 400),
-    url: `https://www.twitch.tv/videos/${vod.id}?t=${twitchTime(start)}`,
+    url: vod.platform === "kick" ? `${vod.url}?t=${Math.floor(start)}` : `https://www.twitch.tv/videos/${vod.id}?t=${twitchTime(start)}`,
   };
 }
 
@@ -266,9 +277,10 @@ export function hooks(m, streamer) {
 
 // Whole pipeline for one VOD: curve -> peaks -> refined moments, plus Twitch's own clips.
 export async function findMoments(vod, { k = 10, step, onProgress, refine = true } = {}) {
-  const st = step || (vod.length > 12 * 3600 ? 60 : vod.length > 6 * 3600 ? 30 : vod.length > 2 * 3600 ? 20 : 10);
+  // Kick allows ~5 requests a second, so it samples coarser: at most ~300 windows a stream.
+  const st = step || (vod.platform === "kick" ? Math.max(30, Math.ceil(vod.length / 300)) : vod.length > 12 * 3600 ? 60 : vod.length > 6 * 3600 ? 30 : vod.length > 2 * 3600 ? 20 : 10);
   const { samples, messages } = await chatCurve(vod, { step: st, onProgress });
-  const peaks = findPeaks(samples, { k });
+  const peaks = findPeaks(samples, { k: vod.platform === "kick" ? Math.min(k, 8) : k });
   const moments = [];
   if (refine) {
     const refined = await pool(peaks, 3, (p) => refinePeak(vod, p));
@@ -282,7 +294,7 @@ export async function findMoments(vod, { k = 10, step, onProgress, refine = true
     const a = moments[i];
     if (moments.some((b, j) => j < i && b.t_start < a.t_end - 10 && b.t_end > a.t_start + 10)) moments.splice(i, 1);
   }
-  const clips = vod.channel ? await twitchClips(vod.channel, vod.id) : [];
+  const clips = vod.channel && vod.platform !== "kick" ? await twitchClips(vod.channel, vod.id) : [];
   for (const m of moments) {
     const overlapping = clips.filter((c) => c.t_start < m.t_end && c.t_end > m.t_start);
     m.twitch_clips = overlapping.length;

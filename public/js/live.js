@@ -2,6 +2,7 @@
 // moment the second chat speed jumps. The stream's in-progress VOD trails live by ~10 s
 // (measured 2026-11-16), so a moment can be cut within a minute of it happening.
 import { momentFromMessages, hooks } from "./twitch.js";
+import { pollKickChat } from "./kick.js";
 
 export class LiveChat {
   constructor(login, { vod, recordingStart, onRate, onMoment, onStatus }) {
@@ -12,6 +13,11 @@ export class LiveChat {
   }
 
   start() {
+    if (this.vod.platform === "kick") {
+      this.stopPoll = pollKickChat(this.vod, (m) => this.add(m), this.onStatus);
+      this.timer = setInterval(() => this.tick(), 1000);
+      return;
+    }
     const ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
     this.ws = ws;
     ws.onopen = () => {
@@ -75,7 +81,7 @@ export class LiveChat {
     this.onMoment && this.onMoment(m);
   }
 
-  stop() { this.stopped = true; clearInterval(this.timer); if (this.ws) this.ws.close(); }
+  stop() { this.stopped = true; clearInterval(this.timer); if (this.ws) this.ws.close(); if (this.stopPoll) this.stopPoll(); }
 }
 
 function median(xs) {

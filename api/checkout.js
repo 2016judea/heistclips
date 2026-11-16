@@ -9,7 +9,10 @@ export default async function handler(req, res) {
   let b = {}; try { b = typeof req.body === "object" && req.body ? req.body : JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); } catch (e) {}
   const pack = PACKS.find((p) => p.id === b.pack);
   if (!pack) { res.statusCode = 400; return res.end(JSON.stringify({ error: "unknown pack" })); }
-  const origin = "https://heistclips.com";
+  // Previews of this project return to themselves (so a test-mode session is claimed with the
+  // test key); everything else returns to the live site.
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "");
+  const origin = /^heistclips-[a-z0-9-]+\.vercel\.app$/.test(host) ? "https://" + host : "https://heistclips.com";
   const f = new URLSearchParams({
     mode: "payment",
     success_url: `${origin}/clip?paid={CHECKOUT_SESSION_ID}`,

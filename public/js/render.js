@@ -31,7 +31,12 @@ export class Clipper {
       const hls = new window.Hls({ maxBufferLength: 75, maxMaxBufferLength: 150, startPosition: Math.max(0, start), enableWorker: true, backBufferLength: 30 });
       this.hls = hls;
       await new Promise((ok, bad) => {
-        hls.on(window.Hls.Events.MANIFEST_PARSED, () => ok());
+        hls.on(window.Hls.Events.MANIFEST_PARSED, (e, d) => {
+          // A master playlist (Kick) has several renditions: take the sharpest up to 1080p.
+          const lv = (d && d.levels) || [];
+          if (lv.length > 1) { let best = 0; lv.forEach((l, i) => { if ((l.height || 0) <= 1080 && (l.height || 0) >= (lv[best].height || 0)) best = i; }); hls.currentLevel = best; }
+          ok();
+        });
         hls.on(window.Hls.Events.ERROR, (e, d) => { if (d.fatal) bad(new Error("video: " + d.details)); });
         hls.loadSource(url); hls.attachMedia(v);
       });

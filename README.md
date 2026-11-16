@@ -4,7 +4,7 @@
 
 The open-source, local OpusClip alternative, built for agents and for gameplay.
 
-Paste a Twitch channel. heistclips reads its chat, finds the seconds chat exploded, and cuts
+Paste a Twitch or Kick channel. heistclips reads its chat, finds the seconds chat exploded, and cuts
 them to 9:16 (facecam over gameplay) with a hook line, on your own machine. It works on
 streams that are **still live**. Then it tells you which clipping campaign pays most for the
 clip.
@@ -40,7 +40,8 @@ agent's skills folder). It teaches the agent to find moments and cut clips with 
 
 ```bash
 git clone https://github.com/2016judea/heistclips && cd heistclips
-node cli/heistclips.mjs moments xqc                 # the moments chat exploded in xQc's live/latest stream
+node cli/heistclips.mjs moments xqc                 # the moments chat exploded in xQc's live/latest Twitch stream
+node cli/heistclips.mjs moments kick.com/xqc        # same, on Kick
 node cli/heistclips.mjs auto xqc --n 3              # find + cut the top 3 to clips/*.mp4 (9:16, hook burned in)
 node cli/heistclips.mjs cut https://www.twitch.tv/videos/2929840281 --start 4:07:16 --end 4:07:54 --layout split --cam tr --hook "Wait for it"
 node cli/heistclips.mjs campaigns --filter gta      # who pays most per clip right now
@@ -72,7 +73,8 @@ Tests: `npm test` (offline).
 
 ## Data and licence
 
-Code: MIT. Campaign figures are read from Content Rewards' public campaign directory and link
-back to each campaign. Stream and chat data come from Twitch's public endpoints, read
+Code: MIT. Campaign figures are read from Content Rewards' public campaign pages (their
+sitemap and discover pages; never `/api/`, which their robots.txt disallows) and link back to
+each campaign. Stream and chat data come from Twitch's public endpoints, read
 anonymously. Not affiliated with Rockstar Games, Take-Two Interactive, Twitch or Content
 Rewards; "GTA VI" is used descriptively.

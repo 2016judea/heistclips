@@ -2,7 +2,7 @@
 // heistclips CLI: the local, open-source clipper. Finds the moments a Twitch stream's chat
 // exploded over and cuts them to 9:16 with local ffmpeg. No account, no upload, no API key.
 //
-//   heistclips moments <channel|vod-url|vod-id> [--n 8] [--json]
+//   heistclips moments <twitch-channel|kick.com/name|vod-url> [--n 8] [--json]
 //   heistclips cut <vod-url|vod-id> --start 1:02:03 --end 1:02:40 [--layout split|fit|crop] [--cam tr] [--hook "text"] [--out clip.mp4]
 //   heistclips auto <channel|vod> [--n 3] [--layout split] [--dir ./clips]      find + cut the top N, one file per hook
 //   heistclips campaigns [--filter gta|gaming|all] [--n 10]                     who pays most per clip right now
@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { parseInput, getChannel, getVod, findMoments, clock } from "../public/js/twitch.js";
+import { getKickChannel, getKickVod } from "../public/js/kick.js";
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
@@ -27,7 +28,13 @@ async function resolveVod(src) {
     if (!c) throw new Error("no Twitch channel " + inp.login);
     return c.live_vod || c.vods[0];
   }
-  throw new Error("pass a Twitch channel or VOD (Kick not supported yet)");
+  if (inp.kind === "kick") {
+    const c = await getKickChannel(inp.login);
+    if (!c) throw new Error("no Kick channel " + inp.login);
+    return c.live_vod || c.vods[0];
+  }
+  if (inp.kind === "kickvod") return getKickVod(inp.id);
+  throw new Error("pass a Twitch or Kick channel, or a VOD link");
 }
 
 async function moments(src, n) {
@@ -40,9 +47,17 @@ async function moments(src, n) {
 
 // ---- cutting ------------------------------------------------------------------------------
 async function playlist(vod, quality = "chunked") {
-  if (!vod.cdn) throw new Error("this VOD's video is not public");
-  const base = `https://${vod.cdn.host}.cloudfront.net/${vod.cdn.dir}/${quality}/`;
-  const r = await fetch(base + "index-dvr.m3u8");
+  let url;
+  if (vod.platform === "kick") {
+    const master = await (await fetch(vod.source)).text();
+    const v = master.split("\n").find((l) => l && !l.startsWith("#"));
+    url = new URL(v, vod.source).href;
+  } else {
+    if (!vod.cdn) throw new Error("this VOD's video is not public");
+    url = `https://${vod.cdn.host}.cloudfront.net/${vod.cdn.dir}/${quality}/index-dvr.m3u8`;
+  }
+  const base = url.slice(0, url.lastIndexOf("/") + 1);
+  const r = await fetch(url);
   if (!r.ok) throw new Error("playlist " + r.status);
   const lines = (await r.text()).split("\n");
   const segs = []; let t = 0, dur = 0;

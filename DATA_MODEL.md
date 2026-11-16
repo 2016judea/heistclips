@@ -84,11 +84,16 @@ Legend: **fills** = a source exists and the field ships · **partial** = shipped
 named as one · **not built** = a source exists, v0 didn't wire it · **can't fill** = no source.
 
 ### Campaign — fills
-Source: Content Rewards' public discover feed (`/api/campaign/campaigns/discover`, 50/page,
-796–811 live campaigns, all read in ~8 s). Their Creator Terms (rev. 2026-11-13) carry no
-scraping clause; their robots.txt disallows `/api/`. We read it every 30 min with an honest
-user agent, link every campaign back to its own page, and republish facts, not their copy.
-**Risk Aidan should know: robots.txt asks crawlers to stay out of `/api/`.**
+Source: Content Rewards' **public pages only** (changed 2026-11-16 the same evening: their
+robots.txt disallows `/api/`, and the call was to respect it). `/sitemap.xml` lists every live
+campaign as `/c/campaigns/<id>`; each page is server-rendered with the full campaign object in
+its Next.js flight payload — every field the old feed had, including cap per clip, per-platform
+rates, budget, approved clips, top-earner totals and daily chart points. The four
+`/c/discover*` pages refresh budget/creator numbers for ~237 campaigns per run. Each 30-min
+run reads the sitemap, the four discover pages and the ~26 stalest campaign pages, one at a
+time with a pause, honest user agent, doubling back-off on 403/429/5xx; a campaign page is
+re-read at least every ~15 h, the discover-covered ones every 30 min. Clipper names, avatars and
+ids in those pages are dropped before storage. **No ranker field is lost by leaving `/api/`.**
 
 | field | status |
 |---|---|
@@ -108,8 +113,13 @@ user agent, link every campaign back to its own page, and republish facts, not t
 Twitch GQL (`gql.twitch.tv`, CORS `*`, anonymous) gives channel, live state, viewers, VODs,
 and the in-progress VOD of a live stream (3 of 4 live GTA channels checked had one; the 4th
 saves no VODs → can't be cut). In-progress VOD trails live by ~10 s (measured).
-Kick: **not built** (its API is Cloudflare-walled to curl and the public API wants an OAuth
-app). YouTube Live: **not built**. campaign_ids: partial, via handles above.
+Kick: **fills** (2026-11-16): `kick.com/api/v2/channels/<slug>` (+`/videos`) give live state and
+VODs, including the in-progress one; VOD video on stream.kick.com sends CORS `*`; chat replay
+is `/api/v2/channels/<id>/messages?start_time=` (≤25 messages per ~5-s window). Kick's robots.txt
+allows `/` (it blocks only AI-training crawlers). Its API refuses >~5 req/s, so Kick reads
+coarser and slower (~1–2 min a stream). Live Kick chat: the public Pusher key now answers "not in
+this cluster" and the new realtime config is behind a security policy, so live mode polls the
+history window ~10 s behind live. YouTube Live: **not built**. campaign_ids: partial, via handles above.
 
 ### Moment — mostly fills
 | field | status |

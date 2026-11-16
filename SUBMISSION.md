@@ -38,7 +38,8 @@ a music-claim warning. Free, no account, no key.
 3. "Tell me about the Tokyo Girl campaign" → campaign_details
 4. "Who's streaming GTA right now?" → live_gta_streams
 5. "What features are people asking heistclips for?" → list_feature_requests
-Negative: "Clip this Kick stream" → find_moments says Kick isn't supported yet; "Post my clip to TikTok" → no tool; "What's the GTA 6 release date?" → no tool.
+6. "Find moments in kick.com/xqc's last stream" → find_moments {source:"kick.com/xqc"}
+Negative: "Clip this YouTube Live stream" → find_moments says it takes Twitch or Kick; "Post my clip to TikTok" → no tool; "What's the GTA 6 release date?" → no tool.
 
 ## Starter prompts
 - Which clipping campaign pays most per clip today?

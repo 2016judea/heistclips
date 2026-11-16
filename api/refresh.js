@@ -1,7 +1,9 @@
-// Cron, every 30 min: re-read every live campaign, rank, store, and tell IndexNow (Bing, which
-// feeds ChatGPT search; Yandex; Seznam; Naver) which pages changed.
-import { fetchAllCampaigns, buildSnapshot } from "../lib/campaigns.js";
-import { liveGtaStreams, handlesFromCampaigns, mergeStreamers } from "../lib/streamers.js";
+// Cron, every 30 min: refresh the campaign-page cache from pages Content Rewards' robots.txt
+// allows (never /api/), rank, store, and tell IndexNow (Bing, which feeds ChatGPT search;
+// Yandex; Seznam; Naver) which pages changed.
+import { buildSnapshot } from "../lib/campaigns.js";
+import { refreshCache, rawCampaigns } from "../lib/crpages.js";
+import { liveGtaStreams, liveKick, handlesFromCampaigns, mergeStreamers } from "../lib/streamers.js";
 import { putJSON, getJSON } from "../lib/store.js";
 import { sitemapUrls } from "./page.js";
 
@@ -26,11 +28,20 @@ export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
   if (secret && auth !== `Bearer ${secret}`) { res.statusCode = 401; return res.end("no"); }
   const t0 = Date.now();
-  const raw = await fetchAllCampaigns();
-  const snap = buildSnapshot(raw);
+  const cached = await getJSON("cr/pages.json", { fresh: true }).catch(() => null);
+  const crawl = await refreshCache(cached, { maxPages: 26, pauseMs: 700 });
+  await putJSON("cr/pages.json", crawl.cache, { maxAge: 60 });
   const prev = await getJSON("snapshot/latest.json", { fresh: true }).catch(() => null);
+  const raw = rawCampaigns(crawl.cache);
+  if (raw.length < 50 && prev) { // a broken crawl must not wipe the ranker
+    res.setHeader("content-type", "application/json");
+    return res.end(JSON.stringify({ ok: false, kept_previous: true, crawl: { fetched: crawl.fetched, error: crawl.error, cached: raw.length } }));
+  }
+  const snap = buildSnapshot(raw);
+  snap.source = "contentrewards.com public campaign pages (sitemap + /c/discover)";
+  snap.crawl = { fetched: crawl.fetched, freshened: crawl.discover, live: crawl.live, error: crawl.error || null, backoff_until: crawl.cache.backoff_until || null };
   let live = [];
-  try { live = await liveGtaStreams(40); } catch (e) {}
+  try { live = [...(await liveGtaStreams(40)).map((s) => ({ ...s, platform: "twitch" })), ...(await liveKick())]; } catch (e) {}
   snap.streamers = mergeStreamers(prev && prev.streamers, live, handlesFromCampaigns(snap.campaigns), snap.generated_at);
   await putJSON("snapshot/latest.json", snap, { maxAge: 60 });
 
@@ -62,5 +73,5 @@ export default async function handler(req, res) {
     await putJSON("snapshot/latest.json", snap, { maxAge: 60 });
   }
   res.setHeader("content-type", "application/json");
-  res.end(JSON.stringify({ ok: true, ms: Date.now() - t0, campaigns: snap.campaigns.length, gta: snap.summary.gta, streamers: snap.streamers.length, live_gta: live.length, indexnow: ping }));
+  res.end(JSON.stringify({ ok: true, ms: Date.now() - t0, campaigns: snap.campaigns.length, crawl: snap.crawl, gta: snap.summary.gta, streamers: snap.streamers.length, live_gta: live.length, indexnow: ping }));
 }

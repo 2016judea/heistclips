@@ -12,7 +12,7 @@ test("normalize reads rate, cap and budget off the feed", () => {
   assert.equal(c.cap_per_clip, 35);
   assert.equal(c.budget_total, 2000);
   assert.ok(c.is_gta);
-  assert.match(c.source_url, /^https:\/\/contentrewards\.com\/discover\//);
+  assert.match(c.source_url, /^https:\/\/contentrewards\.com\/c\/campaigns\//);
 });
 
 test("typical per clip excludes the top three earners and needs 5 other clips", () => {

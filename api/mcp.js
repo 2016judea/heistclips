@@ -4,6 +4,7 @@
 import { latestSnapshot } from "../lib/store.js";
 import { getChannel, getVod, parseInput, findMoments, clock } from "../public/js/twitch.js";
 import { liveGtaStreams } from "../lib/streamers.js";
+import { getKickChannel, getKickVod, liveKickGta } from "../public/js/kick.js";
 import { loadBoard, publicList, vote, submit, notify } from "../lib/requests.js";
 
 const SITE = "https://heistclips.com";
@@ -32,9 +33,9 @@ export const TOOLS = [
   {
     name: "find_moments",
     title: "Find clip-worthy moments in a Twitch stream",
-    description: "Finds the moments a Twitch stream's chat exploded (chat speed vs its normal pace, 'clip it' requests, clips viewers already made), and returns timestamps, a suggested clip window, event type, 3-5 hook lines, and music-claim risk (Twitch muted that audio for licensed music). Pass a Twitch channel (uses the live stream if live, else the latest one) or a VOD link/id. A 7-hour stream takes about 15-20 seconds.",
+    description: "Finds the moments a Twitch stream's chat exploded (chat speed vs its normal pace, 'clip it' requests, clips viewers already made), and returns timestamps, a suggested clip window, event type, 3-5 hook lines, and music-claim risk (Twitch muted that audio for licensed music). Pass a Twitch or Kick channel (uses the live stream if live, else the latest one; Kick as kick.com/<name>) or a VOD link. A 7-hour stream takes about 15-40 seconds.",
     inputSchema: { type: "object", properties: {
-      source: { type: "string", description: "Twitch channel name or URL, or a VOD URL/id (twitch.tv/videos/...)" },
+      source: { type: "string", description: "Twitch channel name or URL, a Kick channel URL (kick.com/<name>), or a VOD URL (twitch.tv/videos/… or kick.com/<name>/videos/…)" },
       limit: { type: "integer", minimum: 1, maximum: 15, description: "How many moments (default 8)" },
     }, required: ["source"], additionalProperties: false },
     annotations: { title: "Find moments", ...ANN },
@@ -42,7 +43,7 @@ export const TOOLS = [
   {
     name: "live_gta_streams",
     title: "Who is streaming GTA right now",
-    description: "Twitch channels streaming GTA (GTA VI when it is live on Twitch, and GTA V) right now, by viewers, each with a heistclips link to find its moments.",
+    description: "Twitch and Kick channels streaming GTA (GTA VI and GTA V) right now, by viewers, each with a heistclips link to find its moments.",
     inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 40, description: "How many (default 15)" } }, additionalProperties: false },
     annotations: { title: "Live GTA streams", ...ANN },
   },
@@ -123,8 +124,13 @@ export async function callTool(name, args = {}, caller = "mcp") {
       if (!chan) return { ...text(`No Twitch channel called ${inp.login}.`), isError: true };
       vod = chan.live_vod || chan.vods[0] || null;
       if (!vod) return { ...text(`${chan.name} has no saved streams to read${chan.is_live ? " (they are live but do not save VODs)" : ""}.`), isError: true };
-    } else if (inp.kind === "kick") return { ...text("Kick is not supported yet; Twitch channels and VODs are."), isError: true };
-    else return { ...text("Pass a Twitch channel name or URL, or a twitch.tv/videos/ link."), isError: true };
+    } else if (inp.kind === "kick") {
+      chan = await getKickChannel(inp.login);
+      if (!chan) return { ...text(`No Kick channel called ${inp.login}.`), isError: true };
+      vod = chan.live_vod || chan.vods[0] || null;
+      if (!vod) return { ...text(`${chan.name} has no saved Kick streams to read.`), isError: true };
+    } else if (inp.kind === "kickvod") vod = await getKickVod(inp.id);
+    else return { ...text("Pass a Twitch or Kick channel (kick.com/<name>), or a twitch.tv/videos/ or Kick video link."), isError: true };
     if (!vod) return { ...text("That VOD does not exist or is not public."), isError: true };
     const r = await findMoments(vod, { k: Math.min(15, (args.limit || 8) + 3) });
     const moments = r.moments.slice(0, args.limit || 8).map((m, i) => ({
@@ -132,13 +138,14 @@ export async function callTool(name, args = {}, caller = "mcp") {
       chat_speed_vs_normal: m.chat_ratio + "x", event_type: m.event_type, clip_requests_in_chat: m.clip_requests,
       top_chat_phrase: m.phrase && m.phrase.text, already_clipped_on_twitch: m.twitch_clips, twitch_clip_views: m.twitch_clip_views,
       music_risk: m.music_risk.level, music_note: m.music_risk.why, hooks: m.hooks,
-      watch: m.url, cut_it: `${SITE}/clip?q=${vod.id}&t=${m.t_start}`,
+      watch: m.url, cut_it: `${SITE}/clip?q=${encodeURIComponent(vod.platform === "kick" ? vod.url : vod.id)}&t=${m.t_start}`,
     }));
-    return text({ stream: { channel: vod.channel_name, title: vod.title, game: vod.game, length: clock(vod.length), status: vod.status === "RECORDING" ? "live, still recording" : "finished", url: vod.url }, moments, note: moments.length ? "Cut any of these to 9:16 with hooks at the cut_it link." : "Chat was steady the whole stream; no clear spikes." });
+    return text({ stream: { platform: vod.platform || "twitch", channel: vod.channel_name, title: vod.title, game: vod.game, length: clock(vod.length), status: vod.status === "RECORDING" ? "live, still recording" : "finished", url: vod.url }, moments, note: moments.length ? "Cut any of these to 9:16 with hooks at the cut_it link." : "Chat was steady the whole stream; no clear spikes." });
   }
   if (name === "live_gta_streams") {
-    const live = (await liveGtaStreams(40)).sort((a, b) => b.viewers - a.viewers).slice(0, args.limit || 15);
-    return text({ at: new Date().toISOString(), streams: live.map((s) => ({ channel: s.name, login: s.login, viewers: s.viewers, game: s.game, title: s.title, language: s.language, find_moments: `${SITE}/clip?q=${s.login}` })) });
+    const [tw, kk] = await Promise.all([liveGtaStreams(40), liveKickGta(20).catch(() => [])]);
+    const live = [...tw.map((s) => ({ ...s, platform: "twitch" })), ...kk].sort((a, b) => b.viewers - a.viewers).slice(0, args.limit || 15);
+    return text({ at: new Date().toISOString(), streams: live.map((s) => ({ platform: s.platform, channel: s.name, login: s.login, viewers: s.viewers, game: s.game, title: s.title, language: s.language, find_moments: `${SITE}/clip?q=${encodeURIComponent(s.platform === "kick" ? "kick.com/" + s.login : s.login)}` })) });
   }
   return { ...text("Unknown tool " + name), isError: true };
 }
