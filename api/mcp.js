@@ -6,7 +6,6 @@ import { getChannel, getVod, parseInput, findMoments, clock } from "../public/js
 import { liveGtaStreams } from "../lib/streamers.js";
 import { loadBoard, publicList, vote, submit, notify } from "../lib/requests.js";
 
-export const config = { maxDuration: 60 };
 const SITE = "https://heistclips.com";
 const VERSION = "0.1.0";
 const ANN = { readOnlyHint: true, destructiveHint: false, openWorldHint: true, idempotentHint: true };

@@ -9,7 +9,6 @@ const SITE = "https://heistclips.com";
 const HOST = "heistclips.com";
 const INDEXNOW_KEY = "066cce158f4bc73e04afdcb48bb189f7";
 
-export const config = { maxDuration: 120 };
 
 export async function pingIndexNow(paths) {
   const urlList = [...new Set(paths)].slice(0, 10000).map((p) => SITE + p);
