@@ -18,8 +18,8 @@
   ],
   "rewrites": [
     {
-      "source": "/tv/:host/:path*",
-      "destination": "https://:host.cloudfront.net/:path*"
+      "source": "/tv/:host([a-z0-9]{8,20})/:dir([0-9a-f]{20}_[A-Za-z0-9_]{3,40}_[0-9]{6,16}_[0-9]{6,12})/:path*",
+      "destination": "https://:host.cloudfront.net/:dir/:path*"
     },
     {
       "source": "/mcp",
