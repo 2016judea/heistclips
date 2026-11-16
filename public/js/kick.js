@@ -11,24 +11,28 @@ const API = "https://kick.com/api";
 const UA = "Mozilla/5.0 (compatible; heistclips/0.1; +https://heistclips.com/about)";
 const isNode = typeof window === "undefined";
 
-// Kick answers 429 above ~5 requests a second (measured 2026-11-16: 2 in flight = 60/60 OK,
-// 6 in flight = 47/60 refused). Every call goes through one queue spaced 220 ms apart, and a
-// 429 waits and retries.
+// Kick throttles: >~5 req/s is refused at once (2 in flight = 60/60 OK, 6 in flight = 47/60
+// refused), and a sustained run starts drawing 429s after ~250 requests (294/300 OK at
+// ~1.6/s, measured 2026-11-16). In a browser a 429 arrives without a CORS header, so it shows
+// up as a failed fetch, not a status. One queue, 300 ms apart; a 429 or failed fetch backs off
+// and retries. Callers keep a stream to ~250 requests.
 let nextSlot = 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function slot() {
   const now = Date.now();
   const at = Math.max(now, nextSlot);
-  nextSlot = at + 220;
+  nextSlot = at + 300;
   if (at > now) await sleep(at - now);
 }
 
 async function kget(path) {
   for (let attempt = 0; attempt < 4; attempt++) {
     await slot();
-    const r = await fetch(API + path, { headers: isNode ? { "user-agent": UA, accept: "application/json" } : { accept: "application/json" } });
+    let r;
+    try { r = await fetch(API + path, { headers: isNode ? { "user-agent": UA, accept: "application/json" } : { accept: "application/json" } }); }
+    catch (e) { nextSlot = Date.now() + 2000 * (attempt + 1); continue; } // browser: a 429 without CORS
     if (r.status === 404) return null;
-    if (r.status === 429) { nextSlot = Date.now() + 1500 * (attempt + 1); continue; }
+    if (r.status === 429) { nextSlot = Date.now() + 2000 * (attempt + 1); continue; }
     if (!r.ok) throw new Error("kick " + r.status);
     return r.json();
   }

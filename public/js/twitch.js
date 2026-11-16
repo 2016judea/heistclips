@@ -277,13 +277,13 @@ export function hooks(m, streamer) {
 
 // Whole pipeline for one VOD: curve -> peaks -> refined moments, plus Twitch's own clips.
 export async function findMoments(vod, { k = 10, step, onProgress, refine = true } = {}) {
-  // Kick allows ~5 requests a second, so it samples coarser: at most ~300 windows a stream.
-  const st = step || (vod.platform === "kick" ? Math.max(30, Math.ceil(vod.length / 300)) : vod.length > 12 * 3600 ? 60 : vod.length > 6 * 3600 ? 30 : vod.length > 2 * 3600 ? 20 : 10);
+  // Kick throttles (see kick.js), so it samples coarser: at most ~150 windows a stream.
+  const st = step || (vod.platform === "kick" ? Math.max(30, Math.ceil(vod.length / 150)) : vod.length > 12 * 3600 ? 60 : vod.length > 6 * 3600 ? 30 : vod.length > 2 * 3600 ? 20 : 10);
   const { samples, messages } = await chatCurve(vod, { step: st, onProgress });
-  const peaks = findPeaks(samples, { k: vod.platform === "kick" ? Math.min(k, 8) : k });
+  const peaks = findPeaks(samples, { k: vod.platform === "kick" ? Math.min(k, 6) : k, gap: vod.platform === "kick" ? Math.max(90, st * 1.5) : 90 });
   const moments = [];
   if (refine) {
-    const refined = await pool(peaks, 3, (p) => refinePeak(vod, p));
+    const refined = await pool(peaks, vod.platform === "kick" ? 1 : 3, (p) => refinePeak(vod, p, vod.platform === "kick" ? { before: 50, after: 20 } : {}));
     for (const m of refined) if (m) moments.push(m);
   } else {
     for (const p of peaks) moments.push(momentFromMessages(vod, messages, p));
