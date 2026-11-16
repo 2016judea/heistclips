@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     const s = await stripeSession(id);
     if (!s || s.payment_status !== "paid") return res.end(JSON.stringify({ error: "payment not confirmed" }));
     const g = await grant(s, "claim");
-    if (!g.granted && g.why !== "already granted") return res.end(JSON.stringify({ error: g.why }));
+    if (!g.granted && g.why !== "already granted") return res.end(JSON.stringify({ error: "payment not confirmed" }));
     const { state } = await read(d, id);
     return res.end(JSON.stringify({ key: id, ...state }));
   }

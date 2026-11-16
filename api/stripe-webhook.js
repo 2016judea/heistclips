@@ -20,7 +20,8 @@ function verify(body, header, secrets) {
 
 export async function grant(session, via) {
   const pack = PACKS.find((p) => p.id === (session.metadata && session.metadata.pack));
-  if (!pack || session.payment_status !== "paid") return { granted: false, why: !pack ? "unknown pack" : "not paid" };
+  // stripe-router's probe (and every router product) expects this phrase for a session to skip.
+  if (session.payment_status !== "paid" || !pack) return { granted: false, why: "not ours or not paid" };
   const path = secretPath("credits/paid", session.id);
   const existing = await getJSON(path, { fresh: true }).catch(() => null);
   if (existing) return { granted: false, why: "already granted", via: existing.via };
@@ -37,7 +38,7 @@ export default async function handler(req, res) {
   const ev = JSON.parse(body);
   if (ev.type !== "checkout.session.completed") return res.end(JSON.stringify({ ignored: ev.type }));
   const s = ev.data.object;
-  if (!s.metadata || s.metadata.product !== "heistclips") return res.end(JSON.stringify({ ignored: "not heistclips" }));
+  if (!s.metadata || s.metadata.product !== "heistclips") return res.end(JSON.stringify({ ignored: "not ours or not paid" }));
   const r = await grant(s, "webhook");
   res.end(JSON.stringify(r));
 }

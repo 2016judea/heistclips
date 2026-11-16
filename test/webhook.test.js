@@ -20,7 +20,7 @@ const ev = JSON.stringify({ type: "checkout.session.completed", data: { object: 
 test("a correctly signed event is accepted, with any of the comma-separated secrets", async () => {
   const r = await call(ev, sign(ev, "whsec_test123"));
   assert.equal(r.status, 200);
-  assert.equal(r.body.ignored, "not heistclips");
+  assert.equal(r.body.ignored, "not ours or not paid");
 });
 
 test("a bad or stale signature is refused", async () => {
