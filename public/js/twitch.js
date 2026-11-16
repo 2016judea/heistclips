@@ -266,7 +266,7 @@ export function hooks(m, streamer) {
 
 // Whole pipeline for one VOD: curve -> peaks -> refined moments, plus Twitch's own clips.
 export async function findMoments(vod, { k = 10, step, onProgress, refine = true } = {}) {
-  const st = step || (vod.length > 6 * 3600 ? 30 : vod.length > 2 * 3600 ? 20 : 10);
+  const st = step || (vod.length > 12 * 3600 ? 60 : vod.length > 6 * 3600 ? 30 : vod.length > 2 * 3600 ? 20 : 10);
   const { samples, messages } = await chatCurve(vod, { step: st, onProgress });
   const peaks = findPeaks(samples, { k });
   const moments = [];
