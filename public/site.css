@@ -156,3 +156,9 @@ pre{padding:12px;overflow-x:auto;white-space:pre}
 .st-shipped{background:#13301f;color:var(--ok)}
 .reqlink{font-size:13px;color:var(--mute)}
 .top .wrap{max-width:980px}
+@media (max-width:600px){
+  .row{flex-wrap:nowrap;gap:12px;min-height:48px}
+  nav{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:12px}
+  nav::-webkit-scrollbar{display:none}
+  .logo{flex:none}
+}

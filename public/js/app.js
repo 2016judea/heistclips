@@ -70,7 +70,8 @@ function say(html) { app.innerHTML = html; }
 function sourceCard(vod, chan) {
   const live = vod.status === "RECORDING";
   const others = chan ? chan.vods.filter((v) => v.id !== vod.id).slice(0, 4) : [];
-  return `<div class="src"><img src="${h(vod.thumb || "")}" alt="">
+  const thumb = live ? `https://static-cdn.jtvnw.net/previews-ttv/live_user_${vod.channel}-640x360.jpg` : vod.thumb;
+  return `<div class="src"><img src="${h(thumb || "")}" alt="" onerror="this.style.visibility='hidden'">
 <div class="t"><b>${h(vod.title || "Untitled stream")}</b>
 <span class="small">${h(vod.channel_name)} · ${h(vod.game || "")} · ${clock(vod.length)}${live ? ' · <b class="livedot">LIVE</b>' : ""}</span>
 ${others.length ? `<span class="small">Other streams: ${others.map((v) => `<a href="/clip?q=${v.id}">${h(new Date(v.created_at).toUTCString().slice(5, 11))}</a>`).join(" · ")}</span>` : ""}</div></div>`;

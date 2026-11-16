@@ -87,7 +87,9 @@ export async function cut(vod, start, end, { layout = "split", cam = "tr", camSi
   };
   let g = graphs[layout] || graphs.split;
   const font = fontFile();
-  if (hook && font) {
+  const hasText = /\bdrawtext\b/.test(spawnSync("ffmpeg", ["-hide_banner", "-filters"], { encoding: "utf8" }).stdout || "");
+  if (hook && !hasText) log("note: this ffmpeg has no drawtext filter (built without freetype), so the hook is not burned in. Hook: " + hook);
+  if (hook && font && hasText) {
     fs.writeFileSync(path.join(tmp, "hook.txt"), wrapHook(hook));
     const y = layout === "fit" ? 300 : layout === "split" ? 110 : 200;
     g = g.replace(/\[v\]$/, `[pre];[pre]drawtext=fontfile='${font}':textfile='${path.join(tmp, "hook.txt")}':fontsize=80:fontcolor=white:borderw=12:bordercolor=black:line_spacing=10:x=(w-text_w)/2:y=${y}[v]`);
