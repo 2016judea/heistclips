@@ -1,0 +1,15 @@
+{
+  "name": "heistclips",
+  "version": "0.1.0",
+  "description": "Find the stream moments chat exploded over, cut them to 9:16 in the browser, and rank clipping campaigns by pay per clip. Web app, CLI and MCP server.",
+  "type": "module",
+  "license": "MIT",
+  "bin": { "heistclips": "cli/heistclips.mjs" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "refresh": "node scripts/refresh_local.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "repository": { "type": "git", "url": "https://github.com/2016judea/heistclips" },
+  "homepage": "https://heistclips.com"
+}

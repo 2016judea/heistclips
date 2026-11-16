@@ -1,0 +1,28 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "echo build",
+  "outputDirectory": "public",
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "functions": {
+    "api/*.js": { "includeFiles": "lib/**" },
+    "api/refresh.js": { "maxDuration": 120, "includeFiles": "lib/**" },
+    "api/mcp.js": { "maxDuration": 60, "includeFiles": "lib/**" }
+  },
+  "crons": [{ "path": "/api/refresh", "schedule": "*/30 * * * *" }],
+  "rewrites": [
+    { "source": "/tv/:host/:path*", "destination": "https://:host.cloudfront.net/:path*" },
+    { "source": "/mcp", "destination": "/api/mcp" },
+    { "source": "/.well-known/openai-apps-challenge", "destination": "/api/page?p=/.well-known/openai-apps-challenge" },
+    { "source": "/((?!api/).*)", "destination": "/api/page?p=/$1" }
+  ],
+  "redirects": [
+    { "source": "/rates", "destination": "/gta-6-clipping-rates-today", "permanent": true },
+    { "source": "/campaigns", "destination": "/gta-6-clipping-campaigns", "permanent": true },
+    { "source": "/mcp-server", "destination": "/connect", "permanent": true }
+  ],
+  "headers": [
+    { "source": "/js/(.*)", "headers": [{ "key": "cache-control", "value": "public, max-age=300, s-maxage=3600" }] },
+    { "source": "/tv/(.*)", "headers": [{ "key": "x-robots-tag", "value": "noindex" }] }
+  ]
+}

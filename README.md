@@ -1,0 +1,78 @@
+# heistclips
+
+**Live:** https://heistclips.com
+
+The open-source, local OpusClip alternative, built for agents and for gameplay.
+
+Paste a Twitch channel. heistclips reads its chat, finds the seconds chat exploded, and cuts
+them to 9:16 (facecam over gameplay) with a hook line, on your own machine. It works on
+streams that are **still live**. Then it tells you which clipping campaign pays most for the
+clip.
+
+- **Built for gameplay, not podcasts.** Transcript-based clippers miss gaming moments, which
+  are visual. Chat doesn't: every spike is a timestamp, and each pick shows the lines chat
+  typed so you can see why it was picked.
+- **Free to find, local to cut.** Moment-finding reads public chat replay (~20 s for a 7-hour
+  stream). Cutting happens in your browser (canvas + MediaRecorder) or with your local
+  ffmpeg. Nothing is uploaded. No per-minute billing, no watermark, no AI tags in the file.
+- **Music-claim warning.** If Twitch muted a stretch for licensed music (GTA radio), the
+  moment is flagged before you post it and lose the payout.
+- **Campaign ranker.** Every live clipping campaign ranked by what a typical approved clip has
+  *actually earned*, with budget runway, so you clip for the one that pays.
+
+## Use it from an agent
+
+**MCP server** (no key, no account): `https://heistclips.com/mcp`
+
+```bash
+claude mcp add --transport http heistclips https://heistclips.com/mcp
+```
+
+Tools: `find_moments`, `rank_campaigns`, `campaign_details`, `live_gta_streams`,
+`list_feature_requests`, `upvote_feature_request`, `request_a_feature`. Works as a ChatGPT
+connector (developer mode), a Claude custom connector, and a Grok connector
+(grok.com/connectors).
+
+**Claude Code / Codex skill:** copy `skill/heistclips/` into `~/.claude/skills/` (or your
+agent's skills folder). It teaches the agent to find moments and cut clips with the CLI.
+
+## CLI (local, needs Node 20+ and ffmpeg)
+
+```bash
+git clone https://github.com/2016judea/heistclips && cd heistclips
+node cli/heistclips.mjs moments xqc                 # the moments chat exploded in xQc's live/latest stream
+node cli/heistclips.mjs auto xqc --n 3              # find + cut the top 3 to clips/*.mp4 (9:16, hook burned in)
+node cli/heistclips.mjs cut https://www.twitch.tv/videos/2929840281 --start 4:07:16 --end 4:07:54 --layout split --cam tr --hook "Wait for it"
+node cli/heistclips.mjs campaigns --filter gta      # who pays most per clip right now
+```
+
+## How moments are found
+
+Twitch's chat replay is paged ~60 messages at a time, so the time one page spans is the
+inverse of chat speed at that point. heistclips samples the replay every 10–30 s, scores each
+point against the median of the surrounding ten minutes, boosts "clip it" requests and
+laugh/hype/shock emotes, then re-reads the top peaks at 6-second resolution to find the
+onset. The clip window starts ~24 s before chat reacts and ends ~14 s after. Live streams use
+anonymous read-only IRC and fire a moment when 5-second chat speed hits 2.5× the last five
+minutes; the stream's in-progress VOD trails live by ~10 s, so it can be cut within a minute.
+
+## Repo map
+
+| Path | What |
+|---|---|
+| `public/js/twitch.js` | Twitch reading + moment finding. Runs in the browser and in Node unchanged. |
+| `public/js/render.js` | Browser 9:16 renderer (hls.js → canvas → MediaRecorder). |
+| `public/js/live.js` | Live chat watcher. |
+| `cli/heistclips.mjs` | Local CLI with ffmpeg. |
+| `lib/campaigns.js` | Campaign feed → ranked list. |
+| `api/` | Vercel functions: pages, `/mcp`, credits, checkout, the request board, the 30-min refresh. |
+| `DATA_MODEL.md` | The ideal data model this was built against, and which fields reality fills. |
+
+Tests: `npm test` (offline).
+
+## Data and licence
+
+Code: MIT. Campaign figures are read from Content Rewards' public campaign directory and link
+back to each campaign. Stream and chat data come from Twitch's public endpoints, read
+anonymously. Not affiliated with Rockstar Games, Take-Two Interactive, Twitch or Content
+Rewards; "GTA VI" is used descriptively.

@@ -78,5 +78,74 @@ not the report).
 Campaign ↔ Source by channel handle. Source → Moment → Clip → Post → Campaign (submission).
 Moment ↔ Post across all clippers = competition on that moment. Clip ↔ Track = music risk.
 
-## Reality check (filled after the research)
-_pending_
+## Reality check (filled 2026-11-16, field by field, against live sources)
+
+Legend: **fills** = a source exists and the field ships · **partial** = shipped from a proxy,
+named as one · **not built** = a source exists, v0 didn't wire it · **can't fill** = no source.
+
+### Campaign — fills
+Source: Content Rewards' public discover feed (`/api/campaign/campaigns/discover`, 50/page,
+796–811 live campaigns, all read in ~8 s). Their Creator Terms (rev. 2026-11-13) carry no
+scraping clause; their robots.txt disallows `/api/`. We read it every 30 min with an honest
+user agent, link every campaign back to its own page, and republish facts, not their copy.
+**Risk Aidan should know: robots.txt asks crawlers to stay out of `/api/`.**
+
+| field | status |
+|---|---|
+| id, owner, title, platforms_accepted, approval_required | fills |
+| rate_per_1k, cap_per_clip | fills (per platform) |
+| min_views | **can't fill**: feed has min *payout* per clip, not min views; shipped as min payout |
+| budget_total, budget_left | fills |
+| burn_per_day | fills (derived: spent / days live) → runway in hours when < 3 days |
+| clippers_count, top_clip_views_7d | fills (creatorCount; 7-day views from chartPoints) |
+| source_channels | **partial**: only when the brief names a twitch.tv/kick.com handle — 13 of 796 campaigns |
+| game_tags | **partial**: no structured game field; GTA = regex over title+brief (2 live GTA campaigns on 11/16) |
+| rules (watermark, length, spoilers, audio, geo) | **partial**: free text only; keyword-flagged as requirement tags |
+| expected_$_per_clip | fills, better than planned: realized $ per approved clip (top-3 earners excluded) × runway. Spread across 483 campaigns with a record: p10 $0.24 → p90 $25.42 per clip (100×), so the ranking has an answer |
+| paid_out (added after the Reddit pull: "payers that never paid") | fills |
+
+### Source — fills for Twitch, can't fill for Kick yet
+Twitch GQL (`gql.twitch.tv`, CORS `*`, anonymous) gives channel, live state, viewers, VODs,
+and the in-progress VOD of a live stream (3 of 4 live GTA channels checked had one; the 4th
+saves no VODs → can't be cut). In-progress VOD trails live by ~10 s (measured).
+Kick: **not built** (its API is Cloudflare-walled to curl and the public API wants an OAuth
+app). YouTube Live: **not built**. campaign_ids: partial, via handles above.
+
+### Moment — mostly fills
+| field | status |
+|---|---|
+| t_start, t_end, first_seen_at | fills (first_seen only in live mode) |
+| chat_velocity_z | fills, as ratio to the local ±10-min median (16 s for a 7-h VOD) |
+| event_type | fills from a chat lexicon (laugh/hype/shock/fail emotes, multi-language laughs) |
+| audio_peak | **not built**: needs the audio decoded; the browser only touches video at render time |
+| transcript | deliberately not built: transcript-first is what clippers say incumbents get wrong for gameplay |
+| others_posted_count | **partial**: Twitch-native clips overlapping the window (count + views). Other clippers' TikTok/Shorts posts: **can't fill** (no public search API) |
+| score | fills |
+
+### Clip — mostly fills
+| field | status |
+|---|---|
+| 9:16 frame, length | fills: browser render 1080×1920 H.264/AAC MP4, 30 fps (verified with ffprobe on a real render) |
+| hook_variants | fills: 3–5 per moment from chat's own top phrase + event templates |
+| captions | **not built**: speech captions need ASR; shipped chat overlay + hook instead |
+| music_risk | **partial**: high = Twitch muted that stretch (Audible Magic) — VODs only; live = chat mentions only. Track fingerprinting: **can't fill** before launch (no GTA VI radio fingerprints) |
+| spoiler_flag | **not built** |
+| watermark_ok | fills (never watermarked; no C2PA/AI tags — checked the file) |
+
+### Post — not built
+Every field needs the clipper's own TikTok/YouTube/Instagram OAuth (upload + view APIs) and
+Content Rewards has no public submission API. Buildable per-user; nothing public fills it.
+
+### Clipper — not built
+No accounts in v0 (a random browser id holds credits). Earnings/$-per-hour needs Post.
+
+### Track — can't fill
+GTA VI's radio tracklist and fingerprints don't exist publicly before launch. Twitch's own
+mute is the proxy (see music_risk).
+
+### Call
+Not abandoning. The chain that decides money — Campaign → Source → Moment → Clip — fills, and
+its one derived number has a 100× spread. Post and Clipper are scope, not reality: they fill
+once a clipper connects their accounts, which is the v1 step. The true can't-fills are other
+clippers' posts, min_views, structured rules and GTA VI track fingerprints; each ships as a
+named proxy above, never as the real thing.
