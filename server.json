@@ -1,0 +1,10 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.heistclips/heistclips",
+  "title": "heistclips – GTA 6 clipping",
+  "description": "Find clip-worthy moments in Twitch streams from chat spikes; rank clipping campaigns by pay per clip",
+  "version": "0.1.0",
+  "websiteUrl": "https://heistclips.com/connect",
+  "repository": { "url": "https://github.com/2016judea/heistclips", "source": "github" },
+  "remotes": [{ "type": "streamable-http", "url": "https://heistclips.com/mcp" }]
+}
