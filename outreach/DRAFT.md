@@ -4,7 +4,9 @@ DRAFT. Aidan reads every message and sends it himself (CLAUDE.md tenets 10 and 1
 Nothing is sent before heistclips.com is live and checked.
 
 - **Recipients:** owners of GTA VI and gaming/streamer clipping campaigns on Content Rewards,
-  filled from the ranker's campaign data.
+  filled from the ranker's campaign data. The list (`outreach/recipients.csv`) and one draft per
+  recipient (`outreach/drafts/<slug>.md`) are local only and gitignored, because this repo is public.
+  The outreach-ledger loader reads them from disk, so the `contacted` dedupe sees them.
 - **Channel:** HTML email. The visible link text is `heistclips.com` and its href is
   `https://heistclips.com/for/<slug>`.
 - **Whop/Discord:** these show the raw URL, so `<slug>` is the recipient's own readable name
