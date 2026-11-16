@@ -43,3 +43,9 @@ test("slugs are url-safe and GTA matching is not fooled by 'gtag'", () => {
   assert.ok(GTA_RE.test("Clip GTA VI streams"));
   assert.ok(!GTA_RE.test("add the gtag snippet"));
 });
+
+test("an RSC-escaped $$ title reads as one $", () => {
+  const c = normalize({ ...raw[0], name: "$$8,000 Expedia Campaign" }, NOW);
+  assert.equal(c.title, "$8,000 Expedia Campaign");
+  assert.match(c.slug, /^8-000-expedia-campaign-/);
+});
