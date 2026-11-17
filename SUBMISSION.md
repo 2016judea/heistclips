@@ -47,11 +47,9 @@ Negative: "Clip this YouTube Live stream" → find_moments says it takes Twitch 
 - Which GTA streamers are live right now?
 
 ## What needs Aidan (gates)
-- **ChatGPT: NOT FILED. Blocked 2026-11-16 on his passkey** (see Submissions below). Once he is
-  signed in to platform.openai.com: Create plugin → With MCP → Universal → endpoint above →
-  auth none → Scan Tools (7) → domain token into Vercel env `OPENAI_APPS_CHALLENGE` → demo
-  recording in Developer mode → submit → he clicks Publish after approval. Headless is signed
-  out and Turnstile-walled.
+- **ChatGPT:** filed 2026-11-17 00:48 UTC, 0.1.0 in review. **When the approval email comes, he
+  clicks Publish** at platform.openai.com/plugins/manage/plugin_asdk_app_6afba27819348191bfed030276cf83be.
+  Approval does not publish it. Leave Vercel env `OPENAI_APPS_CHALLENGE` set: OpenAI re-checks it.
 - **Claude directory:** filed 2026-11-16, in review. Nothing to do.
 - **Grok:** filed 2026-11-16 through xAI's form. A reply comes by email to aidan@brickandmortar.dev.
 
@@ -61,7 +59,7 @@ Negative: "Clip this YouTube Live stream" → find_moments says it takes Twitch 
 |---|---|---|---|
 | Official MCP Registry | LISTED | 11-16 | `com.heistclips/heistclips` 0.1.0 |
 | Claude Connectors Directory | **SUBMITTED, in review** ("can take a few weeks") | 23:04 | claude.ai/directory/manage/heistclips · slug `heistclips` (permanent) |
-| ChatGPT plugin directory | **NOT SUBMITTED**: stopped at sign-in, needs his passkey | 22:50 | — |
+| ChatGPT plugin directory | **SUBMITTED, 0.1.0 in review**; he clicks Publish after approval | 11-17 00:48 | plugin `plugin_asdk_app_6afba27819348191bfed030276cf83be` |
 | xAI Connector Marketplace (Grok, Grok Bot, Cursor) | **SUBMITTED, pending review** | 21:10 | x.ai/bot/marketplace/submit-a-plugin · no ID shown · reply to aidan@brickandmortar.dev |
 | Glama | **LISTED, claimed, health check passing** | 21:20 | https://glama.ai/mcp/connectors/com.heistclips/heistclips |
 | mcp.so | **SUBMITTED free, queued for review** | 22:49 | submission `81b752a0-13b0-4fe5-a227-1cec259d8c49` · will be mcp.so/server/heistclips-gta-6-clipping (404 until approved) |
@@ -71,16 +69,41 @@ Negative: "Clip this YouTube Live stream" → find_moments says it takes Twitch 
 
 Nothing was paid, nothing was sent to a person, nothing was posted on his accounts.
 
-**ChatGPT, where it stopped.** The platform account (aidanjude2016@gmail.com) signs in through
-Google only. "Continue with email" also goes to Google. In a copied Chrome session Google reads
-"Signed out", and picking the account lands on `accounts.google.com/v3/signin/challenge/pk`
-("Complete sign-in using your passkey"). Nothing was created on platform.openai.com. No domain
-token exists yet, so `/.well-known/openai-apps-challenge` correctly still returns 404. The
-chatgpt.com session does work in a copy, but the plan reads Free and Settings shows Plugins with
-no Developer-mode switch, so the demo can't be recorded before the platform draft exists. When
-filing: drop "Free," from the long description, because pricing words fail OpenAI's metadata
-check (`small-business-intelligence-mcp/SUBMISSION-KIT.md` §10). Use the YouTube negative case
-above, not the old Kick one.
+**ChatGPT, what was filed (2026-11-17).** "Create plugin → With MCP" no longer exists. The portal
+takes only a plugin ZIP (Agent Plugins format), the same flow `appeal-the-denial` used on 11-03.
+- **Sign-in.** The platform account (aidanjude2016@gmail.com) signs in through Google only, and
+  Google demands his passkey in a copied Chrome profile. The platform session is also a session
+  cookie, so it never reaches a copy. After he signed in, the work ran in **his own Chrome**, through
+  AppleScript `execute javascript` on a tab of its own.
+- **Package** `heistclips` 0.1.0, publisher **Business — Brick and Mortar AI LLC**.
+  - Copy: displayName "heistclips (GTA 6 clipping)". shortDescription "Clip moments and campaign
+    pay", because the field has a 30-character cap. Long description is the kit's, minus "Free,",
+    because pricing words fail OpenAI's metadata check (SBI kit §10).
+  - Category Entertainment.
+  - Links: website heistclips.com, support /requests (needs an HTTPS URL, not an email),
+    privacy /privacy, terms /terms.
+  - Starter prompts are the kit's, with `<streamer>` filled in as xrohat.
+  - Logo and composer icons are rendered from /img/icon.svg.
+  - Test cases: positive 1–5 above, plus the three negatives (YouTube Live, TikTok, release date).
+  - No skills.
+  - The builder (`build.py`) lived in the session scratchpad and is gone. To change anything,
+    download the plugin.json from the portal, edit it, and **bump the version**.
+- **Domain:** token in Vercel env `OPENAI_APPS_CHALLENGE` (all targets), production redeployed;
+  `/.well-known/openai-apps-challenge` returns it as text/plain. Verified.
+- **MCP:** connected, no auth. Scan found 7 tools with no MCP findings.
+- **One non-blocking metadata finding:** "Review the plugin's privacy policy against the
+  submission guidelines". The review note answers it.
+- **Demo:** https://cf546sdmyewh8fpm.public.blob.vercel-storage.com/demo/chatgpt-review.mp4 (Vercel
+  Blob, not in the repo).
+  - 7 min 08 s, 1440×1000, one take of all 8 test cases, recorded headless with a CDP screencast.
+  - The ChatGPT sidebar is hidden, so no personal chats show. The last answer says "Aidan" once.
+  - Developer mode **works on his Free plan**: chatgpt.com/plugins → Add → Add custom MCP server.
+    That added a dev plugin "heistclips" (no auth) to his ChatGPT.
+- **Submitted** with the six attestations ticked, the same set as SBI and Appeal the Denial. One of
+  them is "all necessary rights to any third-party content or API endpoints". The private review
+  note says plainly that find_moments and live_gta_streams read public Twitch and Kick data
+  anonymously, and that campaigns come from Content Rewards' public directory. If a rejection
+  cites rights to third-party data, that is the soft spot.
 
 **Claude, what was filed.** The portal makes you add the server as a custom connector first. It
 now sits in his Claude Settings → Connectors as "heistclips (GTA 6 clipping)", uuid
