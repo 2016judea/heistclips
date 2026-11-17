@@ -50,7 +50,7 @@ GTA 6 drops Thursday. Every clipper is about to fight over the same streams.
 
 Built heistclips.com. It clips Twitch streams live, off chat spikes. Built for gameplay, not podcasts. Pay per clip, no watermark.
 
-And a free campaign ranker. The median clip pays $4.10.
+And a free campaign ranker. The median clip pays $4.13.
 
 ---
 
@@ -67,8 +67,8 @@ Three wording changes beyond the numbers and "Twitch and Kick chat", each needed
 | Platform | Account | Result | Time |
 |---|---|---|---|
 | r/whop | u/aidanjude (created today) | **Not posted.** Sidebar rule 7: "We are no longer allowing posts related to clipping or content rewards." | — |
-| Show HN | none | **Not posted.** HN account creation stops on a reCAPTCHA. | — |
-| X | none | **Not posted.** X refused the email sign-up ("Sorry, something is not right. Please try using a different method"). Only phone, Google or Apple sign-up remain. | — |
+| Show HN | 2016judea (Aidan, by hand) | https://news.ycombinator.com/item?id=50525493. Aidan posted it himself after sign-up hit a reCAPTCHA. At 00:21 the HN API showed the story as **dead**, meaning HN killed it and it isn't publicly visible. | 2026-11-17 00:09 |
+| X | @_plumbbob_ (display name heistclips; created through X's Google sign-up) | https://x.com/_plumbbob_/status/2122484959634198900. The first attempt failed because X refused email sign-up. The median was re-read at post time from the 00:01 snapshot: $4.13, same length. | 2026-11-17 00:20 |
 
 ### Whop messages
 
