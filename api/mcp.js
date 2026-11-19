@@ -10,6 +10,7 @@ import { latestEntries, PATH as NEWS_PATH } from "../lib/changelog.js";
 import { queueTool } from "../lib/queuetool.js";
 import { findClipMoments } from "../lib/momentstool.js";
 import { JOB, newJobId, jobAgeMs, JOB_DEAD_MS, loadJob } from "../lib/cutjob.js";
+import { isTest } from "../lib/marks.js";
 
 const SITE = "https://heistclips.com";
 const BASE = process.env.HC_BASE || SITE; // where this server reaches its own /api/v1 functions
@@ -206,7 +207,7 @@ async function logCall(tool, ok, ms, meta, extra = {}) {
     for (const k of LOG_KEYS) if (extra[k] !== undefined && extra[k] !== null && typeof extra[k] !== "object") more[k] = typeof extra[k] === "string" ? extra[k].slice(0, 40) : extra[k];
     await fetch("https://us.i.posthog.com/capture/", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(1500),
       body: JSON.stringify({ api_key: PH_KEY, event: "mcp_tool_call", distinct_id: "mcp_" + hashOf(day + "|" + meta.ip + "|" + meta.ua),
-        properties: { tool, ok, ms, ...more, client: meta.client, client_ua: String(meta.ua).split(/[\/ ;(]/)[0].slice(0, 30), site: "heistclips", $process_person_profile: false, $lib: "heistclips-mcp" } }) });
+        properties: { tool, ok, ms, ...more, client: meta.client, client_ua: String(meta.ua).split(/[\/ ;(]/)[0].slice(0, 30), test: meta.test ? true : undefined, site: "heistclips", $process_person_profile: false, $lib: "heistclips-mcp" } }) });
   } catch (e) {}
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
@@ -265,7 +266,7 @@ const brief = (c, i) => ({
   page: tag(`${SITE}/campaigns/${c.slug}`), join: c.source_url,
 });
 
-export async function callTool(name, args = {}, caller = "mcp") {
+export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) {
   name = ALIASES[name] || name;
   if (name === "list_feature_requests") {
     const list = publicList(await loadBoard()).filter((x) => (!args.status || x.status === args.status) && (!KINDS.includes(args.kind) || x.kind === args.kind));
@@ -324,7 +325,7 @@ export async function callTool(name, args = {}, caller = "mcp") {
     // The cut runs in its own function (ffmpeg, longer limit) and goes on to the end whether or
     // not anyone is still waiting. This call waits a safe while, then hands back the job code.
     const job = newJobId(), t0 = Date.now();
-    const cut = fetch(BASE + cutLane(), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...args, via: "mcp", job }) })
+    const cut = fetch(BASE + cutLane(), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...args, via: "mcp", job, ...(meta.test ? { qa: true } : {}) }) })
       .then(async (r) => (await r.json().catch(() => null)) || { ok: false, err: "http_" + r.status, error: "The cut did not finish (" + r.status + "). Nothing was charged; try again." }, () => null);
     const d = await Promise.race([cut, sleep(CUT_WAIT_MS).then(() => undefined)]);
     if (d) return cutResult(d);
@@ -380,8 +381,11 @@ export function withBugHint(out, tool, args = {}) {
   return next;
 }
 
-let caller = "mcp", meta = { ip: "local", ua: "", client: "other" };
-async function handleOne(msg) {
+// Who is calling travels with the request. It used to sit in two module variables, and one
+// instance serves many requests at once: a cut that took 30 s was logged with the client of
+// whoever called last, and a vote could be counted for another caller's address (2026-11-19).
+const NO_META = { ip: "local", ua: "", client: "other", test: false };
+async function handleOne(msg, caller = "mcp", meta = NO_META) {
   const { id, method, params } = msg || {};
   const ok = (result) => ({ jsonrpc: "2.0", id, result });
   if (method === "initialize") {
@@ -394,7 +398,7 @@ async function handleOne(msg) {
   if (method === "tools/call") {
     const t0 = Date.now(), tool = ALIASES[params && params.name] || String((params && params.name) || "");
     let out;
-    try { out = await callTool(params.name, params.arguments || {}, caller); }
+    try { out = await callTool(params.name, params.arguments || {}, caller, meta); }
     catch (e) { out = withLog({ content: [{ type: "text", text: "Error: " + e.message }], isError: true }, { err: /twitch|kick|gql/i.test(e.message) ? "upstream" : "exception" }); }
     const log = out.log || {};
     out = withBugHint(out, tool, params.arguments || {});
@@ -410,7 +414,7 @@ async function handleOne(msg) {
 
 export default async function handler(req, res) {
   res.setHeader("access-control-allow-origin", "*");
-  res.setHeader("access-control-allow-headers", "content-type, mcp-session-id, mcp-protocol-version, authorization");
+  res.setHeader("access-control-allow-headers", "content-type, mcp-session-id, mcp-protocol-version, authorization, x-hc-test");
   res.setHeader("access-control-allow-methods", "POST, GET, OPTIONS, DELETE");
   if (req.method === "OPTIONS") { res.statusCode = 204; return res.end(); }
   if (req.method === "GET") {
@@ -420,11 +424,11 @@ export default async function handler(req, res) {
   if (req.method === "DELETE") { res.statusCode = 204; return res.end(); }
   let body;
   try { body = await readBody(req); } catch (e) { res.statusCode = 400; return res.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } })); }
-  caller = String(req.headers["x-forwarded-for"] || "local").split(",")[0].trim();
+  const caller = String(req.headers["x-forwarded-for"] || "local").split(",")[0].trim();
   const ua = String(req.headers["user-agent"] || "");
-  meta = { ip: caller, ua, client: clientOf(ua) };
+  const meta = { ip: caller, ua, client: clientOf(ua), test: isTest(req) }; // x-hc-test: lib/marks.js
   const batch = Array.isArray(body);
-  const out = (await Promise.all((batch ? body : [body]).map(handleOne))).filter(Boolean);
+  const out = (await Promise.all((batch ? body : [body]).map((m) => handleOne(m, caller, meta)))).filter(Boolean);
   if (!out.length) { res.statusCode = 202; return res.end(); }
   res.setHeader("content-type", "application/json");
   res.end(JSON.stringify(batch ? out : out[0]));

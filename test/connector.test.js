@@ -156,3 +156,23 @@ test("cut_clip_status is listed, read-only, and refuses anything that is not a j
   assert.equal(r.isError, true); assert.equal(r.log.err, "bad_job");
   assert.ok(!("log" in JSON.parse(JSON.stringify(r))), "analytics fields never reach the client");
 });
+
+test("a cut's charge names the stream; a test cut and a house account are marked on the charge and on server_cut (lib/marks.js)", async () => {
+  const commits = [];
+  const credit = async (a, rec, extra) => { if (a === "commit") commits.push(extra.meta); return { ok: true, ticket: "t", free_left: 5, paid_left: 0 }; };
+  let d = deps();
+  const first = await cutJob({ source: "v1", start: 100, end: 130 }, { ...clean(d), creditCall: credit });
+  assert.deepEqual([commits[0].channel, commits[0].platform, commits[0].secs, commits[0].layout, commits[0].vod, commits[0].t], ["x", "twitch", 30, "server-fit", "v1", 100]);
+  assert.equal("qa" in commits[0], false);
+  assert.deepEqual([d.calls.events[0][1].house, d.calls.events[0][1].test], [undefined, undefined]);
+  d = deps();
+  await cutJob({ source: "v1", start: 100, end: 130, account: first.account, qa: true, via: "web" }, { ...clean(d), creditCall: credit });
+  assert.equal(commits[1].qa, true); assert.equal(commits[1].via, "web");
+  assert.equal(d.calls.events[0][1].test, true);
+  process.env.HOUSE_ACCOUNTS = first.account;
+  d = deps();
+  await cutJob({ source: "v1", start: 100, end: 130, account: first.account }, { ...clean(d), creditCall: credit });
+  delete process.env.HOUSE_ACCOUNTS;
+  assert.equal(d.calls.events[0][1].house, true);
+  assert.equal(JSON.stringify(d.calls.events[0][1]).includes(first.account), false);
+});

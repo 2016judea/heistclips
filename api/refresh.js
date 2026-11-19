@@ -55,7 +55,9 @@ export default async function handler(req, res) {
   let trend = null;
   try {
     const last = await getJSON("trend/latest.json", { fresh: true }).catch(() => null);
-    if (!last || Date.now() - Date.parse(last.generated_at) > 50 * 60 * 1000) { const t = await buildTrend(); trend = { clips: t.clips_counted, streams: t.streams.length, moments: t.moments.length }; }
+    // ?trend=now rebuilds at once (after lib/trend_exclude.json changes).
+    const force = new URL(req.url || "/", SITE).searchParams.get("trend") === "now";
+    if (force || !last || Date.now() - Date.parse(last.generated_at) > 50 * 60 * 1000) { const t = await buildTrend(); trend = { clips: t.clips_counted, streams: t.streams.length, moments: t.moments.length }; }
   } catch (e) { trend = "error: " + e.message; }
 
   // Summary history for the rates page (last ~10 days at 30-min steps).

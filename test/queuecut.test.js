@@ -90,3 +90,14 @@ test("connector: my_clip_queue reads a queue by its private link, with src=mcp l
   const names = TOOLS.map((t) => t.name);
   assert.ok(names.includes("my_clip_queue") && names.includes("watch_streamer"));
 });
+
+test("a test cut from the queue carries the mark to the charge; a customer's cut carries none (lib/marks.js)", async () => {
+  const w = await seed();
+  let d = deps();
+  await queueCut({ k: w.k, d: "dev1", ch: "twitch:teststreamer", moment: "v9_100", qa: true }, d);
+  assert.equal(d.calls.commit[0].extra.meta.qa, true);
+  d = deps();
+  await queueCut({ k: w.k, d: "dev1", ch: "twitch:teststreamer", moment: "v9_100" }, d);
+  assert.equal("qa" in d.calls.commit[0].extra.meta, false);
+  assert.deepEqual([d.calls.commit[0].extra.meta.channel, d.calls.commit[0].extra.meta.platform, d.calls.commit[0].extra.meta.secs > 0], ["teststreamer", "twitch", true], "clip_made gets the stream and the length");
+});

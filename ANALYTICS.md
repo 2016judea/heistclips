@@ -53,10 +53,10 @@ ended with no event (610 started, 478 done, 5 failed).
 
 | Event | Fired from | Properties |
 |---|---|---|
-| `clip_made` | `spend()` in `api/credits.js`: the one place every path spends a clip. **The one true count of clips.** | `path` (`browser`, `browser_server`, `connector`, `queue`), `platform`, `channel`, `vod_id`, `t_start`, `clip_secs`, `layout`, `mb`, `charged` (`free` or `paid`), `free_left`, `paid_left` |
+| `clip_made` | `spend()` in `api/credits.js`: the one place every path spends a clip. **The one true count of clips.** | `path` (`browser`, `browser_server`, `connector`, `queue`), `platform`, `channel`, `vod_id`, `t_start`, `clip_secs`, `layout`, `mb`, `charged` (`free` or `paid`), `free_left`, `paid_left`, `house` (`true` on a clip cut by one of our own accounts, absent otherwise) |
 | `purchase` | `grant()` in `api/stripe-webhook.js`, once per paid Checkout session | `pack`, `clips`, `amount`, `currency`, `country`, `livemode`, `via` (`webhook` or `claim`) |
-| `server_cut` | `lib/cutjob.js`, `lib/queuecut.js`: every server cut, finished or failed, whether or not the caller was still waiting. The cutter's timings, not a count of clips (that is `clip_made`). | `ok`, `err` (`too_long`, `past_end`, `no_credits`, `segment`, `segment_timeout`, `ffmpeg`, `ffmpeg_timeout`, `empty`, `store`, `crash_<step>`, a source code such as `vod_missing`), `path` (`connector`, `browser_server`, `queue`), `clip_secs`, `platform`, `layout`, `source_quality` (the rendition read: `720p60`, `1080p60`, `chunked`, `kick-720p`…), `megabytes`, `charged`, and the time split in ms: `resolve_ms`, `account_ms`, `playlist_ms`, `download_ms`, `source_mb`, `queue_ms` (waiting for another cut's encode on the same instance), `encode_ms`, `upload_ms`, `commit_ms`, `total_ms` |
-| `mcp_tool_call` | `api/mcp.js`, one per connector tool call | `tool`, `ok`, `ms`, `client`, `client_ua`, `err` (short code; never the message), `status` (`cutting` when cut_clip handed back a job), `polls`; for `cut_clip` / `cut_clip_status` also `clip_secs`, `platform`, `layout`, `source_quality`, `megabytes`, `cut_ms` and the same time split as `server_cut`; for `find_clip_moments` also `platform`, `cache` (`miss`, `warm`, `stored`), `read_ms`, `stream_hours`, `live`, `moments`. No arguments, chat text or captions. |
+| `server_cut` | `lib/cutjob.js`, `lib/queuecut.js`: every server cut, finished or failed, whether or not the caller was still waiting. The cutter's timings, not a count of clips (that is `clip_made`). | `ok`, `err` (`too_long`, `past_end`, `no_credits`, `segment`, `segment_timeout`, `ffmpeg`, `ffmpeg_timeout`, `empty`, `store`, `crash_<step>`, a source code such as `vod_missing`), `path` (`connector`, `browser_server`, `queue`), `clip_secs`, `platform`, `layout`, `source_quality` (the rendition read: `720p60`, `1080p60`, `chunked`, `kick-720p`…), `megabytes`, `charged`, and the time split in ms: `resolve_ms`, `account_ms`, `playlist_ms`, `download_ms`, `source_mb`, `queue_ms` (waiting for another cut's encode on the same instance), `encode_ms`, `upload_ms`, `commit_ms`, `total_ms`, `house` (`true` for our own accounts), `test` (`true` for a marked test cut) |
+| `mcp_tool_call` | `api/mcp.js`, one per connector tool call | `tool`, `ok`, `ms`, `client`, `client_ua`, `test` (`true` when the call carried the test header), `err` (short code; never the message), `status` (`cutting` when cut_clip handed back a job), `polls`; for `cut_clip` / `cut_clip_status` also `clip_secs`, `platform`, `layout`, `source_quality`, `megabytes`, `cut_ms` and the same time split as `server_cut`; for `find_clip_moments` also `platform`, `cache` (`miss`, `warm`, `stored`), `read_ms`, `stream_hours`, `live`, `moments`. No arguments, chat text or captions. |
 | `bug_report` | `api/requests.js` (`bugEvent`), one per bug filed from the site or the connector | `via` (`website`, `mcp`), `step` (a tool or page step from a fixed list, else `other`), `platform`, `failure` (`error_returned`, `wrong_result`, `empty_or_broken_file`, `timeout`, `other`, `unspecified`), `has_stream`, `has_moment`, `has_error_text`, `lang`. Never the report's words. |
 
 `clip_made.path` is read from what the spender sends: `layout: "queue-server"` is the queue,
@@ -64,11 +64,47 @@ ended with no event (610 started, 478 done, 5 failed).
 a browser render. `channel` and `clip_secs` are there when the spender sends them in the commit's
 `meta` (the browser does; `lib/cutjob.js` sends `vod`, `t` and `layout` today). The distinct id is
 the browser's PostHog id when the page sent one, else a keyed hash of the device id; no person
-profile is created. A commit with `meta.qa === true` is charged and counted nowhere (test runs).
+profile is created.
+
+`client` and `client_ua` on `mcp_tool_call` are wrong for calls that took more than a moment
+(every `cut_clip`) before 2026-11-19 22:00 UTC: the caller was kept in a variable shared by all
+requests on an instance, so a 30 s cut was logged with whoever called last. Do not split cuts
+by client before that time.
+
+## Test and house clips (`lib/marks.js`)
+
+Public numbers (`/most-clipped-streams`, `/data/most-clipped.json`, the count of `clip_made`)
+are customers' clips only. Two marks keep ours out.
+
+**A test marks itself with one header: `x-hc-test: 1`.** It works on every path that can make a
+clip: `POST /api/credits` (a browser render's commit), `POST /api/v1/cut` (the phone and Safari
+server cut), `POST /api/v1/qcut` (a queue cut) and `POST /mcp` (the connector). The clip is cut
+and charged like any other, so the charge path is still tested, and it is counted nowhere: no
+trend record, no `clip_made`. `server_cut` and `mcp_tool_call` are still sent, with
+`test: true`, because they are timings and not counts.
+
+| From | How |
+|---|---|
+| a script | `import { TEST_HEADERS, mcp } from "./scripts/test_cut.mjs"`, or `node scripts/test_cut.mjs <source> <start> <end>` for one marked cut that also checks no trend record was left |
+| a Playwright browser | `context.setExtraHTTPHeaders({ "x-hc-test": "1" })` before the page loads, plus `posthog.register({ qa_test: true })` for the browser's own events (below) |
+| curl | `-H 'x-hc-test: 1'` |
+
+There is no other way and none is needed: not a user agent, not an address, not a body field.
+On 2026-11-19 build agents made about 70 unmarked test clips on production; telling them from
+customers' clips afterwards took the spend ledger and PostHog, and the result is the
+list in `lib/trend_exclude.json` (records the trend build skips; nothing was deleted).
+
+**A house clip is one cut by our own account** (the clip desk that posts to our own channel).
+`HOUSE_ACCOUNTS` in the environment is a comma-separated list of account codes (`hc_…`) or
+browser device ids. A house clip is charged, sends `clip_made` and `server_cut` with
+`house: true`, and leaves no trend record. Count customers' clips with
+`event = 'clip_made' and properties.house is null`. An account code is a secret: it is in the
+environment only, never in this repo and never in an event.
 
 ## Checking that an event arrives
 
 PostHog's snippet does not load when `navigator.webdriver` is true, so a plain headless run sends
 nothing. To see real events: a headless Chrome started with
 `--disable-blink-features=AutomationControlled`, then `posthog.register({ qa_test: true })` in the
-page so the test's events can be filtered out, or the iOS simulator's Safari.
+page so the test's events can be filtered out, or the iOS simulator's Safari. A run that renders or
+cuts a clip also sends the test header (above), so the clip itself is not counted.
