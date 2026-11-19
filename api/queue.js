@@ -132,6 +132,7 @@ export default async function handler(req, res) {
       const last = Date.parse(w.notify.confirm_sent_at || 0) || 0;
       if (Date.now() - last < 60000) return json(res, 429, { error: "a link was just sent; check your inbox" });
       if ((w.notify.confirm_sends || 0) >= 5) return json(res, 429, { error: "too many tries; email aidan@brickandmortar.dev" });
+      w.notify.lang = W.MAIL_LANGS.includes(b.lang) ? b.lang : null; // the page's language: mail follows it
       w.notify.email = email; w.notify.email_ok = false; w.notify.confirm_sent_at = new Date().toISOString(); w.notify.confirm_sends = (w.notify.confirm_sends || 0) + 1;
       await W.saveWatch(w);
       const r = await W.sendMail(W.confirmMail(w, email));

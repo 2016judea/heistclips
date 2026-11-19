@@ -5,7 +5,7 @@ import { guidePage, guidesIndex, ratesPage, GUIDES } from "../lib/guides.js";
 import { getChannel } from "../public/js/twitch.js";
 import { loadBoard, publicList } from "../lib/requests.js";
 import { splitLang, href, isLocal, LANGS } from "../lib/i18n.js";
-import { localPage } from "../lib/pages_l10n.js";
+import { localPage, notFoundPage } from "../lib/pages_l10n.js";
 import { TR_LANGS } from "../lib/translate.js";
 import { TOOLS as MCP_TOOLS } from "./mcp.js";
 import { queuePage } from "../lib/queuepage.js";
@@ -43,6 +43,38 @@ export function sitemapUrls(snap, trend = null) {
   for (const l of LANGS) if (l !== "en") for (const x of base) urls.push(href(l, x));
   return urls;
 }
+
+// The record behind /campaigns/<slug>: live, moved (a 301 to its current slug), ended, or none.
+async function campaignCtx(snap, slug) {
+  const c = snap.campaigns.find((x) => x.slug === slug) || snap.campaigns.find((x) => slug.endsWith("-" + x.id.split("-")[0]));
+  if (c) return c.slug !== slug ? { redirect: c.slug } : { campaign: c };
+  // Not live any more: the page stays, marked ended, with what pays now (lib/ended.js).
+  const e = findEnded(await loadEnded().catch(() => ({})), slug);
+  if (e && e.campaign.slug !== slug) return { redirect: e.campaign.slug };
+  if (e) return { ended: e };
+  // A campaign-shaped URL we hold no record of (it closed before 2026-11-19): still an answer, not indexed.
+  if (/-[0-9a-f]{8}$/.test(slug)) return { ended: { slug } };
+  return null;
+}
+
+// The streamer behind /streamers/<login>. Twitch: any real channel. Kick: channels in the snapshot
+// (Kick throttles reads, so the page is built from the 30-minute snapshot row, not a live call).
+async function streamerCtx(snap, kick, login) {
+  if (!kick && !/^[a-z0-9_]{3,25}$/.test(login)) return null;
+  const s = (snap.streamers || []).find((x) => x.login === login && (x.platform === "kick") === kick);
+  let chan = null;
+  if (!kick) { try { chan = await getChannel(login); } catch (e) {} }
+  else if (s) chan = { name: s.name, avatar: s.avatar, is_live: !!s.live_now, stream: s.live_now ? { viewers: s.viewers_now, game: s.game, title: s.last_title } : null, vods: [] };
+  if (!s && !chan) return null;
+  const row = s || { login, name: chan.name, platform: "twitch" };
+  const who = { platform: kick ? "kick" : "twitch", login, name: (chan && chan.name) || row.name || login };
+  const ids = new Set((s && s.campaign_ids) || []);
+  const camps = snap.campaigns.filter((c) => c.budget_left > 0 && (ids.has(c.id) || campaignsFor(who, [c]).length));
+  return { row, chan, camps, trend: await loadTrend().catch(() => null) };
+}
+
+// Paths that are English on purpose (or are files, not pages): a /de/… request goes to the English one.
+const ENGLISH_ONLY = /^\/(?:for\/|data\/|llms(?:-full)?\.txt$|sitemap\.xml$|robots\.txt$|\.well-known\/|post$|[0-9a-f]{32}\.txt$)/;
 
 export default async function handler(req, res) {
   const u = new URL(req.url, "https://heistclips.com");
@@ -84,14 +116,25 @@ export default async function handler(req, res) {
     // /de/…, /fr/…, /pt/…, /es/…: the same page in that language where one exists, else the English page.
     const loc = splitLang(p);
     if (loc.lang !== "en") {
-      let board, history;
-      if (loc.path === "/requests") board = publicList(await loadBoard());
-      if (loc.path === "/gta-6-clipping-rates-today") { try { history = (await getJSON("snapshot/history.json")) || []; } catch (e) {} }
-      const trend = S.MAKERS[loc.path] || loc.path === S.TREND_PATH ? await loadTrend().catch(() => null) : null;
-      const html = localPage(loc.lang, loc.path, { snap, query: u.searchParams, board, history, trend });
-      if (html) return send(res, 200, html, undefined, loc.path === "/requests" ? 30 : loc.path === "/clip" || loc.path === "/pricing" ? 3600 : 300);
-      const q = new URLSearchParams(u.searchParams); q.delete("p");
-      res.statusCode = 302; res.setHeader("location", loc.path + (q.toString() ? "?" + q : "")); return res.end();
+      const lp = loc.path, ctx = { snap, query: u.searchParams, tools: MCP_TOOLS };
+      let lm;
+      if (lp === "/requests") ctx.board = publicList(await loadBoard());
+      if (lp === "/gta-6-clipping-rates-today") { try { ctx.history = (await getJSON("snapshot/history.json")) || []; } catch (e) {} }
+      if (S.MAKERS[lp] || lp === S.TREND_PATH || lp === S.DATA_PATH) ctx.trend = await loadTrend().catch(() => null);
+      if ((lm = lp.match(/^\/campaigns\/([a-z0-9-]+)$/))) {
+        const r = await campaignCtx(snap, lm[1]);
+        if (r && r.redirect) { res.statusCode = 301; res.setHeader("location", href(loc.lang, "/campaigns/" + r.redirect)); return res.end(); }
+        if (r) { ctx.campaign = r.campaign; ctx.ended = r.ended; }
+      }
+      if ((lm = lp.match(/^\/streamers\/(kick\/)?([a-z0-9_-]{2,40})$/))) ctx.streamer = await streamerCtx(snap, !!lm[1], lm[2]);
+      const html = localPage(loc.lang, lp, ctx);
+      const slow = ["/clip", "/pricing", "/queue", "/connect", "/about", "/privacy", "/terms", "/guides"].includes(lp) || (ctx.ended && !ctx.campaign);
+      if (html) return send(res, 200, html, undefined, lp === "/requests" ? 30 : slow ? 3600 : ctx.streamer || ctx.trend ? 600 : 300);
+      if (ENGLISH_ONLY.test(lp)) {
+        const q = new URLSearchParams(u.searchParams); q.delete("p");
+        res.statusCode = 302; res.setHeader("location", lp + (q.toString() ? "?" + q : "")); return res.end();
+      }
+      return send(res, 404, notFoundPage(loc.lang), undefined, 60);
     }
     if (p === "/") return send(res, 200, R.homePage(snap));
     let fm;
@@ -134,37 +177,20 @@ export default async function handler(req, res) {
       return html ? send(res, 200, html) : send(res, 404, R.notFound());
     }
     if ((m = p.match(/^\/campaigns\/([a-z0-9-]+)$/))) {
-      const c = snap.campaigns.find((x) => x.slug === m[1]) || snap.campaigns.find((x) => m[1].endsWith("-" + x.id.split("-")[0]));
-      if (!c) {
-        // Not live any more: the page stays, marked ended, with what pays now (lib/ended.js).
-        const e = findEnded(await loadEnded().catch(() => ({})), m[1]);
-        if (e && e.campaign.slug !== m[1]) { res.statusCode = 301; res.setHeader("location", "/campaigns/" + e.campaign.slug); return res.end(); }
-        if (e) return send(res, 200, S.endedPage(snap, e), undefined, 3600);
-        // A campaign-shaped URL we hold no record of (it closed before 2026-11-19): still an answer, not indexed.
-        if (/-[0-9a-f]{8}$/.test(m[1])) return send(res, 200, S.endedPage(snap, { slug: m[1] }), undefined, 3600);
-        return send(res, 404, R.notFound(), undefined, 60);
-      }
-      if (c.slug !== m[1]) { res.statusCode = 301; res.setHeader("location", "/campaigns/" + c.slug); return res.end(); }
-      return send(res, 200, R.campaignPage(snap, c));
+      const r = await campaignCtx(snap, m[1]);
+      if (!r) return send(res, 404, R.notFound(), undefined, 60);
+      if (r.redirect) { res.statusCode = 301; res.setHeader("location", "/campaigns/" + r.redirect); return res.end(); }
+      if (r.ended) return send(res, 200, S.endedPage(snap, r.ended), undefined, 3600);
+      return send(res, 200, R.campaignPage(snap, r.campaign));
     }
     if (S.MAKERS[p]) return send(res, 200, S.makerPage(p, await loadTrend().catch(() => null), "en"), undefined, 600);
     if (p === S.TREND_PATH) return send(res, 200, S.trendPage(await loadTrend(), "en"), undefined, 600);
     if (p === S.DATA_PATH) return send(res, 200, S.dataPage(snap, await loadTrend().catch(() => null)), undefined, 600);
-    // "How to clip <streamer>". Twitch: any real channel. Kick: channels in the snapshot (Kick
-    // throttles reads, so the page is built from the 30-minute snapshot row, not a live call).
+    // "How to clip <streamer>" (streamerCtx above).
     if ((m = p.match(/^\/streamers\/(kick\/)?([a-z0-9_-]{2,40})$/))) {
-      const kick = !!m[1], login = m[2];
-      if (!kick && !/^[a-z0-9_]{3,25}$/.test(login)) return send(res, 404, R.notFound(), undefined, 60);
-      const s = (snap.streamers || []).find((x) => x.login === login && (x.platform === "kick") === kick);
-      let chan = null;
-      if (!kick) { try { chan = await getChannel(login); } catch (e) {} }
-      else if (s) chan = { name: s.name, avatar: s.avatar, is_live: !!s.live_now, stream: s.live_now ? { viewers: s.viewers_now, game: s.game, title: s.last_title } : null, vods: [] };
-      if (!s && !chan) return send(res, 404, R.notFound(), undefined, 60);
-      const row = s || { login, name: chan.name, platform: "twitch" };
-      const who = { platform: kick ? "kick" : "twitch", login, name: (chan && chan.name) || row.name || login };
-      const ids = new Set((s && s.campaign_ids) || []);
-      const camps = snap.campaigns.filter((c) => c.budget_left > 0 && (ids.has(c.id) || campaignsFor(who, [c]).length));
-      return send(res, 200, S.streamerHowTo(snap, row, chan, camps, await loadTrend().catch(() => null)), undefined, 600);
+      const w = await streamerCtx(snap, !!m[1], m[2]);
+      if (!w) return send(res, 404, R.notFound(), undefined, 60);
+      return send(res, 200, S.streamerHowTo(snap, w.row, w.chan, w.camps, w.trend), undefined, 600);
     }
     return send(res, 404, R.notFound(), undefined, 60);
   } catch (e) {

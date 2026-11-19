@@ -22,7 +22,8 @@ test("language paths", () => {
   assert.equal(href("de", "/"), "/de");
   assert.equal(href("fr", "/pricing"), "/fr/pricing");
   assert.equal(href("de", "/guides/how-to-clip-gta-6-streams"), "/de/guides/how-to-clip-gta-6-streams");
-  assert.equal(href("de", "/about"), "/about"); // English only: never link to a page that does not exist
+  assert.equal(href("de", "/about"), "/de/about");
+  assert.equal(href("de", "/for/xqc"), "/for/xqc"); // English only: never link to a page that does not exist
   assert.equal(href("en", "/pricing"), "/pricing");
   assert.deepEqual(splitLang("/de/clip"), { lang: "de", path: "/clip" });
   assert.deepEqual(splitLang("/fr"), { lang: "fr", path: "/" });
@@ -31,7 +32,9 @@ test("language paths", () => {
   assert.deepEqual(splitLang("/es"), { lang: "es", path: "/" });
   assert.deepEqual(splitLang("/post"), { lang: "en", path: "/post" });
   assert.equal(href("es", "/gta-6-clipping-campaigns"), "/es/gta-6-clipping-campaigns");
-  assert.equal(isLocal("/campaigns/x"), false);
+  assert.equal(isLocal("/campaigns/x"), true);
+  assert.equal(isLocal("/streamers/kick/tjr"), true);
+  assert.equal(isLocal("/data/clipping-campaign-rates.csv"), false);
 });
 
 test("a ranker row for a campaign that names a streamer carries a one-tap to that stream", async () => {

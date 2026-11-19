@@ -9,6 +9,8 @@ import { getAccount, createAccount, keep, signState, readState, ACCT } from "../
 import { PROVIDERS, available, availability, storeTokens, tiktokProfile } from "../../lib/social.js";
 import { postJob, accountStatus } from "../../lib/postjob.js";
 import { putFile, randomName, CLIP_ID } from "../../lib/blobfiles.js";
+import { postWords } from "../../lib/pages_l10n.js";
+import { href } from "../../lib/i18n.js";
 
 const json = (res, obj, status = 200) => { res.statusCode = status; res.setHeader("content-type", "application/json"); res.setHeader("cache-control", "no-store"); res.end(JSON.stringify(obj)); };
 const go = (res, url) => { res.statusCode = 302; res.setHeader("location", url); res.setHeader("cache-control", "no-store"); res.end(); };
@@ -23,36 +25,57 @@ async function body(req) {
   try { return JSON.parse((await raw(req)).toString("utf8") || "{}"); } catch (e) { return {}; }
 }
 
-function page() {
+// English words for the page; the other languages carry the same keys under `post` in
+// lib/l10n_<lang>.js (lib/i18n.js). Markup, attributes and gating are the same in every language.
+const EN = {
+  title: "Post clips to YouTube and TikTok | heistclips",
+  desc: "Connect YouTube or TikTok once, then post a 9:16 clip with its caption from heistclips or from Claude.",
+  h1: "Post clips to YouTube and TikTok",
+  lede: "Connect once. Then post a clip with its caption from the clip tool, or just ask in Claude: “cut that moment and post it to YouTube”.",
+  loading: "Loading…", connect: (p) => `Connect ${p}`, disconnect: "Disconnect",
+  closed: (p) => `Not open yet: waiting on ${p}’s developer approval.`,
+  how: {
+    youtube: "Google is still reviewing heistclips, so when you connect it shows a “Google hasn’t verified this app” warning. You can still connect: click Advanced, then “Go to heistclips.com”. We only ask for permission to upload. Posts arrive private until the review is done: open YouTube Studio and publish.",
+    tiktok: "Posts to your profile, or to your TikTok inbox as a draft. Until TikTok finishes its review, posts arrive private.",
+  },
+  howH: "How it works",
+  facts: [
+    `heistclips asks only for permission to <b>upload videos</b> (TikTok also shares your display name). It cannot read your videos, messages or anything else. <a href="/privacy">Privacy</a>.`,
+    `Disconnect here at any time, or from <a href="https://myaccount.google.com/permissions" rel="noopener">Google</a> or TikTok’s “Manage app permissions”.`,
+    "This browser’s free clips and packs are shared with the connector once this page has been opened with its link.",
+  ],
+};
+
+function page(lang = "en") {
+  const W = postWords(lang) || EN;
+  if (W === EN) lang = "en";
   const av = availability();
   const row = (p, how) => `<div class="pack postrow" data-provider="${p}"><b>${PROVIDERS[p].label}</b><span class="small" data-state>…</span>
-<button class="btn" data-connect="${p}"${av[p] ? "" : " hidden"}>Connect ${PROVIDERS[p].label}</button><button class="linkbtn" data-disconnect="${p}" hidden>Disconnect</button><span class="small" data-closed${av[p] ? " hidden" : ""}>Not open yet: waiting on ${PROVIDERS[p].label}’s developer approval.</span>
+<button class="btn" data-connect="${p}"${av[p] ? "" : " hidden"}>${W.connect(PROVIDERS[p].label)}</button><button class="linkbtn" data-disconnect="${p}" hidden>${W.disconnect}</button><span class="small" data-closed${av[p] ? " hidden" : ""}>${W.closed(PROVIDERS[p].label)}</span>
 <span class="small">${how}</span></div>`;
-  const b = `<h1>Post clips to YouTube and TikTok</h1>
-<p class="lede">Connect once. Then post a clip with its caption from the clip tool, or just ask in Claude: “cut that moment and post it to YouTube”.</p>
+  const b = `<h1>${W.h1}</h1>
+<p class="lede">${W.lede}</p>
 <div id="postpage" data-open='${JSON.stringify(av)}'>
-<p class="small" id="acctline">Loading…</p>
+<p class="small" id="acctline">${W.loading}</p>
 <div class="packs">
-${row("youtube", "Google is still reviewing heistclips, so when you connect it shows a “Google hasn’t verified this app” warning. You can still connect: click Advanced, then “Go to heistclips.com”. We only ask for permission to upload. Posts arrive private until the review is done: open YouTube Studio and publish.")}
-${row("tiktok", "Posts to your profile, or to your TikTok inbox as a draft. Until TikTok finishes its review, posts arrive private.")}
+${row("youtube", W.how.youtube)}
+${row("tiktok", W.how.tiktok)}
 </div>
 <p class="small" id="postmsg"></p>
-<h2>How it works</h2>
+<h2>${W.howH}</h2>
 <ul class="facts">
-<li>heistclips asks only for permission to <b>upload videos</b> (TikTok also shares your display name). It cannot read your videos, messages or anything else. <a href="/privacy">Privacy</a>.</li>
-<li>Disconnect here at any time, or from <a href="https://myaccount.google.com/permissions" rel="noopener">Google</a> or TikTok’s “Manage app permissions”.</li>
-<li>This browser’s free clips and packs are shared with the connector once this page has been opened with its link.</li>
+${W.facts.map((x) => `<li>${x.replace('href="/privacy"', `href="${href(lang, "/privacy")}"`)}</li>`).join("\n")}
 </ul>
 </div>
-<script type="module" src="/js/post.js?v=1"></script>`;
-  return R.layout({ title: "Post clips to YouTube and TikTok | heistclips", desc: "Connect YouTube or TikTok once, then post a 9:16 clip with its caption from heistclips or from Claude.", path: "/post", body: b, noindex: false });
+${lang === "en" ? "" : '<script type="module" src="/js/l10n.js?v=5"></script>'}<script type="module" src="/js/post.js?v=1"></script>`;
+  return R.layout({ lang, title: W.title, desc: W.desc, path: "/post", body: b, noindex: false });
 }
 
 export default async function handler(req, res) {
   const u = new URL(req.url, "https://heistclips.com");
   const op = u.searchParams.get("op");
   try {
-    if (req.method === "GET" && !op) { res.statusCode = 200; res.setHeader("content-type", "text/html; charset=utf-8"); res.setHeader("cache-control", "public, max-age=60, s-maxage=300"); return res.end(page()); }
+    if (req.method === "GET" && !op) { res.statusCode = 200; res.setHeader("content-type", "text/html; charset=utf-8"); res.setHeader("cache-control", "public, max-age=60, s-maxage=300"); return res.end(page(u.searchParams.get("lang") || "en")); } // /de/post arrives as ?lang=de (vercel.json)
 
     if (req.method === "GET" && op === "start") {
       const p = u.searchParams.get("provider"), acct = u.searchParams.get("acct");

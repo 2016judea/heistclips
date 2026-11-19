@@ -43,6 +43,10 @@
       "destination": "/api/v1/post"
     },
     {
+      "source": "/:lang(de|fr|pt|es)/post",
+      "destination": "/api/v1/post?lang=:lang"
+    },
+    {
       "source": "/oauth/:provider(youtube|tiktok)/callback",
       "destination": "/api/v1/post?op=callback&provider=:provider"
     },
