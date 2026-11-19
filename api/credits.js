@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import { getJSON, putJSON, secretPath, listPaths } from "../lib/store.js";
 import { FREE_CLIPS } from "../lib/render.js";
 import { grant } from "./stripe-webhook.js";
+import { recordClip } from "../lib/trend.js";
 
 const TICKET_TTL_MS = 6 * 3600 * 1000;
 const salt = () => process.env.CREDIT_SALT || process.env.BLOB_READ_WRITE_TOKEN || "dev";
@@ -59,10 +60,12 @@ async function spend(d, k, id, meta) {
   const row = { at: new Date().toISOString(), ...meta };
   if (state.free_left > 0) {
     await putJSON(usesDir("free", d) + name, row, { maxAge: 60 });
+    await recordClip(meta); // stream + moment only, for /most-clipped-streams (lib/trend.js)
     return { ok: true, free_left: state.free_left - 1, paid_left: state.paid_left };
   }
   if (paid && state.paid_left > 0) {
     await putJSON(usesDir("paid", k) + name, row, { maxAge: 60 });
+    await recordClip(meta);
     return { ok: true, free_left: 0, paid_left: state.paid_left - 1 };
   }
   return { ok: false, need: "buy", ...state };

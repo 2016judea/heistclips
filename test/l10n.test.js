@@ -13,12 +13,13 @@ const snap = {
 };
 const board = [{ id: "s01", title: "Kick support", detail: "Find and cut moments from Kick streams, live or saved.", status: "shipped", by: "Suggested by heistclips", votes: 2, voted: false },
   { id: "r1", title: "Bessere Qualität", detail: "", status: "building", by: "Requested by a clipper", votes: 4, voted: false, response: "On it." }];
-const paths = ["/", "/clip", "/pricing", "/requests", "/guides", "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", ...GUIDES.map((g) => "/guides/" + g.slug)];
+const paths = ["/", "/clip", "/pricing", "/requests", "/guides", "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", "/twitch-clip-maker", "/kick-clip-maker", "/most-clipped-streams", ...GUIDES.map((g) => "/guides/" + g.slug)];
+const trend = { generated_at: "2026-11-19T17:00:00.000Z", window_days: 3, from: "2026-11-17", to: "2026-11-19", clips_counted: 9, streams: [{ platform: "twitch", login: "trymacs", name: "Trymacs", clips: 9, clips_today: 4, clip_path: "/clip?q=trymacs&src=trend" }], moments: [{ platform: "twitch", login: "trymacs", name: "Trymacs", vod: "2932305259", t: 3600, clips: 5, clips_today: 2, title: "GTA", clip_path: "/clip?q=2932305259&t=3600&src=trend" }] };
 
 for (const lang of ["de", "fr", "pt", "es"]) {
   test(`every page renders in ${lang}, tracked, with its alternates, and no English left in the frame`, () => {
     for (const p of paths) {
-      const html = localPage(lang, p, { snap, query: new URLSearchParams(""), board, history: [] });
+      const html = localPage(lang, p, { snap, query: new URLSearchParams(""), board, history: [], trend });
       assert.ok(html, p);
       assert.match(html, new RegExp(`<html lang="${lang}">`), p);
       assert.match(html, /\/_vercel\/insights\/script\.js/, p);

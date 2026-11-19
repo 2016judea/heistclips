@@ -7,6 +7,8 @@ import { liveGtaStreams, liveKick, handlesFromCampaigns, mergeStreamers } from "
 import { putJSON, getJSON } from "../lib/store.js";
 import { sitemapUrls } from "./page.js";
 import { sweepOld } from "../lib/blobfiles.js";
+import { archiveEnded } from "../lib/ended.js";
+import { buildTrend } from "../lib/trend.js";
 
 const SITE = "https://heistclips.com";
 const HOST = "heistclips.com";
@@ -46,6 +48,16 @@ export default async function handler(req, res) {
   snap.streamers = mergeStreamers(prev && prev.streamers, live, handlesFromCampaigns(snap.campaigns), snap.generated_at);
   await putJSON("snapshot/latest.json", snap, { maxAge: 60 });
 
+  // Campaigns that just left the snapshot keep their page (lib/ended.js).
+  let ended = null;
+  try { ended = await archiveEnded(prev, snap, new Set(raw.map((r) => r.id))); } catch (e) { ended = "error: " + e.message; }
+  // Most-clipped streams, rebuilt once an hour (lib/trend.js).
+  let trend = null;
+  try {
+    const last = await getJSON("trend/latest.json", { fresh: true }).catch(() => null);
+    if (!last || Date.now() - Date.parse(last.generated_at) > 50 * 60 * 1000) { const t = await buildTrend(); trend = { clips: t.clips_counted, streams: t.streams.length, moments: t.moments.length }; }
+  } catch (e) { trend = "error: " + e.message; }
+
   // Summary history for the rates page (last ~10 days at 30-min steps).
   let hist = (await getJSON("snapshot/history.json", { fresh: true }).catch(() => null)) || [];
   hist.push({ at: snap.generated_at, summary: snap.summary });
@@ -60,7 +72,7 @@ export default async function handler(req, res) {
     const before = new Set(sitemapUrls(prev));
     paths = nowPaths.filter((p) => !before.has(p));
     const prevSent = Date.parse((prev.indexnow && prev.indexnow.rolling_at) || 0);
-    if (Date.now() - prevSent > 6 * 3600 * 1000) paths.push("/", "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", "/streamers", "/guides/how-much-does-gta-6-clipping-pay");
+    if (Date.now() - prevSent > 6 * 3600 * 1000) paths.push("/", "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", "/streamers", "/guides/how-much-does-gta-6-clipping-pay", "/most-clipped-streams", "/data");
   }
   let ping = { sent: 0 };
   if (process.env.INDEXNOW_OFF) { ping = { skipped: paths.length }; paths = []; }
@@ -77,5 +89,5 @@ export default async function handler(req, res) {
   // Server-cut clips and upload parts are kept 72 hours (lib/blobfiles.js).
   let swept = null;
   try { swept = await sweepOld(); } catch (e) { swept = "error: " + e.message; }
-  res.end(JSON.stringify({ ok: true, swept, ms: Date.now() - t0, campaigns: snap.campaigns.length, crawl: snap.crawl, gta: snap.summary.gta, streamers: snap.streamers.length, live_gta: live.length, indexnow: ping }));
+  res.end(JSON.stringify({ ok: true, swept, ended, trend, ms: Date.now() - t0, campaigns: snap.campaigns.length, crawl: snap.crawl, gta: snap.summary.gta, streamers: snap.streamers.length, live_gta: live.length, indexnow: ping }));
 }

@@ -124,6 +124,9 @@ minutes; the stream's in-progress VOD trails live by ~10 s, so it can be cut wit
 | `public/js/live.js` | Live chat watcher. |
 | `cli/heistclips.mjs` | Local CLI with ffmpeg. |
 | `lib/campaigns.js` | Campaign feed → ranked list. |
+| `lib/searchpages.js` | Search pages: `/twitch-clip-maker`, `/kick-clip-maker`, `/most-clipped-streams`, "How to clip <streamer>", `/data`, `/llms-full.txt`, ended campaigns. |
+| `lib/trend.js` | The clip counter behind `/most-clipped-streams`: one empty file per clip, named by stream and moment. No person data. |
+| `lib/ended.js` | Campaigns that left the snapshot keep their URL, marked ended, with their last numbers. |
 | `api/` | Vercel functions: pages, `/mcp`, credits, checkout, the request board, the 30-min refresh. |
 | `DATA_MODEL.md` | The ideal data model this was built against, and which fields reality fills. |
 

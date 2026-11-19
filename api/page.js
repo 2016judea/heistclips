@@ -10,8 +10,14 @@ import { TR_LANGS } from "../lib/translate.js";
 import { TOOLS as MCP_TOOLS } from "./mcp.js";
 import { queuePage } from "../lib/queuepage.js";
 import { loadPitch, pitchPage } from "../lib/pitch.js";
+import * as S from "../lib/searchpages.js";
+import { loadTrend } from "../lib/trend.js";
+import { loadEnded, findEnded } from "../lib/ended.js";
+import { campaignsFor } from "../lib/autopilot.js";
 
 const INDEXNOW_KEY = "066cce158f4bc73e04afdcb48bb189f7";
+// Data files are meant to be fetched by other sites and by assistants.
+const sendData = (res, body, type) => { res.setHeader("access-control-allow-origin", "*"); return send(res, 200, body, type, 600); };
 
 function send(res, status, body, type = "text/html; charset=utf-8", maxAge = 300) {
   res.statusCode = status;
@@ -20,11 +26,16 @@ function send(res, status, body, type = "text/html; charset=utf-8", maxAge = 300
   res.end(body);
 }
 
-export function sitemapUrls(snap) {
-  const urls = ["/", "/clip", "/queue", "/requests", "/gta-6-clipping-campaigns", "/gta-6-clipping-campaigns?f=gta", "/gta-6-clipping-campaigns?f=all", "/gta-6-clipping-rates-today", "/streamers", "/guides", "/pricing", "/connect", "/about", "/privacy", "/terms",
+// Canonical 200 pages only: no redirects and no ?f= filter views (those point their canonical at
+// the unfiltered page). `trend` (optional) adds the streamers people clip who are not in the snapshot.
+export function sitemapUrls(snap, trend = null) {
+  const streamerPath = (s) => (s.platform === "kick" ? "/streamers/kick/" : "/streamers/") + s.login;
+  const inSnap = (snap.streamers || []).filter((s) => s.platform === "twitch" ? /^[a-z0-9_]{3,25}$/.test(s.login) : /^[a-z0-9_-]{2,40}$/.test(s.login));
+  const clipped = ((trend && trend.streams) || []).filter((s) => s.platform === "twitch" && /^[a-z0-9_]{3,25}$/.test(s.login)); // a Kick page needs its snapshot row
+  const urls = ["/", "/clip", "/twitch-clip-maker", "/kick-clip-maker", "/most-clipped-streams", "/queue", "/requests", "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", "/streamers", "/guides", "/data", "/pricing", "/connect", "/about", "/privacy", "/terms",
     ...GUIDES.map((g) => "/guides/" + g.slug),
     ...snap.campaigns.map((c) => "/campaigns/" + c.slug),
-    ...(snap.streamers || []).filter((s) => s.platform === "twitch").map((s) => "/streamers/" + s.login)];
+    ...new Set([...inSnap, ...clipped].map(streamerPath))];
   // Each translated page, in each language.
   const base = urls.filter((x) => !x.includes("?") && isLocal(x));
   for (const l of LANGS) if (l !== "en") for (const x of base) urls.push(href(l, x));
@@ -44,13 +55,23 @@ export default async function handler(req, res) {
 
     if (p === "/sitemap.xml") {
       const lastmod = snap.generated_at;
-      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemapUrls(snap).map((x) => `<url><loc>${R.SITE}${x.replace(/&/g, "&amp;")}</loc><lastmod>${lastmod}</lastmod></url>`).join("\n")}\n</urlset>`;
+      const [trend, ended] = await Promise.all([loadTrend().catch(() => null), loadEnded().catch(() => ({}))]);
+      const fresh = sitemapUrls(snap, trend);
+      const liveSlugs = new Set(snap.campaigns.map((c) => c.slug));
+      // Ended campaigns stay listed, marked old and low priority, so their pages stay known without looking fresh.
+      const old = Object.entries(ended || {}).filter(([slug, e]) => e.campaign && !liveSlugs.has(slug)).sort((a, b) => Date.parse(b[1].ended_at) - Date.parse(a[1].ended_at)).slice(0, 3000)
+        .map(([slug, e]) => `<url><loc>${R.SITE}/campaigns/${slug}</loc><lastmod>${e.ended_at}</lastmod><priority>0.1</priority></url>`);
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...fresh.map((x) => `<url><loc>${R.SITE}${x.replace(/&/g, "&amp;")}</loc><lastmod>${lastmod}</lastmod></url>`), ...old].join("\n")}\n</urlset>`;
       return send(res, 200, xml, "application/xml; charset=utf-8", 600);
     }
+    if (p === "/llms-full.txt") return sendData(res, S.llmsFull(snap, await loadTrend().catch(() => null), MCP_TOOLS, GUIDES), "text/plain; charset=utf-8");
+    if (p === S.RATES_CSV) return sendData(res, S.ratesCsv(snap), "text/csv; charset=utf-8");
+    if (p === S.RATES_JSON) return sendData(res, S.ratesJson(snap), "application/json; charset=utf-8");
+    if (p === S.TREND_JSON) return sendData(res, S.trendJson(await loadTrend()), "application/json; charset=utf-8");
     if (p === "/llms.txt") {
       const s = snap.summary;
       const top = snap.campaigns.filter((c) => c.is_gaming).slice(0, 10).map((c) => `- [${c.title}](${R.SITE}/campaigns/${c.slug}): ${c.expected_per_clip != null ? "$" + c.expected_per_clip + " typical per clip" : "new"}, $${c.rate_per_1k ?? c.per_post}/${c.per_post != null ? "post" : "1k views"}, cap $${c.cap_per_clip ?? "none"}, $${Math.round(c.budget_left)} left`).join("\n");
-      return send(res, 200, `# heistclips\n\n> GTA 6 clipping tool. Finds the moments Twitch chat exploded in a stream (live or VOD), cuts them to 9:16 with hook text in the browser, flags licensed-music risk, and ranks clipping campaigns by what a typical approved clip actually earns. ${R.FREE_CLIPS} clips free, then pay per exported clip, never per stream minute.\n\nData updated ${snap.generated_at}: ${s.campaigns} live campaigns, ${s.gta} GTA; median $${s.rate_per_1k_median}/1k views; typical approved clip earns $${s.earned_per_clip_median}.\n\n## Pages\n- [Clip tool](${R.SITE}/clip)\n- [Campaigns ranked by pay per clip](${R.SITE}/gta-6-clipping-campaigns)\n- [GTA 6 clipping rates today](${R.SITE}/gta-6-clipping-rates-today)\n- [Pricing](${R.SITE}/pricing)\n${GUIDES.map((g) => `- [${g.title}](${R.SITE}/guides/${g.slug})`).join("\n")}\n\n## Top gaming campaigns right now\n${top}\n\n## API and MCP\n- JSON: ${R.SITE}/api/campaigns?filter=gta|gaming|all\n- MCP server (streamable HTTP): ${R.SITE}/mcp  (tools: ${MCP_TOOLS.map((t) => t.name).join(", ")})\n- Source: https://github.com/2016judea/heistclips\n`, "text/plain; charset=utf-8", 600);
+      return send(res, 200, `# heistclips\n\n> Clip maker for Twitch and Kick streams, built for GTA 6 clipping. Finds the moments chat exploded in a stream (live or VOD), cuts them to 9:16 with hook text in the browser, flags licensed-music risk, and ranks clipping campaigns by what a typical approved clip actually earns. ${R.FREE_CLIPS} clips free, then pay per exported clip, never per stream minute. No watermark.\n\nData updated ${snap.generated_at}: ${s.campaigns} live campaigns, ${s.gta} GTA; median $${s.rate_per_1k_median}/1k views; typical approved clip earns $${s.earned_per_clip_median}.\n\n## Pages\n- [Clip tool](${R.SITE}/clip): open on a streamer with ${R.SITE}/clip?q=<twitch login> or ?q=kick.com/<slug>\n- [Twitch clip maker](${R.SITE}/twitch-clip-maker)\n- [Kick clip maker](${R.SITE}/kick-clip-maker)\n- [Most clipped streams right now](${R.SITE}${S.TREND_PATH}): streams and moments clippers are cutting, updated hourly\n- [How to clip a streamer](${R.SITE}/streamers): one page per streamer at ${R.SITE}/streamers/<twitch login>\n- [Campaigns ranked by pay per clip](${R.SITE}/gta-6-clipping-campaigns)\n- [GTA 6 clipping rates today](${R.SITE}/gta-6-clipping-rates-today)\n- [Pricing](${R.SITE}/pricing)\n${GUIDES.map((g) => `- [${g.title}](${R.SITE}/guides/${g.slug})`).join("\n")}\n\n## Top gaming campaigns right now\n${top}\n\n## Data (free to quote, please link back)\n- [Everything in one text file](${R.SITE}/llms-full.txt)\n- [Campaign rates, CSV](${R.SITE}${S.RATES_CSV})\n- [Campaign rates, JSON with field notes](${R.SITE}${S.RATES_JSON})\n- [Most clipped streams, JSON](${R.SITE}${S.TREND_JSON})\n- [Field notes and licence](${R.SITE}${S.DATA_PATH})\n- JSON API: ${R.SITE}/api/campaigns?filter=gta|gaming|all\n\n## Connector (MCP)\n- [Add heistclips to ChatGPT, Claude or Grok](${R.SITE}/connect)\n- MCP server (streamable HTTP, no key): ${R.SITE}/mcp  (tools: ${MCP_TOOLS.map((t) => t.name).join(", ")})\n- Source: https://github.com/2016judea/heistclips\n`, "text/plain; charset=utf-8", 600);
     }
 
     // /de/…, /fr/…, /pt/…, /es/…: the same page in that language where one exists, else the English page.
@@ -59,7 +80,8 @@ export default async function handler(req, res) {
       let board, history;
       if (loc.path === "/requests") board = publicList(await loadBoard());
       if (loc.path === "/gta-6-clipping-rates-today") { try { history = (await getJSON("snapshot/history.json")) || []; } catch (e) {} }
-      const html = localPage(loc.lang, loc.path, { snap, query: u.searchParams, board, history });
+      const trend = S.MAKERS[loc.path] || loc.path === S.TREND_PATH ? await loadTrend().catch(() => null) : null;
+      const html = localPage(loc.lang, loc.path, { snap, query: u.searchParams, board, history, trend });
       if (html) return send(res, 200, html, undefined, loc.path === "/requests" ? 30 : loc.path === "/clip" || loc.path === "/pricing" ? 3600 : 300);
       const q = new URLSearchParams(u.searchParams); q.delete("p");
       res.statusCode = 302; res.setHeader("location", loc.path + (q.toString() ? "?" + q : "")); return res.end();
@@ -106,18 +128,36 @@ export default async function handler(req, res) {
     }
     if ((m = p.match(/^\/campaigns\/([a-z0-9-]+)$/))) {
       const c = snap.campaigns.find((x) => x.slug === m[1]) || snap.campaigns.find((x) => m[1].endsWith("-" + x.id.split("-")[0]));
-      if (!c) return send(res, 404, R.notFound(), undefined, 60);
+      if (!c) {
+        // Not live any more: the page stays, marked ended, with what pays now (lib/ended.js).
+        const e = findEnded(await loadEnded().catch(() => ({})), m[1]);
+        if (e && e.campaign.slug !== m[1]) { res.statusCode = 301; res.setHeader("location", "/campaigns/" + e.campaign.slug); return res.end(); }
+        if (e) return send(res, 200, S.endedPage(snap, e), undefined, 3600);
+        // A campaign-shaped URL we hold no record of (it closed before 2026-11-19): still an answer, not indexed.
+        if (/-[0-9a-f]{8}$/.test(m[1])) return send(res, 200, S.endedPage(snap, { slug: m[1] }), undefined, 3600);
+        return send(res, 404, R.notFound(), undefined, 60);
+      }
       if (c.slug !== m[1]) { res.statusCode = 301; res.setHeader("location", "/campaigns/" + c.slug); return res.end(); }
       return send(res, 200, R.campaignPage(snap, c));
     }
-    if ((m = p.match(/^\/streamers\/([a-z0-9_]{3,25})$/))) {
-      const login = m[1];
-      const s = (snap.streamers || []).find((x) => x.login === login && x.platform === "twitch");
+    if (S.MAKERS[p]) return send(res, 200, S.makerPage(p, await loadTrend().catch(() => null), "en"), undefined, 600);
+    if (p === S.TREND_PATH) return send(res, 200, S.trendPage(await loadTrend(), "en"), undefined, 600);
+    if (p === S.DATA_PATH) return send(res, 200, S.dataPage(snap, await loadTrend().catch(() => null)), undefined, 600);
+    // "How to clip <streamer>". Twitch: any real channel. Kick: channels in the snapshot (Kick
+    // throttles reads, so the page is built from the 30-minute snapshot row, not a live call).
+    if ((m = p.match(/^\/streamers\/(kick\/)?([a-z0-9_-]{2,40})$/))) {
+      const kick = !!m[1], login = m[2];
+      if (!kick && !/^[a-z0-9_]{3,25}$/.test(login)) return send(res, 404, R.notFound(), undefined, 60);
+      const s = (snap.streamers || []).find((x) => x.login === login && (x.platform === "kick") === kick);
       let chan = null;
-      try { chan = await getChannel(login); } catch (e) {}
+      if (!kick) { try { chan = await getChannel(login); } catch (e) {} }
+      else if (s) chan = { name: s.name, avatar: s.avatar, is_live: !!s.live_now, stream: s.live_now ? { viewers: s.viewers_now, game: s.game, title: s.last_title } : null, vods: [] };
       if (!s && !chan) return send(res, 404, R.notFound(), undefined, 60);
-      const camps = snap.campaigns.filter((c) => s && (s.campaign_ids || []).includes(c.id));
-      return send(res, 200, R.streamerPage(snap, s || { login, name: chan.name }, chan, camps), undefined, 600);
+      const row = s || { login, name: chan.name, platform: "twitch" };
+      const who = { platform: kick ? "kick" : "twitch", login, name: (chan && chan.name) || row.name || login };
+      const ids = new Set((s && s.campaign_ids) || []);
+      const camps = snap.campaigns.filter((c) => c.budget_left > 0 && (ids.has(c.id) || campaignsFor(who, [c]).length));
+      return send(res, 200, S.streamerHowTo(snap, row, chan, camps, await loadTrend().catch(() => null)), undefined, 600);
     }
     return send(res, 404, R.notFound(), undefined, 60);
   } catch (e) {

@@ -295,3 +295,51 @@ Not abandoning, and not hiding the gap: the queue is fully useful alone for the 
 and one-tap export, and the campaign match is real for the 22 streamers a campaign names. The
 honest limit is that Content Rewards campaigns mostly do not say which channel they pay for.
 The Whop app closes that from the other side: there the campaign owner states the channel.
+
+---
+
+# Most clipped right now — ideal model (written 2026-11-19, before the data was checked)
+
+## Need
+
+ChatGPT sent 66 people in four days; 39 landed on the campaign ranker and none made a clip. A
+person asking an assistant "what should I clip right now" needs an answer that is a stream and
+a second, not a list of campaigns. The ideal page answers: which streams and which moments are
+clippers cutting this hour, and opens the tool on that exact moment.
+
+## Entities
+
+### Clip event — one clip made
+| field | question it answers |
+|---|---|
+| at | how fresh is this |
+| platform, channel | whose stream |
+| vod_id, t_start, t_end | which moment, exactly |
+| campaign_id | was it made for a paying campaign |
+| posted_url, views | did it travel |
+
+### Hot stream / hot moment (derived)
+| field | question |
+|---|---|
+| clips in the last hour / day / 3 days | what is hot now, and is it rising |
+| distinct clippers | is it one person or a crowd |
+| best paying campaign for it | is it worth my next ten minutes |
+
+## Reality check (filled 2026-11-19)
+
+| field | status |
+|---|---|
+| at | fills from 11-19 on (the counter file's name carries the time). Before that: **partial**, by UTC day only, from page analytics (457 `clip_render_done` events, 11-15 to 11-19) |
+| vod_id, t_start | fills. Stored rounded to 10 s; moments are grouped in 30-s buckets |
+| platform, channel | fills for a clip made on a VOD link (the VOD is named from Twitch or Kick once, then cached). A deleted VOD cannot be named and is left out (3 of 34 VODs in the seed) |
+| t_end | **not built**: the charge record carries the start only |
+| campaign_id | **not built**: the tool does not ask which campaign a clip is for. The streamer page joins the stream to campaigns that name the streamer instead |
+| posted_url, views | **can't fill** without the clipper's own accounts (same gap as Post in the first model) |
+| distinct clippers | **deliberately not kept**. The record has no browser id, so it cannot be computed. The page says "clips", never "clippers" |
+| last hour / rising | **partial**: 3-day total and today's count. Hourly resolution exists from 11-19 on but is not shown until a day of it has built up |
+| spread | fills: 21 streams pass the 3-clip floor, from 202 clips (KaiCenat) down to 3; 40 moments pass the 2-clip floor |
+
+### Call
+Build. The one number the page depends on, clips per stream, has a 67x spread across 21
+streams, so the ranking has an answer. The honest limits: it counts clips made on heistclips
+only (not all clipping everywhere), and it cannot say how many people made them.
