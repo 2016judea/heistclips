@@ -33,7 +33,7 @@ ${av[p] ? `<button class="btn" data-connect="${p}">Connect ${PROVIDERS[p].label}
 <div id="postpage" data-open='${JSON.stringify(av)}'>
 <p class="small" id="acctline">Loading…</p>
 <div class="packs">
-${row("youtube", "Posts as a Short. Until YouTube finishes reviewing heistclips, posts arrive private: open YouTube Studio and publish.")}
+${row("youtube", "Google is still reviewing heistclips, so when you connect it shows a “Google hasn’t verified this app” warning. You can still connect: click Advanced, then “Go to heistclips.com”. We only ask for permission to upload. Posts arrive private until the review is done: open YouTube Studio and publish.")}
 ${row("tiktok", "Posts to your profile, or to your TikTok inbox as a draft. Until TikTok finishes its review, posts arrive private.")}
 </div>
 <p class="small" id="postmsg"></p>
