@@ -112,7 +112,7 @@ function youText(s) {
   const L = sizeWords, v = s.you && s.you[size];
   if (!L || !v) return "";
   const f = v.floor;
-  const floor = !f ? "" : !f.known ? L.floorUnknown : f.pool > 0 ? L.floorPool.replace("{v}", kv(f.pool)) : f.clip > 0 ? L.floorClip.replace("{v}", kv(f.clip)) : "";
+  const floor = !f ? "" : !f.known ? L.floorUnknown : f.pool > 0 ? L.floorPool.replace("{v}", kv(f.pool)) : f.clip >= 100 ? L.floorClip.replace("{v}", kv(f.clip)) : "";
   const odds = !(v.usd > 0) && v.chance > 0 ? " · " + L.oneIn.replace("{n}", Math.max(2, Math.round(1 / v.chance))) : "";
   return `<span class="you${v.usd === 0 ? " zero" : ""}"><b>${v.usd == null ? "?" : money(v.usd)}</b> ${h(L.likely[size] + odds)}${floor && !(v.usd > 0) ? " · " + h(floor) : ""}</span>`;
 }
