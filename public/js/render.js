@@ -322,6 +322,9 @@ export class Clipper {
       c.maxBufferLength = Math.max(c.maxBufferLength, end - start + 12);
       c.maxMaxBufferLength = Math.max(c.maxMaxBufferLength, c.maxBufferLength * 2);
       c.backBufferLength = Math.max(c.backBufferLength, end - start + 15);
+      // hls.js also caps the buffer in BYTES (60 MB by default). A 1080p60 or 1440p source runs past
+      // that before a 40 s window is in, so loading sat at ~70% until the 2-minute timeout (2026-11-19).
+      c.maxBufferSize = Math.max(c.maxBufferSize || 0, 600 * 1000 * 1000);
     }
     const t0 = Date.now();
     let seen = -1, moved = Date.now();
