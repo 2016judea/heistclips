@@ -1,5 +1,35 @@
 [
   {
+    "id": "funny-facecam-effects",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Funny facecam effects",
+    "body": "Make the streamer's facecam funny with one tap: Big head, Fisheye, Shake when loud, Deep fried or Jelly. It works with every facecam shape and is saved in your MP4.",
+    "link": "/clip",
+    "request_ids": [
+      "rmwm3rms3"
+    ],
+    "at": "2026-11-19T20:26:06.264Z",
+    "langs": {
+      "de": {
+        "title": "Lustige Facecam-Effekte",
+        "body": "Mach die Facecam des Streamers mit einem Tipp lustig: Riesenkopf, Fischauge, Wackeln, wenn es laut wird, Deep Fried oder Wackelpudding. Das geht mit jeder Facecam-Form und ist in deinem MP4 gespeichert."
+      },
+      "fr": {
+        "title": "Effets marrants pour la facecam",
+        "body": "Rends la facecam du streamer marrante en un clic : Grosse tête, Fisheye, Tremble quand ça crie, Deep fried ou Gelée. Ça marche avec toutes les formes de facecam et c’est enregistré dans ton MP4."
+      },
+      "pt": {
+        "title": "Efeitos engraçados na facecam",
+        "body": "Deixe a facecam do streamer engraçada com um toque: Cabeção, Olho de peixe, Treme quando grita, Deep fried ou Gelatina. Funciona com todos os formatos de facecam e fica gravado no seu MP4."
+      },
+      "es": {
+        "title": "Efectos divertidos para la facecam",
+        "body": "Haz divertida la facecam del streamer con un toque: Cabezón, Ojo de pez, Tiembla cuando hay gritos, Deep fried o Gelatina. Funciona con todas las formas de facecam y queda guardado en tu MP4."
+      }
+    }
+  },
+  {
     "id": "find-moments-takes-names-typos-and-clip",
     "date": "2026-11-19",
     "type": "improved",

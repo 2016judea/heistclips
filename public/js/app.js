@@ -1,6 +1,6 @@
 // The clip tool: paste -> moments (with why) -> cut -> download.
 import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitchTime, searchChannels, getClip, refinePeak, hooks } from "./twitch.js";
-import { Clipper, pickMime, camPreset, clampBox, CAM_DEFAULT } from "./render.js?v=14";
+import { Clipper, pickMime, camPreset, clampBox, CAM_DEFAULT } from "./render.js?v=15";
 import { FX } from "./fx.js?v=3";
 import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";

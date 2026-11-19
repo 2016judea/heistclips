@@ -244,7 +244,7 @@ export class Clipper {
       ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = 36; ctx.fillStyle = "#000";
       shape(0);
       ctx.fill(); ctx.shadowBlur = 0; ctx.clip();
-      const pop = this.paintCam(v, vw, vh, r, x, y, w, h, f);
+      const pop = this.paintCam(v, vw, vh, r, x, y, w, h, f, () => { if (o.camStyle === "circle") { ctx.moveTo(x + w - 8, y + h / 2); ctx.arc(x + w / 2, y + h / 2, w / 2 - 8, 0, Math.PI * 2); } else if (ctx.roundRect) ctx.roundRect(x + 8, y + 8, w - 16, h - 16, 36); else ctx.rect(x + 8, y + 8, w - 16, h - 16); });
       ctx.restore();
       ctx.save(); ctx.lineWidth = 8; ctx.strokeStyle = "rgba(255,255,255,.92)";
       shape(4);
@@ -258,7 +258,7 @@ export class Clipper {
     const camY = top ? 0 : H - camH;
     this.drawGame(v, vw, vh, top ? camH : 0, H - camH);
     ctx.save(); ctx.beginPath(); ctx.rect(0, camY, W, camH); ctx.clip();
-    const pop = this.paintCam(v, vw, vh, r, 0, camY, W, camH, this.fxState(t));
+    const pop = this.paintCam(v, vw, vh, r, 0, camY, W, camH, this.fxState(t), () => ctx.rect(0, camY, W, camH));
     ctx.restore();
     ctx.fillStyle = "#000"; ctx.fillRect(0, (top ? camH : camY) - 3, W, 6);
     if (pop) pop(false);
@@ -291,7 +291,7 @@ export class Clipper {
 
   // Draw the facecam into (x, y, w, h); the caller has set the clip. Returns a function that
   // draws what sticks out past the frame (big head), or null.
-  paintCam(v, vw, vh, r, x, y, w, h, f) {
+  paintCam(v, vw, vh, r, x, y, w, h, f, addFrame) {
     const { ctx } = this;
     const s = coverRect(r.x, r.y, r.w, r.h, w, h);
     let cv = null;
@@ -302,14 +302,16 @@ export class Clipper {
     if (!cv) { ctx.drawImage(v, s.x, s.y, s.w, s.h, x, y, w, h); return null; }
     if (f.fx !== "bighead") { ctx.drawImage(cv, x, y, w, h); return null; }
     const px = w * BIGHEAD_PAD, py = h * BIGHEAD_PAD;
-    const all = () => ctx.drawImage(cv, x - px, y - py, w + 2 * px, h + 2 * py);
-    all();
+    // One draw for the whole big head (frame and the part sticking out), after the ring: drawing
+    // it twice a frame is what left some 1440p exports near 50 fps on a busy laptop (2026-11-19).
     // The head bulges out of its frame: the same oval the shader blows up, drawn over the border.
     const asp = w / h;
     let ry = 0.56, rx = Math.min(0.46, (ry * 0.8) / asp); ry = Math.min(ry, (rx * asp) / 0.62);
-    const oval = (grow) => { ctx.beginPath(); ctx.ellipse(x + w * 0.5, y + h * 0.47, rx * w + grow, ry * h + grow, 0, 0, Math.PI * 2); };
+    const ex = x + w * 0.5, ey = y + h * 0.47;
+    const oval = (grow) => { ctx.beginPath(); ctx.ellipse(ex, ey, rx * w + grow, ry * h + grow, 0, 0, Math.PI * 2); };
     return (ring) => {
-      ctx.save(); oval(0); ctx.clip(); all(); ctx.restore();
+      ctx.save(); ctx.beginPath(); addFrame(); ctx.moveTo(ex + rx * w, ey); ctx.ellipse(ex, ey, rx * w, ry * h, 0, 0, Math.PI * 2); ctx.clip();
+      ctx.drawImage(cv, x - px, y - py, w + 2 * px, h + 2 * py); ctx.restore();
       if (!ring) return;
       // White edge on the part outside the frame only, so it reads as one sticker with the ring.
       ctx.save();
