@@ -71,6 +71,19 @@ test("plan_my_clips: only what can pay at your size, moments with cut_clip argum
   assert.equal(parseStreamer("https://kick.com/Foo_Bar/").platform, "kick");
 });
 
+test("a stream with nothing to clip right now gives way to one with moments, and is still listed", async () => {
+  const mk = (id, login, rate) => ({ ...cpm, id, slug: id, title: login + " campaign", description: "https://twitch.tv/" + login, rate_per_1k: rate, payouts: [{ platform: "tiktok", rate_per_1k: rate, cap_per_clip: 300, min_payout: 0.5 }] });
+  const camps = [mk("a-1", "quiet", 3), mk("b-1", "loud", 1)].map((c) => ({ ...c, ...payAtSizes(c) }));
+  const snap = { campaigns: camps, streamers: [{ platform: "twitch", login: "quiet" }, { platform: "twitch", login: "loud" }] };
+  const deps = { snapshot: async () => snap, trend: async () => null,
+    findClipMoments: async (a) => ({ out: { stream: { platform: "twitch", url: "https://www.twitch.tv/videos/9" }, note: "Chat was steady the whole stream; no clear spikes.",
+      moments: a.source === "loud" ? [{ t_start_s: 10, t_end_s: 48, chat_speed_vs_normal: "5x", hooks: ["h"], music_risk: "low" }] : [] } }) };
+  const { out } = await planMyClips({ views_per_clip: 5000, limit: 1 }, { deps });
+  assert.deepEqual(out.plan.map((p) => p.streamer.login), ["loud"]);
+  assert.equal(out.also_pays_you[0].streamer, "quiet");
+  assert.match(out.also_pays_you[0].note, /steady/);
+});
+
 test("the connector lists plan_my_clips and the instructions point at it", () => {
   const t = TOOLS.find((x) => x.name === "plan_my_clips");
   assert.ok(t && t.annotations.readOnlyHint === true);
