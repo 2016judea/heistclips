@@ -26,6 +26,7 @@ h3{font-size:17px;margin:1.2em 0 .3em}
 .paste input:focus{outline:2px solid var(--acc);outline-offset:1px}
 .paste button,.btn{font:inherit;font-weight:800;border:0;border-radius:12px;padding:14px 18px;background:var(--acc);color:var(--acc-ink);cursor:pointer;text-decoration:none;display:inline-block;min-height:48px}
 .btn.ghost{background:transparent;color:var(--ink);border:1px solid #3a3a44}
+.btn:hover{color:var(--acc-ink)}.btn.ghost:hover{color:var(--acc)}
 .btn.sm{padding:9px 12px;min-height:40px;font-size:14px}
 .btn:disabled{opacity:.5;cursor:default}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}

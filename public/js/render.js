@@ -28,7 +28,7 @@ export class Clipper {
     if (this.hls) { this.hls.destroy(); this.hls = null; }
     const v = this.video;
     if (window.Hls && window.Hls.isSupported()) {
-      const hls = new window.Hls({ maxBufferLength: 75, maxMaxBufferLength: 150, startPosition: Math.max(0, start), enableWorker: true, backBufferLength: 30 });
+      const hls = new window.Hls({ maxBufferLength: 60, maxMaxBufferLength: 120, startPosition: Math.max(0, start), enableWorker: true, backBufferLength: 60 });
       this.hls = hls;
       await new Promise((ok, bad) => {
         hls.on(window.Hls.Events.MANIFEST_PARSED, (e, d) => {
@@ -61,6 +61,20 @@ export class Clipper {
     const b = this.video.buffered, now = this.video.currentTime;
     for (let i = 0; i < b.length; i++) if (b.start(i) <= now + 0.5 && b.end(i) >= t - 0.3) return true;
     return false;
+  }
+
+  // A Twitch VOD of a stream that is still going is a growing (EVENT) playlist: hls.js treats it
+  // as live and keeps reloading it, and the media only reaches as far as Twitch has written.
+  isLive() {
+    const h = this.hls, lv = h && h.levels && h.levels[h.currentLevel >= 0 ? h.currentLevel : 0];
+    if (lv && lv.details) return !!lv.details.live;
+    return this.video.duration === Infinity;
+  }
+
+  availableEnd() {
+    const v = this.video;
+    if (isFinite(v.duration) && v.duration > 0) return v.duration;
+    return v.seekable.length ? v.seekable.end(v.seekable.length - 1) : 0;
   }
 
   bufferedEnd() {
@@ -143,21 +157,31 @@ export class Clipper {
   }
   stopPreview() { cancelAnimationFrame(this.loop); }
 
+  // The stream's sound reaches the recording through Web Audio. Create it inside the click
+  // (browsers only start sound on a user gesture), then resumeAudio() before recording.
   ensureAudio() {
     if (this.audio) return this.audio;
     const AC = window.AudioContext || window.webkitAudioContext;
     const ac = new AC();
     const src = ac.createMediaElementSource(this.video);
     const dest = ac.createMediaStreamDestination();
-    src.connect(dest); src.connect(ac.destination);
-    this.audio = { ac, dest };
+    const level = ac.createAnalyser(); level.fftSize = 2048;
+    const monitor = ac.createGain();
+    src.connect(dest); src.connect(level); src.connect(monitor); monitor.connect(ac.destination);
+    this.audio = { ac, dest, level, monitor };
     return this.audio;
+  }
+
+  async resumeAudio() {
+    const ac = this.ensureAudio().ac;
+    if (ac.state !== "running") await Promise.race([ac.resume().catch(() => {}), sleep(3000)]);
+    if (ac.state !== "running") throw new Error("the browser blocked the sound, so the clip would be silent. Click Render again");
   }
 
   async playWindow(start, end) {
     const v = this.video;
     this.clipStart = start;
-    this.ensureAudio(); await this.audio.ac.resume();
+    this.ensureAudio(); await this.resumeAudio().catch(() => {});
     if (Math.abs(v.currentTime - start) > 0.3) await this.seek(start);
     this.startPreview();
     await v.play();
@@ -166,47 +190,89 @@ export class Clipper {
     this.stopPreview(); this.draw();
   }
 
-  // Record [start, end] in real time. onState(msg, frac) reports progress.
+  // Record [start, end] in real time. onState(msg, frac) reports progress. Throws, before
+  // anything is recorded where it can, instead of handing back an empty file.
   async record(start, end, onState) {
     const v = this.video;
+    if (!(end - start >= 2)) throw new Error("the clip window is empty (its end is before its start). Reset it with the buttons and render again");
     this.clipStart = start;
     const mime = pickMime();
     if (mime === null) throw new Error("This browser cannot record video. Use Chrome, Edge or Safari on a computer.");
-    this.ensureAudio(); await this.audio.ac.resume();
+    this.ensureAudio();
+    await this.resumeAudio();
+    // A still-live VOD: wait for Twitch to write the window into the recording.
+    const tw = Date.now();
+    while (this.availableEnd() < end - 0.25) {
+      const behind = end - this.availableEnd();
+      if (!this.isLive()) { if (this.availableEnd() - start >= 2) { end = this.availableEnd(); break; } throw new Error("that part of the stream isn't in the video"); }
+      if (Date.now() - tw > 90000) throw new Error(`that moment isn't in Twitch's recording yet (it's ${Math.ceil(behind)} s ahead of it). Try again in a minute`);
+      onState && onState(`Waiting for the live video to catch up (${Math.ceil(behind)} s to go)…`, 0);
+      await sleep(1000);
+    }
     await this.seek(start);
-    // Pre-buffer the whole window so the recording never freezes on a stall.
+    // Pre-buffer the whole window so the recording never freezes on a stall. Never restart the
+    // loader while it is working: hls.startLoad() aborts the segment in flight, and calling it
+    // every 400 ms meant a 10 s segment that takes longer than that never arrived (2026-11-19).
+    if (this.hls) {
+      const c = this.hls.config;
+      c.maxBufferLength = Math.max(c.maxBufferLength, end - start + 12);
+      c.maxMaxBufferLength = Math.max(c.maxMaxBufferLength, c.maxBufferLength * 2);
+      c.backBufferLength = Math.max(c.backBufferLength, end - start + 15);
+    }
     const t0 = Date.now();
-    while (!this.bufferedTo(end) && Date.now() - t0 < 90000) {
-      const got = this.bufferedEnd() - start;
-      onState && onState("Loading the video…", Math.max(0, Math.min(1, got / (end - start))) * 0.3);
-      if (this.hls) this.hls.startLoad(Math.max(0, start));
+    let seen = -1, moved = Date.now();
+    while (!this.bufferedTo(end) && Date.now() - t0 < 120000) {
+      const got = this.bufferedEnd();
+      if (got > seen + 0.05) { seen = got; moved = Date.now(); }
+      else if (this.hls && Date.now() - moved > 20000) { this.hls.startLoad(Math.max(0, v.currentTime)); moved = Date.now(); }
+      onState && onState("Loading the video…", Math.max(0, Math.min(1, (got - start) / (end - start))) * 0.3);
       await sleep(400);
     }
-    const stream = new MediaStream([...this.canvas.captureStream(30).getVideoTracks(), ...this.audio.dest.stream.getAudioTracks()]);
-    const rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 160_000 });
+    const fps = this.fps || 30;
+    const stream = new MediaStream([...this.canvas.captureStream(fps).getVideoTracks(), ...this.audio.dest.stream.getAudioTracks()]);
+    const vbps = this.videoBitrate || 8_000_000;
+    const rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: vbps, audioBitsPerSecond: 192_000 });
     const chunks = [];
+    let failed = null, loudest = 0;
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onerror = (e) => { failed = (e && e.error) || new Error("the browser's video encoder stopped"); };
     const stopped = new Promise((ok) => (rec.onstop = ok));
     const onWait = () => { if (rec.state === "recording") rec.pause(); };
-    const onPlay = () => { if (rec.state === "paused") rec.resume(); };
-    v.addEventListener("waiting", onWait); v.addEventListener("playing", onPlay);
+    const onPlay = () => { if (rec.state === "paused" && !document.hidden) rec.resume(); };
+    // A hidden tab stops drawing frames: hold the video and the recording until it's back.
+    const onVis = () => {
+      if (document.hidden) { v.pause(); if (rec.state === "recording") rec.pause(); onState && onState("Paused: keep this tab open while it records", null); }
+      else if (rec.state === "paused") { v.play().catch(() => {}); }
+    };
+    v.addEventListener("waiting", onWait); v.addEventListener("playing", onPlay); document.addEventListener("visibilitychange", onVis);
+    const lv = this.audio.level, buf = new Float32Array(lv.fftSize);
     this.draw();
     rec.start(500);
-    await v.play();
-    await new Promise((ok) => {
-      const tick = () => {
-        this.draw();
-        onState && onState("Recording…", 0.3 + 0.7 * Math.min(1, (v.currentTime - start) / (end - start)));
-        if (v.currentTime >= end || v.ended) return ok();
-        requestAnimationFrame(tick);
-      };
-      tick();
-    });
-    v.pause();
-    v.removeEventListener("waiting", onWait); v.removeEventListener("playing", onPlay);
-    rec.stop(); await stopped;
+    try {
+      await v.play();
+      await new Promise((ok) => {
+        const tick = () => {
+          if (failed) return ok();
+          this.draw();
+          lv.getFloatTimeDomainData(buf);
+          for (let i = 0; i < buf.length; i += 8) loudest = Math.max(loudest, Math.abs(buf[i]));
+          if (!document.hidden) onState && onState("Recording…", 0.3 + 0.7 * Math.min(1, (v.currentTime - start) / (end - start)));
+          if (v.currentTime >= end || v.ended) return ok();
+          requestAnimationFrame(tick);
+        };
+        tick();
+      });
+    } finally {
+      v.pause();
+      v.removeEventListener("waiting", onWait); v.removeEventListener("playing", onPlay); document.removeEventListener("visibilitychange", onVis);
+      if (rec.state !== "inactive") rec.stop();
+      await stopped;
+    }
     const type = (mime || "video/webm").split(";")[0];
-    return { blob: new Blob(chunks, { type }), ext: type.includes("mp4") ? "mp4" : "webm" };
+    const blob = new Blob(chunks, { type });
+    if (failed) throw new Error(failed.message || String(failed));
+    if (!blob.size) throw new Error("the recording came out empty");
+    return { blob, ext: type.includes("mp4") ? "mp4" : "webm", secs: end - start, end, fps, vbps, sound: loudest > 0.001 };
   }
 
   destroy() { this.stopPreview(); if (this.hls) this.hls.destroy(); this.video.removeAttribute("src"); }

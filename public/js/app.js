@@ -1,6 +1,6 @@
 // The clip tool: paste -> moments (with why) -> cut -> download.
 import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitchTime } from "./twitch.js";
-import { Clipper, pickMime } from "./render.js";
+import { Clipper, pickMime } from "./render.js?v=7";
 import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";
 import { paywallHTML } from "./paywall.js";
@@ -26,10 +26,12 @@ async function loadCredits() {
 }
 const creditText = () => credits.free_left == null ? "" : `${credits.free_left} free clip${credits.free_left === 1 ? "" : "s"} left${credits.paid_left ? ` + ${credits.paid_left} paid` : ""}`;
 
-async function useCredit(meta) {
-  const r = await fetch("/api/credits", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "use", d: device, k: store.get("hc_key") || "", meta }) });
+// A clip is charged only after the file exists and has bytes in it: "start" checks the balance
+// and hands back a ticket, "commit" spends it. A failed or empty render costs nothing.
+async function creditCall(action, extra) {
+  const r = await fetch("/api/credits", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, d: device, k: store.get("hc_key") || "", ...extra }) });
   const d = await r.json();
-  if (d.free_left != null) credits = d;
+  if (d.free_left != null) credits = { free_left: d.free_left, paid_left: d.paid_left };
   document.querySelectorAll(".credit").forEach((el) => (el.textContent = creditText()));
   return d;
 }
@@ -235,10 +237,13 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
     const n = e.target.closest("[data-nudge]");
     if (n) {
       const v = n.dataset.nudge;
+      // A still-live VOD keeps growing, so the length read when the page opened is no limit
+      // (clamping to it put the end before the start: a 0-byte file, 2026-11-18).
+      const maxEnd = current.vod.status === "RECORDING" ? Infinity : current.vod.length || Infinity;
       if (v === "s-") win.s = Math.max(0, win.s - 5);
-      if (v === "s+") win.s = Math.min(win.e - 5, win.s + 5);
-      if (v === "e+") win.e = Math.min(current.vod.length || win.e + 5, win.e + 5);
-      if (v === "e-") win.e = Math.max(win.s + 5, win.e - 5);
+      if (v === "s+") win.s = Math.max(win.s, Math.min(win.e - 5, win.s + 5));
+      if (v === "e+") win.e = Math.max(win.e, Math.min(maxEnd, win.e + 5));
+      if (v === "e-") win.e = Math.min(win.e, Math.max(win.s + 5, win.e - 5));
       $("#win", ed).textContent = `${clock(win.s)} – ${clock(win.e)} (${Math.round(win.e - win.s)} s)`;
       cl.seek(win.s);
     }
@@ -255,6 +260,7 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
   try {
     if (current.vod.platform === "kick" && m.live) current.vod.length = (Date.now() - current.vod.start_ms) / 1000;
     await cl.load(url, win.s);
+    if (current.vod.status === "RECORDING") current.vod.length = Math.max(current.vod.length || 0, cl.availableEnd());
     vstat.textContent = `${cl.video.videoWidth}×${cl.video.videoHeight} source · renders at 1080×1920`;
   } catch (e) {
     try { if (current.vod.platform === "kick") throw e; await cl.load(playlistPath(current.vod, "720p60"), win.s); vstat.textContent = "720p source"; }
@@ -264,24 +270,32 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
   $("#rec", ed).onclick = async () => {
     const btn = $("#rec", ed);
     btn.disabled = true;
-    const u = await useCredit({ vod: current.vod.id, t: Math.round(win.s), layout: cl.opts.layout });
-    if (!u.ok) {
+    try { cl.ensureAudio(); cl.audio.ac.resume().catch(() => {}); } catch (e) {} // sound starts only inside a click
+    const say = (html) => ($("#dl", ed).querySelector(".rnote") || $("#dl", ed).insertAdjacentElement("afterbegin", Object.assign(document.createElement("div"), { className: "note rnote" }))).innerHTML = html;
+    const lenNow = Math.round(win.e - win.s);
+    if (!(lenNow >= 2)) { btn.disabled = false; say("This clip window is empty. Use the ±5s buttons to set a start before the end."); return; }
+    const t = await creditCall("start", {}).catch(() => ({ ok: false, error: "offline" }));
+    if (!t.ok) {
       btn.disabled = false;
-      $("#dl", ed).innerHTML = paywallHTML();
-      ph("paywall_hit", {});
+      if (t.need === "buy") { $("#dl", ed).innerHTML = paywallHTML(); ph("paywall_hit", {}); }
+      else say("Couldn’t reach heistclips to check your clips. Check your connection and try again.");
       return;
     }
-    ph("clip_render_start", { layout: cl.opts.layout, hook: !!cl.opts.hook, chat: cl.opts.chat, len: Math.round(win.e - win.s), live: !!m.live });
+    ph("clip_render_start", { layout: cl.opts.layout, hook: !!cl.opts.hook, chat: cl.opts.chat, len: lenNow, live: !!m.live, vod_live: current.vod.status === "RECORDING" });
+    const old = $("#dl", ed).querySelector(".rnote"); if (old) old.remove();
     try {
-      const out = await cl.record(win.s, win.e, (msg, f) => { vstat.textContent = `${msg} ${Math.round(f * 100)}%`; });
+      const out = await cl.record(win.s, win.e, (msg, f) => { vstat.textContent = f == null ? msg : `${msg} ${Math.round(f * 100)}%`; });
+      const c = await creditCall("commit", { ticket: t.ticket, bytes: out.blob.size, meta: { vod: current.vod.id, t: Math.round(win.s), layout: cl.opts.layout } }).catch(() => ({}));
       const href = URL.createObjectURL(out.blob);
       const name = `${current.vod.channel}-${twitchTime(win.s)}-${cl.opts.layout}.${out.ext}`;
-      $("#dl", ed).insertAdjacentHTML("afterbegin", `<div><video src="${href}" controls playsinline></video><a class="btn" href="${href}" download="${h(name)}">Download ${out.ext.toUpperCase()} (${(out.blob.size / 1e6).toFixed(1)} MB)</a>${out.ext === "webm" ? `<p class="small">WebM plays on TikTok and YouTube. For Instagram, Safari or Chrome 126+ export MP4.</p>` : ""}</div>`);
+      const mb = out.blob.size / 1e6;
+      $("#dl", ed).insertAdjacentHTML("afterbegin", `<div><video src="${href}" controls playsinline></video><a class="btn" href="${href}" download="${h(name)}">Download ${out.ext.toUpperCase()} (${mb.toFixed(1)} MB)</a>${out.ext === "webm" ? `<p class="small">WebM plays on TikTok and YouTube. For Instagram, Safari or Chrome 126+ export MP4.</p>` : ""}${out.sound ? "" : `<p class="small">No sound came through for this stretch${current.vod.muted && current.vod.muted.some((x) => x.start < out.end && x.end > win.s) ? ": Twitch muted it in the VOD (licensed music)" : ""}.</p>`}</div>`);
       vstat.textContent = "Done. Pick another hook and render again for a second, different post.";
-      ph("clip_render_done", { mb: Math.round(out.blob.size / 1e5) / 10, ext: out.ext });
+      ph("clip_render_done", { mb: Math.round(mb * 10) / 10, ext: out.ext, charged: !!c.ok, sound: out.sound, vod_live: current.vod.status === "RECORDING" });
     } catch (e) {
-      vstat.textContent = "Render failed: " + e.message;
-      ph("clip_render_fail", { err: String(e.message).slice(0, 80) });
+      vstat.textContent = "Render failed: " + e.message + ". Nothing was charged.";
+      say("Render failed: " + h(e.message) + ". <b>Nothing was charged.</b>");
+      ph("clip_render_fail", { err: String(e.message).slice(0, 80), vod_live: current.vod.status === "RECORDING", len: lenNow });
     } finally { btn.disabled = false; }
   };
 }
