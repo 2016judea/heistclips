@@ -1,0 +1,463 @@
+[
+  {
+    "id": "live-clips-not-empty",
+    "date": "2026-11-19",
+    "type": "fixed",
+    "title": "Clips of live streams no longer come out empty",
+    "body": "If the stream is still live, the clip now waits for Twitch’s recording to catch up. And a render that fails never costs you a clip.",
+    "link": "/clip",
+    "request_ids": [
+      "rmwmh8d74"
+    ],
+    "langs": {
+      "de": {
+        "title": "Clips von laufenden Streams sind nicht mehr leer",
+        "body": "Läuft der Stream noch, wartet der Clip jetzt, bis die Aufzeichnung von Twitch so weit ist. Und ein fehlgeschlagener Render kostet dich nie einen Clip."
+      },
+      "fr": {
+        "title": "Les clips de streams en live ne sortent plus vides",
+        "body": "Si le stream est encore en live, le clip attend que l’enregistrement de Twitch rattrape le direct. Et un rendu raté ne te coûte jamais un clip."
+      },
+      "pt": {
+        "title": "Clipes de lives em andamento não saem mais vazios",
+        "body": "Se a live ainda está no ar, o clipe agora espera a gravação da Twitch alcançar. E um render que falha nunca te custa um clipe."
+      },
+      "es": {
+        "title": "Los clips de directos en curso ya no salen vacíos",
+        "body": "Si el directo sigue en marcha, el clip espera a que la grabación de Twitch se ponga al día. Y un render que falla nunca te cuesta un clip."
+      }
+    }
+  },
+  {
+    "id": "every-mp4-has-sound",
+    "date": "2026-11-19",
+    "type": "fixed",
+    "title": "Every MP4 has sound",
+    "body": "Every download carries the stream’s sound. If the sound can’t be captured, the render stops and tells you. No more silent files.",
+    "link": "/clip",
+    "request_ids": [
+      "rmwml5082",
+      "rmwmge6c4"
+    ],
+    "langs": {
+      "de": {
+        "title": "Jede MP4 hat Ton",
+        "body": "Jeder Download hat den Ton des Streams. Lässt sich der Ton nicht aufnehmen, stoppt der Render und sagt es dir. Keine stummen Dateien mehr."
+      },
+      "fr": {
+        "title": "Chaque MP4 a du son",
+        "body": "Chaque téléchargement garde le son du stream. Si le son ne peut pas être capté, le rendu s’arrête et te le dit. Fini les fichiers muets."
+      },
+      "pt": {
+        "title": "Todo MP4 tem som",
+        "body": "Todo download vem com o som da live. Se o som não puder ser capturado, o render para e te avisa. Chega de arquivo mudo."
+      },
+      "es": {
+        "title": "Todos los MP4 tienen sonido",
+        "body": "Cada descarga lleva el sonido del directo. Si no se puede capturar el sonido, el render se detiene y te avisa. Se acabaron los archivos mudos."
+      }
+    }
+  },
+  {
+    "id": "60-fps-exports",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "60 fps exports, with the quality on the download button",
+    "body": "Clips now export at the stream’s own frame rate, up to 60 fps, at about 20 Mbps. It was 30 fps and 8 Mbps. The download button shows size, frame rate and bitrate before you save.",
+    "link": "/clip",
+    "request_ids": [
+      "rmwm24ctb"
+    ],
+    "langs": {
+      "de": {
+        "title": "Export mit 60 fps, die Qualität steht auf dem Download-Button",
+        "body": "Clips werden jetzt mit der Bildrate des Streams exportiert, bis 60 fps, bei etwa 20 Mbit/s. Vorher waren es 30 fps und 8 Mbit/s. Der Download-Button zeigt Größe, Bildrate und Bitrate, bevor du speicherst."
+      },
+      "fr": {
+        "title": "Export en 60 fps, avec la qualité affichée sur le bouton de téléchargement",
+        "body": "Les clips sortent à la fréquence d’images du stream, jusqu’à 60 fps, à environ 20 Mb/s. Avant, c’était 30 fps et 8 Mb/s. Le bouton de téléchargement affiche la taille, les fps et le débit avant d’enregistrer."
+      },
+      "pt": {
+        "title": "Exportação em 60 fps, com a qualidade no botão de download",
+        "body": "Os clipes agora saem na taxa de quadros da própria live, até 60 fps, a cerca de 20 Mbps. Antes eram 30 fps e 8 Mbps. O botão de download mostra tamanho, fps e bitrate antes de você salvar."
+      },
+      "es": {
+        "title": "Exporta a 60 fps, con la calidad en el botón de descarga",
+        "body": "Los clips salen a los fps del propio directo, hasta 60 fps, a unos 20 Mbps. Antes eran 30 fps y 8 Mbps. El botón de descarga muestra tamaño, fps y bitrate antes de guardar."
+      }
+    }
+  },
+  {
+    "id": "pick-the-facecam",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Pick where the facecam is",
+    "body": "Drag a box over the facecam or tap a preset: any corner, middle-left or middle-right. Put it on top or bottom, pick Panel, Rounded box or Circle, and zoom in on the loudest second.",
+    "link": "/clip",
+    "request_ids": [
+      "rmwnmbvuw",
+      "rmwm7a4ji"
+    ],
+    "langs": {
+      "de": {
+        "title": "Wähl aus, wo die Facecam ist",
+        "body": "Zieh einen Rahmen über die Facecam oder tipp auf eine Vorgabe: jede Ecke, Mitte links oder Mitte rechts. Setz sie nach oben oder unten, wähl Panel, abgerundete Box oder Kreis und zoom auf die lauteste Sekunde."
+      },
+      "fr": {
+        "title": "Choisis où se trouve la facecam",
+        "body": "Fais glisser un cadre sur la facecam ou touche un préréglage : un coin, milieu gauche ou milieu droite. Place-la en haut ou en bas, choisis Panneau, Cadre arrondi ou Cercle, et zoome sur la seconde la plus forte."
+      },
+      "pt": {
+        "title": "Escolha onde fica a facecam",
+        "body": "Arraste uma caixa sobre a facecam ou toque em um atalho: qualquer canto, meio à esquerda ou meio à direita. Coloque em cima ou embaixo, escolha Painel, Caixa arredondada ou Círculo e dê zoom no segundo mais barulhento."
+      },
+      "es": {
+        "title": "Elige dónde está la facecam",
+        "body": "Arrastra un recuadro sobre la facecam o toca un ajuste: cualquier esquina, centro izquierda o centro derecha. Ponla arriba o abajo, elige Panel, Caja redondeada o Círculo y haz zoom en el segundo más ruidoso."
+      }
+    }
+  },
+  {
+    "id": "post-to-youtube",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Post to YouTube from the clip tool or from Claude",
+    "body": "Connect your channel once. Then post a finished clip with one button, or ask Claude to cut a moment and post it. Posts arrive private for now, while Google reviews our app.",
+    "link": "/post",
+    "request_ids": [
+      "rmwmzl1z6"
+    ],
+    "langs": {
+      "de": {
+        "title": "Auf YouTube posten, aus dem Clip-Tool oder aus Claude",
+        "body": "Verbinde deinen Kanal einmal. Danach postest du einen fertigen Clip mit einem Klick oder bittest Claude, einen Moment zu schneiden und zu posten. Posts kommen vorerst privat an, solange Google unsere App prüft."
+      },
+      "fr": {
+        "title": "Poste sur YouTube depuis l’outil de clip ou depuis Claude",
+        "body": "Connecte ta chaîne une fois. Ensuite, poste un clip fini en un clic, ou demande à Claude de couper un moment et de le poster. Pour l’instant les posts arrivent en privé, le temps que Google valide notre appli."
+      },
+      "pt": {
+        "title": "Poste no YouTube pela ferramenta de clipes ou pelo Claude",
+        "body": "Conecte seu canal uma vez. Depois, poste um clipe pronto com um botão, ou peça ao Claude para cortar um momento e postar. Por enquanto os posts chegam como privados, enquanto o Google analisa nosso app."
+      },
+      "es": {
+        "title": "Publica en YouTube desde la herramienta de clips o desde Claude",
+        "body": "Conecta tu canal una vez. Después publica un clip terminado con un botón, o pídele a Claude que corte un momento y lo publique. Por ahora las publicaciones llegan en privado, mientras Google revisa nuestra app."
+      }
+    }
+  },
+  {
+    "id": "skip-story-spoilers",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Skip story spoilers",
+    "body": "A new switch on the clip page leaves out moments that show story spoilers, for campaigns that ban them. Skipped moments stay listed with the reason.",
+    "link": "/clip",
+    "request_ids": [
+      "s07"
+    ],
+    "langs": {
+      "de": {
+        "title": "Story-Spoiler überspringen",
+        "body": "Ein neuer Schalter auf der Clip-Seite lässt Momente mit Story-Spoilern weg, für Kampagnen, die sie verbieten. Übersprungene Momente bleiben mit Grund aufgelistet."
+      },
+      "fr": {
+        "title": "Passer les spoilers de l’histoire",
+        "body": "Un nouvel interrupteur sur la page de clip écarte les moments qui spoilent l’histoire, pour les campagnes qui les interdisent. Les moments écartés restent listés avec la raison."
+      },
+      "pt": {
+        "title": "Pular spoilers da história",
+        "body": "Uma nova chave na página de clipes deixa de fora os momentos com spoiler da história, para campanhas que proíbem isso. Os momentos pulados continuam na lista, com o motivo."
+      },
+      "es": {
+        "title": "Saltar spoilers de la historia",
+        "body": "Un nuevo interruptor en la página de clips deja fuera los momentos con spoilers de la historia, para las campañas que los prohíben. Los momentos saltados siguen en la lista, con el motivo."
+      }
+    }
+  },
+  {
+    "id": "claude-cuts-clips",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Claude can cut a clip for you",
+    "body": "Add heistclips to Claude and ask for a moment from a stream. You get back a finished 9:16 MP4, up to 60 seconds, without opening the editor.",
+    "link": "/connect",
+    "langs": {
+      "de": {
+        "title": "Claude kann einen Clip für dich schneiden",
+        "body": "Füg heistclips zu Claude hinzu und frag nach einem Moment aus einem Stream. Du bekommst eine fertige 9:16-MP4 zurück, bis 60 Sekunden, ohne den Editor zu öffnen."
+      },
+      "fr": {
+        "title": "Claude peut couper un clip pour toi",
+        "body": "Ajoute heistclips à Claude et demande un moment d’un stream. Tu reçois un MP4 9:16 fini, jusqu’à 60 secondes, sans ouvrir l’éditeur."
+      },
+      "pt": {
+        "title": "O Claude pode cortar um clipe para você",
+        "body": "Adicione o heistclips ao Claude e peça um momento de uma live. Você recebe um MP4 9:16 pronto, de até 60 segundos, sem abrir o editor."
+      },
+      "es": {
+        "title": "Claude puede cortar un clip por ti",
+        "body": "Añade heistclips a Claude y pide un momento de un directo. Recibes un MP4 9:16 terminado, de hasta 60 segundos, sin abrir el editor."
+      }
+    }
+  },
+  {
+    "id": "autopilot-queue",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Autopilot: a queue of ready clips",
+    "body": "Tell it which streamers you clip. It watches them and fills a queue of clips, each matched to the campaign that pays. It opens on Paying right now: streamers a live campaign names, best pay first.",
+    "link": "/queue",
+    "langs": {
+      "de": {
+        "title": "Autopilot: eine Warteschlange fertiger Clips",
+        "body": "Sag, welche Streamer du clippst. Autopilot beobachtet sie und füllt eine Warteschlange mit Clips, jeder passend zur Kampagne, die zahlt. Los geht es mit „Zahlt gerade“: Streamer, die eine laufende Kampagne nennt, beste Bezahlung zuerst."
+      },
+      "fr": {
+        "title": "Autopilot : une file de clips prêts",
+        "body": "Dis-lui quels streamers tu clippes. Il les surveille et remplit une file de clips, chacun associé à la campagne qui paie. Elle s’ouvre sur « Ça paie en ce moment » : les streamers cités par une campagne en cours, les mieux payés d’abord."
+      },
+      "pt": {
+        "title": "Autopilot: uma fila de clipes prontos",
+        "body": "Diga quais streamers você clipa. Ele acompanha as lives e enche uma fila de clipes, cada um ligado à campanha que paga. A fila abre em “Pagando agora”: streamers citados por uma campanha ativa, o melhor pagamento primeiro."
+      },
+      "es": {
+        "title": "Autopilot: una cola de clips listos",
+        "body": "Dile qué streamers clipeas. Los vigila y llena una cola de clips, cada uno ligado a la campaña que paga. Se abre en «Pagando ahora»: streamers que nombra una campaña activa, la mejor paga primero."
+      }
+    }
+  },
+  {
+    "id": "four-new-languages",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "heistclips in German, French, Portuguese and Spanish",
+    "body": "The clip tool, pricing, campaigns, rates and guides now read in five languages. Hook text on your clips follows the language you pick.",
+    "link": "/",
+    "langs": {
+      "de": {
+        "title": "heistclips auf Deutsch, Französisch, Portugiesisch und Spanisch",
+        "body": "Clip-Tool, Preise, Kampagnen, Raten und Guides gibt es jetzt in fünf Sprachen. Der Hook-Text auf deinen Clips folgt der Sprache, die du wählst."
+      },
+      "fr": {
+        "title": "heistclips en allemand, français, portugais et espagnol",
+        "body": "L’outil de clip, les prix, les campagnes, les tarifs et les guides se lisent maintenant en cinq langues. Le texte d’accroche sur tes clips suit la langue que tu choisis."
+      },
+      "pt": {
+        "title": "heistclips em alemão, francês, português e espanhol",
+        "body": "A ferramenta de clipes, os preços, as campanhas, os valores e os guias agora estão em cinco idiomas. O texto de gancho dos seus clipes segue o idioma que você escolher."
+      },
+      "es": {
+        "title": "heistclips en alemán, francés, portugués y español",
+        "body": "La herramienta de clips, los precios, las campañas, las tarifas y las guías ya se leen en cinco idiomas. El texto de gancho de tus clips sigue el idioma que elijas."
+      }
+    }
+  },
+  {
+    "id": "searches-find-something",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "Searches no longer end on nothing",
+    "body": "Names with spaces, clip links and pasted stream links now work. If chat was quiet you get the best three moments, or a list of who is live right now.",
+    "link": "/clip",
+    "langs": {
+      "de": {
+        "title": "Suchen enden nicht mehr im Nichts",
+        "body": "Namen mit Leerzeichen, Clip-Links und eingefügte Stream-Links funktionieren jetzt. War der Chat ruhig, bekommst du die drei besten Momente oder eine Liste, wer gerade live ist."
+      },
+      "fr": {
+        "title": "Les recherches ne finissent plus sur rien",
+        "body": "Les noms avec des espaces, les liens de clips et les liens de streams collés fonctionnent. Si le chat était calme, tu obtiens les trois meilleurs moments, ou la liste de ceux qui sont en live."
+      },
+      "pt": {
+        "title": "As buscas não terminam mais em nada",
+        "body": "Nomes com espaço, links de clipes e links de live colados agora funcionam. Se o chat estava parado, você recebe os três melhores momentos ou uma lista de quem está ao vivo agora."
+      },
+      "es": {
+        "title": "Las búsquedas ya no acaban en nada",
+        "body": "Los nombres con espacios, los enlaces de clips y los enlaces de directos pegados ya funcionan. Si el chat estaba tranquilo, ves los tres mejores momentos o una lista de quién está en directo ahora."
+      }
+    }
+  },
+  {
+    "id": "loading-no-longer-stalls",
+    "date": "2026-11-19",
+    "type": "fixed",
+    "title": "Renders no longer get stuck on “Loading the video”",
+    "body": "High-bitrate streams and streams with muted parts now finish loading. A wait tells you what it is waiting for, and there is a Cancel button.",
+    "link": "/clip",
+    "langs": {
+      "de": {
+        "title": "Renders bleiben nicht mehr bei „Video wird geladen“ hängen",
+        "body": "Streams mit hoher Bitrate und Streams mit stummgeschalteten Stellen laden jetzt fertig. Beim Warten steht da, worauf gewartet wird, und es gibt einen Abbrechen-Button."
+      },
+      "fr": {
+        "title": "Les rendus ne restent plus bloqués sur « Chargement de la vidéo »",
+        "body": "Les streams à haut débit et les streams avec des passages au son coupé se chargent maintenant jusqu’au bout. Une attente dit ce qu’elle attend, et il y a un bouton Annuler."
+      },
+      "pt": {
+        "title": "Os renders não travam mais em “Carregando o vídeo”",
+        "body": "Lives com bitrate alto e lives com trechos sem áudio agora carregam até o fim. A espera diz o que está esperando, e há um botão Cancelar."
+      },
+      "es": {
+        "title": "Los renders ya no se quedan en «Cargando el vídeo»",
+        "body": "Los directos con bitrate alto y los que tienen partes silenciadas ya terminan de cargar. La espera te dice qué está esperando, y hay un botón Cancelar."
+      }
+    }
+  },
+  {
+    "id": "clip-from-a-campaign",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "One tap from a campaign to its streamer’s stream",
+    "body": "Every campaign that names a streamer now has a Clip their stream now button. It opens the live stream, or the latest saved one.",
+    "link": "/gta-6-clipping-campaigns",
+    "langs": {
+      "de": {
+        "title": "Mit einem Tipp von der Kampagne zum Stream ihres Streamers",
+        "body": "Jede Kampagne, die einen Streamer nennt, hat jetzt einen Button, um dessen Stream sofort zu clippen. Er öffnet den Livestream oder den letzten gespeicherten."
+      },
+      "fr": {
+        "title": "D’une campagne au stream de son streamer, en un tap",
+        "body": "Chaque campagne qui cite un streamer a maintenant un bouton pour clipper son stream tout de suite. Il ouvre le live, ou le dernier stream enregistré."
+      },
+      "pt": {
+        "title": "Da campanha para a live do streamer em um toque",
+        "body": "Toda campanha que cita um streamer agora tem um botão para clipar a live dele na hora. Ele abre a live, ou a última gravada."
+      },
+      "es": {
+        "title": "De la campaña al directo de su streamer con un toque",
+        "body": "Cada campaña que nombra a un streamer tiene ahora un botón para clipear su directo al momento. Abre el directo, o el último guardado."
+      }
+    }
+  },
+  {
+    "id": "most-clipped-streams",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "See which streams clippers are cutting right now",
+    "body": "The new Most clipped page lists the streams and moments people are clipping, updated every hour. There are also Twitch clip maker and Kick clip maker pages.",
+    "link": "/most-clipped-streams",
+    "langs": {
+      "de": {
+        "title": "Sieh, welche Streams gerade geclippt werden",
+        "body": "Die neue Seite „Meistgeclippt“ zeigt die Streams und Momente, die Leute gerade clippen, stündlich aktualisiert. Dazu gibt es Seiten für den Twitch Clip Maker und den Kick Clip Maker."
+      },
+      "fr": {
+        "title": "Vois quels streams les clippeurs découpent en ce moment",
+        "body": "La nouvelle page « Les plus clippés » liste les streams et les moments que les gens clippent, mise à jour toutes les heures. Il y a aussi des pages Créateur de clips Twitch et Créateur de clips Kick."
+      },
+      "pt": {
+        "title": "Veja quais lives os clipadores estão cortando agora",
+        "body": "A nova página “Mais clipados” lista as lives e os momentos que a galera está clipando, atualizada de hora em hora. Também há páginas de criador de clipes da Twitch e da Kick."
+      },
+      "es": {
+        "title": "Mira qué directos se están clipeando ahora",
+        "body": "La nueva página «Lo más clipeado» lista los directos y momentos que la gente está clipeando, actualizada cada hora. También hay páginas de creador de clips de Twitch y de Kick."
+      }
+    }
+  },
+  {
+    "id": "checkout-in-your-language",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "Checkout in your language, with more ways to pay",
+    "body": "Checkout opens in the language of the page, with Google Pay and the local payment methods for your country. The paywall now has Buy buttons, and you land back on the stream you were clipping.",
+    "link": "/pricing",
+    "langs": {
+      "de": {
+        "title": "Checkout in deiner Sprache, mit mehr Zahlungsarten",
+        "body": "Der Checkout öffnet sich in der Sprache der Seite, mit Google Pay und den lokalen Zahlungsarten für dein Land. An der Paywall gibt es jetzt Kaufen-Buttons, und du landest wieder bei dem Stream, den du gerade geclippt hast."
+      },
+      "fr": {
+        "title": "Paiement dans ta langue, avec plus de moyens de payer",
+        "body": "Le paiement s’ouvre dans la langue de la page, avec Google Pay et les moyens de paiement locaux de ton pays. Le paywall a maintenant des boutons Acheter, et tu reviens sur le stream que tu clippais."
+      },
+      "pt": {
+        "title": "Checkout no seu idioma, com mais formas de pagar",
+        "body": "O checkout abre no idioma da página, com Google Pay e as formas de pagamento locais do seu país. O paywall agora tem botões de Comprar, e você volta para a live que estava clipando."
+      },
+      "es": {
+        "title": "Pago en tu idioma, con más formas de pagar",
+        "body": "El pago se abre en el idioma de la página, con Google Pay y los métodos de pago locales de tu país. El paywall ahora tiene botones de Comprar, y vuelves al directo que estabas clipeando."
+      }
+    }
+  },
+  {
+    "id": "board-translates-requests",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "The request board translates requests",
+    "body": "A request written in German or French now reads in English, and the other way round. The original is one tap away.",
+    "link": "/requests",
+    "langs": {
+      "de": {
+        "title": "Das Wunsch-Board übersetzt Wünsche",
+        "body": "Ein Wunsch auf Englisch oder Französisch ist jetzt auf Deutsch zu lesen, und umgekehrt. Das Original ist einen Tipp entfernt."
+      },
+      "fr": {
+        "title": "Le tableau des demandes traduit les demandes",
+        "body": "Une demande écrite en anglais ou en allemand se lit maintenant en français, et inversement. L’original est à un tap."
+      },
+      "pt": {
+        "title": "O mural de pedidos traduz os pedidos",
+        "body": "Um pedido escrito em alemão ou francês agora pode ser lido em inglês, e vice-versa. O original fica a um toque."
+      },
+      "es": {
+        "title": "El tablón de peticiones traduce las peticiones",
+        "body": "Una petición escrita en alemán o francés ahora se lee en inglés, y al revés. El original está a un toque."
+      }
+    }
+  },
+  {
+    "id": "phones-stop-zooming",
+    "date": "2026-11-19",
+    "type": "fixed",
+    "title": "Phones no longer zoom in when you tap a box",
+    "body": "Tapping a text box or menu on a phone used to zoom the page and leave it zoomed. That is fixed, and menu and footer links are bigger to tap.",
+    "langs": {
+      "de": {
+        "title": "Handys zoomen nicht mehr rein, wenn du ein Feld antippst",
+        "body": "Beim Tippen auf ein Textfeld oder Menü hat das Handy die Seite gezoomt und so gelassen. Das ist behoben, und Menü- und Footer-Links sind größer zum Antippen."
+      },
+      "fr": {
+        "title": "Les téléphones ne zooment plus quand tu touches un champ",
+        "body": "Toucher un champ de texte ou un menu sur téléphone zoomait la page et la laissait zoomée. C’est corrigé, et les liens du menu et du pied de page sont plus faciles à toucher."
+      },
+      "pt": {
+        "title": "O celular não dá mais zoom quando você toca em um campo",
+        "body": "Tocar em uma caixa de texto ou menu no celular dava zoom na página e ela ficava assim. Isso foi corrigido, e os links do menu e do rodapé estão maiores para tocar."
+      },
+      "es": {
+        "title": "El móvil ya no hace zoom al tocar un campo",
+        "body": "Tocar un cuadro de texto o un menú en el móvil ampliaba la página y la dejaba así. Está arreglado, y los enlaces del menú y del pie son más grandes para tocar."
+      }
+    }
+  },
+  {
+    "id": "heistclips-is-live",
+    "date": "2026-11-16",
+    "type": "new",
+    "title": "heistclips is live",
+    "body": "Paste a Twitch or Kick stream and see the moments chat exploded. Cut them to 9:16 in your browser, with hook text and no watermark, and see which campaign pays most per clip. 10 clips free.",
+    "link": "/clip",
+    "langs": {
+      "de": {
+        "title": "heistclips ist live",
+        "body": "Füg einen Twitch- oder Kick-Stream ein und sieh die Momente, bei denen der Chat ausgerastet ist. Schneid sie im Browser auf 9:16, mit Hook-Text und ohne Wasserzeichen, und sieh, welche Kampagne am meisten pro Clip zahlt. 10 Clips gratis."
+      },
+      "fr": {
+        "title": "heistclips est en ligne",
+        "body": "Colle un stream Twitch ou Kick et vois les moments où le chat a explosé. Découpe-les en 9:16 dans ton navigateur, avec un texte d’accroche et sans filigrane, et vois quelle campagne paie le plus par clip. 10 clips offerts."
+      },
+      "pt": {
+        "title": "O heistclips está no ar",
+        "body": "Cole uma live da Twitch ou da Kick e veja os momentos em que o chat explodiu. Corte em 9:16 no navegador, com texto de gancho e sem marca d’água, e veja qual campanha paga mais por clipe. 10 clipes grátis."
+      },
+      "es": {
+        "title": "heistclips ya está en línea",
+        "body": "Pega un directo de Twitch o Kick y mira los momentos en que el chat estalló. Córtalos en 9:16 en tu navegador, con texto de gancho y sin marca de agua, y mira qué campaña paga más por clip. 10 clips gratis."
+      }
+    }
+  }
+]

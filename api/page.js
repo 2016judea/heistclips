@@ -14,6 +14,8 @@ import * as S from "../lib/searchpages.js";
 import { loadTrend } from "../lib/trend.js";
 import { loadEnded, findEnded } from "../lib/ended.js";
 import { campaignsFor } from "../lib/autopilot.js";
+import * as NEW from "../lib/changelog.js";
+import { whatsNewPage, whatsNewFeed } from "../lib/changelogpage.js";
 
 const INDEXNOW_KEY = "066cce158f4bc73e04afdcb48bb189f7";
 // Data files are meant to be fetched by other sites and by assistants.
@@ -32,7 +34,7 @@ export function sitemapUrls(snap, trend = null) {
   const streamerPath = (s) => (s.platform === "kick" ? "/streamers/kick/" : "/streamers/") + s.login;
   const inSnap = (snap.streamers || []).filter((s) => s.platform === "twitch" ? /^[a-z0-9_]{3,25}$/.test(s.login) : /^[a-z0-9_-]{2,40}$/.test(s.login));
   const clipped = ((trend && trend.streams) || []).filter((s) => s.platform === "twitch" && /^[a-z0-9_]{3,25}$/.test(s.login)); // a Kick page needs its snapshot row
-  const urls = ["/", "/clip", "/twitch-clip-maker", "/kick-clip-maker", "/most-clipped-streams", "/queue", "/requests", "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", "/streamers", "/guides", "/data", "/pricing", "/connect", "/about", "/privacy", "/terms",
+  const urls = ["/", "/clip", "/twitch-clip-maker", "/kick-clip-maker", "/most-clipped-streams", "/queue", "/requests", NEW.PATH, "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", "/streamers", "/guides", "/data", "/pricing", "/connect", "/about", "/privacy", "/terms",
     ...GUIDES.map((g) => "/guides/" + g.slug),
     ...snap.campaigns.map((c) => "/campaigns/" + c.slug),
     ...new Set([...inSnap, ...clipped].map(streamerPath))];
@@ -64,15 +66,20 @@ export default async function handler(req, res) {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...fresh.map((x) => `<url><loc>${R.SITE}${x.replace(/&/g, "&amp;")}</loc><lastmod>${lastmod}</lastmod></url>`), ...old].join("\n")}\n</urlset>`;
       return send(res, 200, xml, "application/xml; charset=utf-8", 600);
     }
-    if (p === "/llms-full.txt") return sendData(res, S.llmsFull(snap, await loadTrend().catch(() => null), MCP_TOOLS, GUIDES), "text/plain; charset=utf-8");
+    if (p === "/llms-full.txt") return sendData(res, S.llmsFull(snap, await loadTrend().catch(() => null), MCP_TOOLS, GUIDES) + NEW.llmsText(), "text/plain; charset=utf-8");
     if (p === S.RATES_CSV) return sendData(res, S.ratesCsv(snap), "text/csv; charset=utf-8");
     if (p === S.RATES_JSON) return sendData(res, S.ratesJson(snap), "application/json; charset=utf-8");
     if (p === S.TREND_JSON) return sendData(res, S.trendJson(await loadTrend()), "application/json; charset=utf-8");
     if (p === "/llms.txt") {
       const s = snap.summary;
       const top = snap.campaigns.filter((c) => c.is_gaming).slice(0, 10).map((c) => `- [${c.title}](${R.SITE}/campaigns/${c.slug}): ${c.expected_per_clip != null ? "$" + c.expected_per_clip + " typical per clip" : "new"}, $${c.rate_per_1k ?? c.per_post}/${c.per_post != null ? "post" : "1k views"}, cap $${c.cap_per_clip ?? "none"}, $${Math.round(c.budget_left)} left`).join("\n");
-      return send(res, 200, `# heistclips\n\n> Clip maker for Twitch and Kick streams, built for GTA 6 clipping. Finds the moments chat exploded in a stream (live or VOD), cuts them to 9:16 with hook text in the browser, flags licensed-music risk, and ranks clipping campaigns by what a typical approved clip actually earns. ${R.FREE_CLIPS} clips free, then pay per exported clip, never per stream minute. No watermark.\n\nData updated ${snap.generated_at}: ${s.campaigns} live campaigns, ${s.gta} GTA; median $${s.rate_per_1k_median}/1k views; typical approved clip earns $${s.earned_per_clip_median}.\n\n## Pages\n- [Clip tool](${R.SITE}/clip): open on a streamer with ${R.SITE}/clip?q=<twitch login> or ?q=kick.com/<slug>\n- [Twitch clip maker](${R.SITE}/twitch-clip-maker)\n- [Kick clip maker](${R.SITE}/kick-clip-maker)\n- [Most clipped streams right now](${R.SITE}${S.TREND_PATH}): streams and moments clippers are cutting, updated hourly\n- [How to clip a streamer](${R.SITE}/streamers): one page per streamer at ${R.SITE}/streamers/<twitch login>\n- [Campaigns ranked by pay per clip](${R.SITE}/gta-6-clipping-campaigns)\n- [GTA 6 clipping rates today](${R.SITE}/gta-6-clipping-rates-today)\n- [Pricing](${R.SITE}/pricing)\n${GUIDES.map((g) => `- [${g.title}](${R.SITE}/guides/${g.slug})`).join("\n")}\n\n## Top gaming campaigns right now\n${top}\n\n## Data (free to quote, please link back)\n- [Everything in one text file](${R.SITE}/llms-full.txt)\n- [Campaign rates, CSV](${R.SITE}${S.RATES_CSV})\n- [Campaign rates, JSON with field notes](${R.SITE}${S.RATES_JSON})\n- [Most clipped streams, JSON](${R.SITE}${S.TREND_JSON})\n- [Field notes and licence](${R.SITE}${S.DATA_PATH})\n- JSON API: ${R.SITE}/api/campaigns?filter=gta|gaming|all\n\n## Connector (MCP)\n- [Add heistclips to ChatGPT, Claude or Grok](${R.SITE}/connect)\n- MCP server (streamable HTTP, no key): ${R.SITE}/mcp  (tools: ${MCP_TOOLS.map((t) => t.name).join(", ")})\n- Source: https://github.com/2016judea/heistclips\n`, "text/plain; charset=utf-8", 600);
+      return send(res, 200, `# heistclips\n\n> Clip maker for Twitch and Kick streams, built for GTA 6 clipping. Finds the moments chat exploded in a stream (live or VOD), cuts them to 9:16 with hook text in the browser, flags licensed-music risk, and ranks clipping campaigns by what a typical approved clip actually earns. ${R.FREE_CLIPS} clips free, then pay per exported clip, never per stream minute. No watermark.\n\nData updated ${snap.generated_at}: ${s.campaigns} live campaigns, ${s.gta} GTA; median $${s.rate_per_1k_median}/1k views; typical approved clip earns $${s.earned_per_clip_median}.\n\n## Pages\n- [Clip tool](${R.SITE}/clip): open on a streamer with ${R.SITE}/clip?q=<twitch login> or ?q=kick.com/<slug>\n- [Twitch clip maker](${R.SITE}/twitch-clip-maker)\n- [Kick clip maker](${R.SITE}/kick-clip-maker)\n- [Most clipped streams right now](${R.SITE}${S.TREND_PATH}): streams and moments clippers are cutting, updated hourly\n- [How to clip a streamer](${R.SITE}/streamers): one page per streamer at ${R.SITE}/streamers/<twitch login>\n- [Campaigns ranked by pay per clip](${R.SITE}/gta-6-clipping-campaigns)\n- [GTA 6 clipping rates today](${R.SITE}/gta-6-clipping-rates-today)\n- [Pricing](${R.SITE}/pricing)\n${NEW.llmsLine()}\n${GUIDES.map((g) => `- [${g.title}](${R.SITE}/guides/${g.slug})`).join("\n")}\n\n## Top gaming campaigns right now\n${top}\n\n## Data (free to quote, please link back)\n- [Everything in one text file](${R.SITE}/llms-full.txt)\n- [Campaign rates, CSV](${R.SITE}${S.RATES_CSV})\n- [Campaign rates, JSON with field notes](${R.SITE}${S.RATES_JSON})\n- [Most clipped streams, JSON](${R.SITE}${S.TREND_JSON})\n- [Field notes and licence](${R.SITE}${S.DATA_PATH})\n- JSON API: ${R.SITE}/api/campaigns?filter=gta|gaming|all\n\n## Connector (MCP)\n- [Add heistclips to ChatGPT, Claude or Grok](${R.SITE}/connect)\n- MCP server (streamable HTTP, no key): ${R.SITE}/mcp  (tools: ${MCP_TOOLS.map((t) => t.name).join(", ")})\n- Source: https://github.com/2016judea/heistclips\n`, "text/plain; charset=utf-8", 600);
     }
+
+    // What's new: the Atom feed (one per language) and the English page; /de/whats-new etc. go through localPage.
+    const feed = p.match(/^(?:\/(de|fr|pt|es))?\/whats-new\.xml$/);
+    if (feed) return sendData(res, whatsNewFeed(feed[1] || "en"), "application/atom+xml; charset=utf-8");
+    if (p === NEW.PATH) return send(res, 200, whatsNewPage("en"), undefined, 600);
 
     // /de/…, /fr/…, /pt/…, /es/…: the same page in that language where one exists, else the English page.
     const loc = splitLang(p);

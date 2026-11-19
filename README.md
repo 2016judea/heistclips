@@ -128,6 +128,7 @@ minutes; the stream's in-progress VOD trails live by ~10 s, so it can be cut wit
 | `lib/trend.js` | The clip counter behind `/most-clipped-streams`: one empty file per clip, named by stream and moment. No person data. |
 | `lib/ended.js` | Campaigns that left the snapshot keep their URL, marked ended, with their last numbers. |
 | `api/` | Vercel functions: pages, `/mcp`, credits, checkout, the request board, the 30-min refresh. |
+| `lib/changelog.json` | What's new (`/whats-new`, feed at `/whats-new.xml`). Announce a shipped change with `node scripts/changelog_add.mjs <new\|improved\|fixed> "<title>" "<body>" [--link=/clip] [--request=<board id>]` in the same commit. |
 | `DATA_MODEL.md` | The ideal data model this was built against, and which fields reality fills. |
 
 Tests: `npm test` (offline).
