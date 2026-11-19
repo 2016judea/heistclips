@@ -1,5 +1,31 @@
 [
   {
+    "id": "whole-site-in-five-languages",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "The whole site in German, French, Portuguese and Spanish",
+    "body": "Every page now reads in your language: Autopilot, posting to YouTube, streamer and campaign pages, privacy and terms, and the emails the queue sends. Pick your language with the switch at the top.",
+    "at": "2026-11-19T20:12:10.703Z",
+    "langs": {
+      "de": {
+        "title": "Die ganze Seite auf Deutsch, Französisch, Portugiesisch und Spanisch",
+        "body": "Jede Seite gibt es jetzt in deiner Sprache: Autopilot, Posten auf YouTube, Streamer- und Kampagnen-Seiten, Datenschutz und AGB und die E-Mails der Warteschlange. Die Sprache wählst du oben mit dem Umschalter."
+      },
+      "fr": {
+        "title": "Tout le site en allemand, français, portugais et espagnol",
+        "body": "Chaque page se lit maintenant dans ta langue : l’autopilot, la publication sur YouTube, les pages des streamers et des campagnes, la confidentialité et les conditions, et les e-mails de la file. Choisis ta langue avec le menu en haut."
+      },
+      "pt": {
+        "title": "O site inteiro em alemão, francês, português e espanhol",
+        "body": "Agora toda página aparece no seu idioma: piloto automático, postagem no YouTube, páginas de streamers e de campanhas, privacidade e termos, e os e-mails da fila. Escolha o idioma no seletor lá em cima."
+      },
+      "es": {
+        "title": "Todo el sitio en alemán, francés, portugués y español",
+        "body": "Ahora cada página se lee en tu idioma: el piloto automático, publicar en YouTube, las páginas de streamers y de campañas, privacidad y términos, y los correos de la cola. Elige el idioma con el selector de arriba."
+      }
+    }
+  },
+  {
     "id": "live-clips-not-empty",
     "date": "2026-11-19",
     "type": "fixed",

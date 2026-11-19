@@ -266,7 +266,7 @@ const RULES = [
   [/^This browser can’t record video\. Open heistclips in Chrome, Edge or Safari on a computer\.$/, { de: "Dieser Browser kann kein Video aufnehmen. Öffne heistclips in Chrome, Edge oder Safari am Computer.", fr: "Ce navigateur ne peut pas enregistrer de vidéo. Ouvre heistclips dans Chrome, Edge ou Safari sur un ordinateur.", pt: "Este navegador não consegue gravar vídeo. Abra o heistclips no Chrome, Edge ou Safari em um computador.", es: "Este navegador no puede grabar video. Abre heistclips en Chrome, Edge o Safari en una computadora." }],
   [/^Want another layout, captions, or something else\?$/, { de: "Anderes Layout, Untertitel oder was ganz anderes?", fr: "Une autre mise en page, des sous-titres, autre chose ?", pt: "Quer outro layout, legendas ou outra coisa?", es: "¿Quieres otro formato, subtítulos u otra cosa?" }],
   [/^Request a feature$/, { de: "Feature wünschen", fr: "Demande une fonction", pt: "Peça uma função", es: "Pide una función" }],
-  [/^— we build what clippers ask for\.$/, { de: "– wir bauen, was Clipper sich wünschen.", fr: ": on construit ce que les clippeurs demandent.", pt: "— a gente constrói o que os clipadores pedem.", es: "— construimos lo que piden los clippers." }],
+  [/^— we build what clippers ask for\.$/, { de: "– wir bauen, was Clipper sich wünschen.", fr: ": on construit ce que les clippeurs demandent.", pt: "e a gente constrói o que os clipadores pedem.", es: "y construimos lo que piden los clippers." }],
   [/^(\d+)×(\d+) source · renders at 1080×1920$/, { de: "Quelle $1×$2 · gerendert wird in 1080×1920", fr: "Source $1×$2 · rendu en 1080×1920", pt: "Fonte $1×$2 · renderiza em 1080×1920", es: "Fuente $1×$2 · se renderiza a 1080×1920" }],
   [/^Couldn’t load the video: (.*?)( \(live moments need ~30 s before the video catches up; try again shortly\))?$/, by({
     de: (m) => `Das Video ließ sich nicht laden: ${m[1]}` + (m[2] ? " (Live-Momente brauchen ~30 s, bis das Video nachzieht; versuch es gleich nochmal)" : ""),
@@ -467,6 +467,7 @@ const RULES = [
     fr: (m) => `${SPOIL[m[1]].fr} : ${m[2]} ligne${s(m[2])}${m[3] || ""}${m[4] ? " ; le titre indique un stream sur l’histoire" : ""}`,
     pt: (m) => `${SPOIL[m[1]].pt}: ${m[2]} linha${s(m[2])}${m[3] || ""}${m[4] ? "; o título indica que é uma live de história" : ""}`,
     es: (m) => `${SPOIL[m[1]].es}: ${m[2]} línea${s(m[2])}${m[3] || ""}${m[4] ? "; el título indica que es un directo de historia" : ""}` })],
+  [/^● New moment – heistclips$/, { de: "● Neuer Moment – heistclips", fr: "● Nouveau moment – heistclips", pt: "● Momento novo – heistclips", es: "● Momento nuevo – heistclips" }],
 ];
 
 export function tr(text) {

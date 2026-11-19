@@ -170,3 +170,8 @@ test("the autopilot queue and the post page: what their scripts write, in all fo
     delete globalThis.document;
   }
 });
+
+test("every connector tool listed on /connect has its line in every language", async () => {
+  const { TOOLS } = await import("../api/mcp.js");
+  for (const l of ["de", "fr", "pt", "es"]) for (const t of TOOLS) assert.ok(WORDS[l].connect.tools[t.name], l + ": " + t.name + " (add it under connect.tools in lib/l10n_" + l + ".js)");
+});

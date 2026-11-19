@@ -67,7 +67,7 @@ ${row("tiktok", W.how.tiktok)}
 ${W.facts.map((x) => `<li>${x.replace('href="/privacy"', `href="${href(lang, "/privacy")}"`)}</li>`).join("\n")}
 </ul>
 </div>
-${lang === "en" ? "" : '<script type="module" src="/js/l10n.js?v=6"></script>'}<script type="module" src="/js/post.js?v=1"></script>`;
+${lang === "en" ? "" : '<script type="module" src="/js/l10n.js?v=8"></script>'}<script type="module" src="/js/post.js?v=1"></script>`;
   return R.layout({ lang, title: W.title, desc: W.desc, path: "/post", body: b, noindex: false });
 }
 

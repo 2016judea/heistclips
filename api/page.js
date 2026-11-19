@@ -34,7 +34,7 @@ export function sitemapUrls(snap, trend = null) {
   const streamerPath = (s) => (s.platform === "kick" ? "/streamers/kick/" : "/streamers/") + s.login;
   const inSnap = (snap.streamers || []).filter((s) => s.platform === "twitch" ? /^[a-z0-9_]{3,25}$/.test(s.login) : /^[a-z0-9_-]{2,40}$/.test(s.login));
   const clipped = ((trend && trend.streams) || []).filter((s) => s.platform === "twitch" && /^[a-z0-9_]{3,25}$/.test(s.login)); // a Kick page needs its snapshot row
-  const urls = ["/", "/clip", "/twitch-clip-maker", "/kick-clip-maker", "/most-clipped-streams", "/queue", "/requests", NEW.PATH, "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", "/streamers", "/guides", "/data", "/pricing", "/connect", "/about", "/privacy", "/terms",
+  const urls = ["/", "/clip", "/twitch-clip-maker", "/kick-clip-maker", "/most-clipped-streams", "/queue", "/post", "/requests", NEW.PATH, "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", "/streamers", "/guides", "/data", "/pricing", "/connect", "/about", "/privacy", "/terms",
     ...GUIDES.map((g) => "/guides/" + g.slug),
     ...snap.campaigns.map((c) => "/campaigns/" + c.slug),
     ...new Set([...inSnap, ...clipped].map(streamerPath))];
