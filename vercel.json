@@ -7,7 +7,12 @@
   "functions": {
     "api/*.js": {
       "includeFiles": "lib/**",
-      "maxDuration": 120
+      "maxDuration": 300
+    },
+    "api/v1/*.js": {
+      "includeFiles": "{lib/**,node_modules/ffmpeg-static/ffmpeg}",
+      "maxDuration": 300,
+      "memory": 3009
     }
   },
   "crons": [
@@ -28,6 +33,14 @@
     {
       "source": "/.well-known/openai-apps-challenge",
       "destination": "/api/page?p=/.well-known/openai-apps-challenge"
+    },
+    {
+      "source": "/post",
+      "destination": "/api/v1/post"
+    },
+    {
+      "source": "/oauth/:provider(youtube|tiktok)/callback",
+      "destination": "/api/v1/post?op=callback&provider=:provider"
     },
     {
       "source": "/((?!api/).*)",

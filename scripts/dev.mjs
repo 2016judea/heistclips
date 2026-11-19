@@ -27,7 +27,9 @@ http.createServer(async (req, res) => {
   }
   let name = "page";
   if (u.pathname === "/mcp") name = "mcp";
-  else if ((m = u.pathname.match(/^\/api\/([a-z-]+)$/))) name = m[1];
+  else if ((m = u.pathname.match(/^\/api\/((?:v1\/)?[a-z-]+)$/))) name = m[1];
+  else if (u.pathname === "/post") { name = "v1/post"; }
+  else if ((m = u.pathname.match(/^\/oauth\/(youtube|tiktok)\/callback$/))) { name = "v1/post"; req.url = `/api/v1/post?op=callback&provider=${m[1]}&${u.search.slice(1)}`; }
   else req.url = "/api/page?p=" + encodeURIComponent(u.pathname) + (u.search ? "&" + u.search.slice(1) : "");
   try {
     const mod = await import(path.join(root, "api", name + ".js"));

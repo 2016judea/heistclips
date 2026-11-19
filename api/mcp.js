@@ -9,6 +9,7 @@ import { getKickChannel, getKickVod, liveKickGta } from "../public/js/kick.js";
 import { loadBoard, publicList, vote, submit, notify, hashOf } from "../lib/requests.js";
 
 const SITE = "https://heistclips.com";
+const BASE = process.env.HC_BASE || SITE; // where this server reaches its own /api/v1 functions
 const VERSION = "0.2.0";
 const PH_KEY = "phc_yFgRGppL6H7DvhgZTQKbHdrY5oqnpLT482rrNYtLqnAx"; // public project key, same as lib/posthog.html
 const ANN = { readOnlyHint: true, destructiveHint: false, openWorldHint: true, idempotentHint: true };
@@ -42,6 +43,21 @@ export const TOOLS = [
       skip_spoilers: { type: "boolean", description: "true = leave out moments that look like story spoilers (chat warns about spoilers, talks about the ending, or reacts to a story scene), for campaigns that ban spoilers. Skipped moments come back in skipped_spoilers with the reason. Default false: every moment is returned with a spoiler_risk field." },
     }, required: ["source"], additionalProperties: false },
     annotations: { title: "Find moments", ...ANN },
+  },
+  {
+    name: "cut_clip",
+    title: "Cut a moment into a vertical 9:16 MP4 clip for TikTok, Shorts and Reels",
+    description: "Cuts a window of a Twitch or Kick stream (a VOD, or a live stream so far) into a finished 1080x1920 MP4 and returns a download link, without opening the web editor. Use after find_clip_moments: pass the same source and a moment's t_start_s and t_end_s (5 to 90 seconds). Layouts: fit (full frame over a blurred fill, the safe default), split (facecam on top, gameplay below; say which corner the facecam is in), crop (centre crop). Optional hook text is burned in at the top. Each cut uses one clip credit, the same as a render on the site: a new account gets free clips, then packs. The first call returns an account code; pass it back as account on every later cut_clip and post_clip so credits and connected YouTube/TikTok accounts carry over. Takes 20-90 seconds. The file is kept 72 hours.",
+    inputSchema: { type: "object", properties: {
+      source: { type: "string", description: "The stream: a Twitch VOD link or id, a Kick video link, or a channel (its live or latest stream). Use the stream url from find_clip_moments." },
+      start: { type: ["number", "string"], description: "Where the clip starts: seconds into the stream (t_start_s), or h:mm:ss" },
+      end: { type: ["number", "string"], description: "Where the clip ends: seconds into the stream (t_end_s), or h:mm:ss. 5 to 90 seconds after start." },
+      layout: { type: "string", enum: ["fit", "split", "crop"], description: "fit = whole frame, blurred fill (default); split = facecam on top + gameplay; crop = centre crop" },
+      facecam: { type: "string", enum: ["tl", "tr", "bl", "br"], description: "For split: the corner of the stream the facecam is in (default tr = top right)" },
+      hook: { type: "string", description: "Optional text burned in at the top, e.g. one of the moment's hooks. Up to 90 characters; emoji are dropped." },
+      account: { type: "string", description: "The account code (hc_…) from an earlier cut_clip. Leave out on the very first cut." },
+    }, required: ["source", "start", "end"], additionalProperties: false },
+    annotations: { title: "Cut a 9:16 clip", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
   },
   {
     name: "live_gta_streams",
@@ -102,7 +118,7 @@ async function logCall(tool, ok, ms, meta) {
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
 
-export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do.";
+export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back). Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do.";
 
 const text = (obj) => ({ content: [{ type: "text", text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 1) }], structuredContent: typeof obj === "string" ? undefined : obj });
 
@@ -177,6 +193,13 @@ export async function callTool(name, args = {}, caller = "mcp") {
     }));
     return text({ stream: { platform: vod.platform || "twitch", channel: vod.channel_name, title: vod.title, game: vod.game, length: clock(vod.length), status: vod.status === "RECORDING" ? "live, still recording" : "finished", url: vod.url }, moments, spoiler_filter: args.skip_spoilers ? "on" : "off",
       skipped_spoilers: skipped.map((m) => ({ start: clock(m.t_start), end: clock(m.t_end), reason: m.spoiler.reason, watch: m.url })), note: moments.length ? "Cut any of these to 9:16 with hooks at the cut_it link." : "Chat was steady the whole stream; no clear spikes." });
+  }
+  if (name === "cut_clip") {
+    // The cut runs in its own function (ffmpeg, longer limit); this one just waits for it.
+    const r = await fetch(BASE + "/api/v1/cut", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...args, via: "mcp" }), signal: AbortSignal.timeout(280000) });
+    const d = await r.json().catch(() => ({ ok: false, error: "The cut did not finish (" + r.status + "). Nothing was charged; try a shorter window." }));
+    if (!d.ok) return { ...text(d), isError: !d.need };
+    return text({ ...d, next: "Give the user the download link. To post it, call post_clip with clip_id, account, platform and a caption." });
   }
   if (name === "live_gta_streams") {
     const [tw, kk] = await Promise.all([liveGtaStreams(40), liveKickGta(20).catch(() => [])]);

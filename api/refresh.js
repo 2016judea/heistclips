@@ -6,6 +6,7 @@ import { refreshCache, rawCampaigns } from "../lib/crpages.js";
 import { liveGtaStreams, liveKick, handlesFromCampaigns, mergeStreamers } from "../lib/streamers.js";
 import { putJSON, getJSON } from "../lib/store.js";
 import { sitemapUrls } from "./page.js";
+import { sweepOld } from "../lib/blobfiles.js";
 
 const SITE = "https://heistclips.com";
 const HOST = "heistclips.com";
@@ -73,5 +74,8 @@ export default async function handler(req, res) {
     await putJSON("snapshot/latest.json", snap, { maxAge: 60 });
   }
   res.setHeader("content-type", "application/json");
-  res.end(JSON.stringify({ ok: true, ms: Date.now() - t0, campaigns: snap.campaigns.length, crawl: snap.crawl, gta: snap.summary.gta, streamers: snap.streamers.length, live_gta: live.length, indexnow: ping }));
+  // Server-cut clips and upload parts are kept 72 hours (lib/blobfiles.js).
+  let swept = null;
+  try { swept = await sweepOld(); } catch (e) { swept = "error: " + e.message; }
+  res.end(JSON.stringify({ ok: true, swept, ms: Date.now() - t0, campaigns: snap.campaigns.length, crawl: snap.crawl, gta: snap.summary.gta, streamers: snap.streamers.length, live_gta: live.length, indexnow: ping }));
 }
