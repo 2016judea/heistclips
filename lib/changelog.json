@@ -1,5 +1,59 @@
 [
   {
+    "id": "cutting-a-clip-in-your-ai-chat",
+    "date": "2026-11-19",
+    "type": "fixed",
+    "title": "Cutting a clip in your AI chat no longer hangs for four minutes",
+    "body": "About one cut in seven used to hang for four minutes and then fail. That is fixed. If a clip ever needs more than 45 seconds, your assistant waits for it, and you are charged once, only when the file is ready.",
+    "link": "/connect",
+    "at": "2026-11-19T20:15:24.864Z",
+    "langs": {
+      "de": {
+        "title": "Clips im KI-Chat schneiden hängt nicht mehr vier Minuten lang",
+        "body": "Etwa jeder siebte Schnitt hing früher vier Minuten und schlug dann fehl. Das ist behoben. Wenn ein Clip mal länger als 45 Sekunden braucht, wartet dein Assistent darauf, und dir wird nur einmal etwas abgezogen, erst wenn die Datei fertig ist."
+      },
+      "fr": {
+        "title": "Couper un clip depuis ton chat IA ne reste plus bloqué quatre minutes",
+        "body": "Environ une coupe sur sept restait bloquée quatre minutes, puis échouait. C’est corrigé. Si un clip a besoin de plus de 45 secondes, ton assistant l’attend, et tu es débité une seule fois, seulement quand le fichier est prêt."
+      },
+      "pt": {
+        "title": "Cortar um clip no seu chat de IA não trava mais por quatro minutos",
+        "body": "Mais ou menos um corte em cada sete travava por quatro minutos e depois falhava. Isso foi corrigido. Se um clip precisar de mais de 45 segundos, seu assistente espera por ele, e você é cobrado uma vez só, apenas quando o arquivo está pronto."
+      },
+      "es": {
+        "title": "Cortar un clip desde tu chat de IA ya no se queda colgado cuatro minutos",
+        "body": "Más o menos uno de cada siete cortes se quedaba colgado cuatro minutos y luego fallaba. Ya está arreglado. Si un clip necesita más de 45 segundos, tu asistente lo espera, y se te cobra una sola vez, solo cuando el archivo está listo."
+      }
+    }
+  },
+  {
+    "id": "clips-cut-in-your-ai-chat-are",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "Clips cut in your AI chat are 3 to 5 times faster",
+    "body": "A 30-second clip made from Claude or ChatGPT is now ready in about 12 to 22 seconds. It used to take one to two minutes. A 60-second clip takes about half a minute.",
+    "link": "/connect",
+    "at": "2026-11-19T20:15:23.593Z",
+    "langs": {
+      "de": {
+        "title": "Clips aus deinem KI-Chat sind 3- bis 5-mal schneller fertig",
+        "body": "Ein 30-Sekunden-Clip aus Claude oder ChatGPT ist jetzt in etwa 12 bis 22 Sekunden fertig. Vorher hat das ein bis zwei Minuten gedauert. Ein 60-Sekunden-Clip braucht etwa eine halbe Minute."
+      },
+      "fr": {
+        "title": "Les clips coupés depuis ton chat IA sont 3 à 5 fois plus rapides",
+        "body": "Un clip de 30 secondes fait depuis Claude ou ChatGPT est maintenant prêt en 12 à 22 secondes environ. Avant, ça prenait une à deux minutes. Un clip de 60 secondes prend environ une demi-minute."
+      },
+      "pt": {
+        "title": "Clips cortados no seu chat de IA ficam prontos de 3 a 5 vezes mais rápido",
+        "body": "Um clip de 30 segundos feito pelo Claude ou pelo ChatGPT agora fica pronto em cerca de 12 a 22 segundos. Antes levava de um a dois minutos. Um clip de 60 segundos leva cerca de meio minuto."
+      },
+      "es": {
+        "title": "Los clips cortados desde tu chat de IA son de 3 a 5 veces más rápidos",
+        "body": "Un clip de 30 segundos hecho desde Claude o ChatGPT ahora está listo en unos 12 a 22 segundos. Antes tardaba de uno a dos minutos. Un clip de 60 segundos tarda más o menos medio minuto."
+      }
+    }
+  },
+  {
     "id": "whole-site-in-five-languages",
     "date": "2026-11-19",
     "type": "improved",

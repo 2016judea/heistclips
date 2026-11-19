@@ -210,3 +210,15 @@ pre{padding:12px;overflow-x:auto;white-space:pre}
 @media (max-width:560px){.three.four{grid-template-columns:1fr}}
 /* The hidden attribute always wins: .btn sets display and was un-hiding the closed TikTok button (2026-11-19). */
 [hidden]{display:none !important}
+/* request board: bug reports (a tag on the row, a Features/Bugs filter, a choice on the form) */
+.st-bug{background:#3a1d22;color:#ffb3bd}
+.reqkind{display:flex;gap:8px;flex-wrap:wrap}
+.reqkind label{display:flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:1px solid #3a3a44;border-radius:999px;font-size:14px;cursor:pointer}
+.reqkind label:has(input:checked){border-color:var(--acc);color:var(--ink);background:#15151a}
+.reqkind input{width:auto;padding:0;border:0;accent-color:var(--acc);margin:0}
+#bugfields{display:flex;flex-direction:column;gap:8px}
+#bugfields[hidden]{display:none}
+.reqfilter{display:flex;gap:8px;margin:0 0 12px}
+.reqfilter button{font:inherit;font-size:14px;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid #3a3a44;background:transparent;color:var(--mute);cursor:pointer}
+.reqfilter button.on{color:var(--ink);border-color:var(--ink)}
+.req[hidden]{display:none}

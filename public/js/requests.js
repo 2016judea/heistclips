@@ -74,10 +74,38 @@ document.addEventListener("click", async (e) => {
 });
 
 const f = document.getElementById("reqform");
+
+// "Request a feature" or "Report a bug": the same box, different questions. The words for
+// both are on the elements (data-ph-bug, data-bug…), written by the page in its own language.
+const bugBox = document.getElementById("bugfields");
+const isBug = () => !!(f.elements.kind && f.elements.kind.value === "bug");
+function setKind() {
+  const bug = isBug(), k = bug ? "bug" : "feature";
+  f.elements.title.placeholder = f.elements.title.dataset["ph" + (bug ? "Bug" : "Feature")] || f.elements.title.placeholder;
+  if (bugBox) { bugBox.hidden = !bug; for (const el of bugBox.querySelectorAll("input,textarea")) el.disabled = !bug; }
+  if (f.elements.detail) { f.elements.detail.hidden = bug; f.elements.detail.disabled = bug; }
+  for (const el of f.querySelectorAll("[data-feature][data-bug]")) el.textContent = el.dataset[k];
+  f.classList.toggle("is-bug", bug);
+}
+f.addEventListener("change", (e) => { if (e.target.name === "kind") { setKind(); ph("request_kind", { kind: isBug() ? "bug" : "feature" }); } });
+// /requests#bug or ?kind=bug opens the form on "Report a bug".
+if (bugBox && (location.hash === "#bug" || new URLSearchParams(location.search).get("kind") === "bug")) { f.elements.kind.value = "bug"; setKind(); }
+
+// Features / Bugs filter over the rows already on the page.
+const filter = document.getElementById("reqfilter");
+if (filter) filter.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-kind]");
+  if (!b) return;
+  for (const x of filter.querySelectorAll("[data-kind]")) x.classList.toggle("on", x === b);
+  for (const li of document.querySelectorAll("#reqs > .req")) li.hidden = b.dataset.kind !== "all" && (li.dataset.kind || "feature") !== b.dataset.kind;
+  ph("request_filter", { kind: b.dataset.kind });
+});
+
 f.addEventListener("submit", async (e) => {
   e.preventDefault();
   const msg = document.getElementById("reqmsg");
   const data = Object.fromEntries(new FormData(f));
+  const bug = data.kind === "bug";
   msg.textContent = "Sending…";
   const r = await fetch("/api/requests", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "submit", d, ...data, not_a_stream: f.dataset.force === "1" }) });
   const j = await r.json();
@@ -90,10 +118,10 @@ f.addEventListener("submit", async (e) => {
   }
   if (!j.ok) { msg.textContent = j.error; return; }
   delete f.dataset.force;
-  ph("request_submit", { duplicate: !!j.duplicate });
+  ph(bug ? "bug_submit" : "request_submit", { duplicate: !!j.duplicate });
   if (j.duplicate) { msg.textContent = "Already on the board, so we added nothing. Upvote it:"; location.hash = j.id; return; }
-  msg.textContent = "Added. It’s on the board now.";
-  const li = `<li class="req" id="${esc(j.item.id)}"><button class="vote on" data-vote="${esc(j.item.id)}"><span>▲</span><b>1</b></button><div><b class="rt">${esc(j.item.title)}</b>${j.item.detail ? `<p class="rd">${esc(j.item.detail)}</p>` : ""}<span class="meta"><em class="st st-requested">requested</em> Requested by a clipper</span></div></li>`;
+  msg.textContent = bug ? f.dataset.okBug || "Reported. It’s on the board, and the builder has it." : "Added. It’s on the board now.";
+  const li = `<li class="req" id="${esc(j.item.id)}" data-kind="${bug ? "bug" : "feature"}"><button class="vote on" data-vote="${esc(j.item.id)}"><span>▲</span><b>1</b></button><div><b class="rt">${esc(j.item.title)}</b>${j.item.detail ? `<p class="rd">${esc(j.item.detail)}</p>` : ""}<span class="meta">${bug ? `<em class="st st-bug">${esc(f.dataset.bugTag || "Bug")}</em> ` : ""}<em class="st st-requested">requested</em> Requested by a clipper</span></div></li>`;
   document.getElementById("reqs").insertAdjacentHTML("afterbegin", li);
-  f.reset();
+  f.reset(); setKind();
 });

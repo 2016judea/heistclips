@@ -4,7 +4,9 @@
 import { latestSnapshot } from "../lib/store.js";
 import { liveGtaStreams } from "../lib/streamers.js";
 import { liveKickGta } from "../public/js/kick.js";
-import { loadBoard, publicList, vote, submit, notify, hashOf } from "../lib/requests.js";
+import { loadBoard, publicList, vote, submit, notify, hashOf, KINDS } from "../lib/requests.js";
+import { bugEvent, BUG_FAILURES } from "./requests.js";
+import { latestEntries, PATH as NEWS_PATH } from "../lib/changelog.js";
 import { queueTool } from "../lib/queuetool.js";
 import { findClipMoments } from "../lib/momentstool.js";
 import { JOB, newJobId, jobAgeMs, JOB_DEAD_MS, loadJob } from "../lib/cutjob.js";
@@ -132,10 +134,42 @@ export const TOOLS = [
     annotations: { title: "Request a feature", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
   },
   {
+    name: "report_a_bug",
+    title: "Report a heistclips bug: something broke or came out wrong",
+    description: "Files a bug report on heistclips' public board (heistclips.com/requests, tagged Bug) and emails the person who fixes it. Use when something heistclips did went wrong: a clip with no sound or a black or empty video, a render or export that failed or got stuck, a cut_clip or find_clip_moments error, wrong moments, a post that did not arrive, a broken page. Only file when the user asks or agrees; never on your own. Include everything you already know from this chat so nobody has to ask again: the stream, the start and end of the moment, which tool or step failed, the exact error text returned, the clip_id and the account code if there are any. Pass the user's words VERBATIM as title and what_happened, in their language. Not for wishes: a missing feature goes to request_a_feature. Tell them it was filed only if ok is true.",
+    inputSchema: { type: "object", properties: {
+      title: { type: "string", description: "What went wrong in a few of the user's own words, under 90 characters, e.g. 'The MP4 has no sound'" },
+      what_happened: { type: "string", description: "What they did and what heistclips did instead, in their words. No links here; the stream goes in source." },
+      expected: { type: "string", description: "What they expected to happen" },
+      source: { type: "string", description: "The stream: a Twitch or Kick VOD link or id, or the channel" },
+      moment_start: { type: "number", description: "Start of the moment, seconds into the stream" },
+      moment_end: { type: "number", description: "End of the moment, seconds into the stream" },
+      tool: { type: "string", description: "The tool or step that failed: a tool name like cut_clip or find_clip_moments, or the page step (render, editor, queue, post, checkout)" },
+      error_text: { type: "string", description: "The exact error text heistclips returned or showed, if any" },
+      failure: { type: "string", enum: ["error_returned", "wrong_result", "empty_or_broken_file", "timeout", "other"], description: "The kind of failure" },
+      clip_id: { type: "string", description: "clip_id from cut_clip, if the bug is about a clip that was made" },
+      account: { type: "string", description: "The account code (hc_…) if the user has one. Sent to the builder only, never shown on the board." },
+      client: { type: "string", description: "Which assistant this is, e.g. Claude, ChatGPT, Grok" },
+      contact: { type: "string", description: "Optional: email or handle for a reply, verbatim, only if offered. Sent to the builder only." },
+    }, required: ["title"], additionalProperties: false },
+    annotations: { title: "Report a bug", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
+  },
+  {
+    name: "whats_new",
+    title: "What's new on heistclips: latest fixes and features",
+    description: "The latest things shipped on heistclips: new features, improvements and bug fixes, newest first, each with its date, one or two plain sentences, a link to the entry and where to try it. Use for 'what changed on heistclips', 'is that bug fixed yet', 'anything new for clipping'. Pass lang to get them in German, French, Portuguese or Spanish.",
+    inputSchema: { type: "object", properties: {
+      limit: { type: "integer", minimum: 1, maximum: 30, description: "How many entries (default 8)" },
+      since: { type: "string", description: "Only entries on or after this date, YYYY-MM-DD" },
+      lang: { type: "string", enum: ["en", "de", "fr", "pt", "es"], description: "Language of the entries (default en)" },
+    }, additionalProperties: false },
+    annotations: { title: "What's new", ...ANN },
+  },
+  {
     name: "list_feature_requests",
     title: "heistclips feature requests",
-    description: "The public heistclips feature-request board: every request with its upvotes, status (requested, building, shipped), and for closed items the builder's response and shipped_at date, most upvoted first. Titles and details are in English; a request written in another language also carries its original text and language code under original. Use before request_a_feature to find an existing request to upvote instead.",
-    inputSchema: { type: "object", properties: { status: { type: "string", enum: ["requested", "building", "shipped"], description: "Only this status" } }, additionalProperties: false },
+    description: "The public heistclips board of feature requests and bug reports: every item with its kind (feature or bug), upvotes, status (requested, building, shipped), and for closed items the builder's response and shipped_at date, most upvoted first. Titles and details are in English; a request written in another language also carries its original text and language code under original. Use before request_a_feature to find an existing request to upvote instead.",
+    inputSchema: { type: "object", properties: { status: { type: "string", enum: ["requested", "building", "shipped"], description: "Only this status" }, kind: { type: "string", enum: ["feature", "bug"], description: "Only feature requests, or only bug reports" } }, additionalProperties: false },
     annotations: { title: "List feature requests", ...ANN },
   },
   {
@@ -177,7 +211,7 @@ async function logCall(tool, ok, ms, meta, extra = {}) {
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
 
-export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back; if it answers status 'cutting', call cut_clip_status with the job code instead of cutting again), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do.";
+export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back; if it answers status 'cutting', call cut_clip_status with the job code instead of cutting again), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do. If something heistclips did went wrong (an error, a broken or silent clip, wrong moments), offer report_a_bug and, if the user agrees, file it with everything you already know: stream, moment, tool, error text. whats_new lists the latest fixes and features.";
 
 // A tool result may carry `log`: analytics fields for this call. It never reaches the client.
 const withLog = (result, log) => Object.defineProperty(result, "log", { value: log, enumerable: false });
@@ -225,12 +259,28 @@ const brief = (c, i) => ({
 export async function callTool(name, args = {}, caller = "mcp") {
   name = ALIASES[name] || name;
   if (name === "list_feature_requests") {
-    const list = publicList(await loadBoard()).filter((x) => !args.status || x.status === args.status);
+    const list = publicList(await loadBoard()).filter((x) => (!args.status || x.status === args.status) && (!KINDS.includes(args.kind) || x.kind === args.kind));
     return text({ board: tag(SITE + "/requests"), requests: list.map(({ voted, ...x }) => x) });
   }
   if (name === "upvote_feature_request") {
     const r = await vote(String(args.id || ""), "mcp:" + caller, caller);
     return r.ok ? text({ ok: true, id: args.id, votes: r.votes, already_voted: !!r.already, board: tag(SITE + "/requests#" + args.id) }) : { ...text({ ok: false, error: r.error }), isError: true };
+  }
+  if (name === "whats_new") {
+    const lang = ["de", "fr", "pt", "es"].includes(args.lang) ? args.lang : "en";
+    const since = /^\d{4}-\d{2}-\d{2}$/.test(String(args.since || "")) ? args.since : null;
+    const list = latestEntries({ limit: Math.min(30, Number(args.limit) || 8), lang, since });
+    return text({ page: tag(SITE + (lang === "en" ? "" : "/" + lang) + NEWS_PATH), entries: list.map((e) => ({ ...e, url: tag(e.url), try_it: e.try_it ? tag(e.try_it) : undefined })), note: list.length ? undefined : "Nothing new in that range." });
+  }
+  if (name === "report_a_bug") {
+    if (!args.title) return text({ ok: false, needs: "Ask the user what went wrong, then call again with it as title and what_happened." });
+    const r = await submit({ ...args, kind: "bug", client: args.client || meta.client }, "mcp:" + caller, caller);
+    if (!r.ok) return withLog({ ...text({ ok: false, error: r.error }), isError: true, noBugHint: true }, { err: "bug_refused" });
+    if (r.item) {
+      await notify(r.item, r.contact, "MCP (" + meta.client + ")", r.bug_private).catch(() => null);
+      await bugEvent(r.item, "mcp", BUG_FAILURES.includes(args.failure) ? args.failure : undefined).catch(() => null);
+    }
+    return withLog(text({ ok: true, id: r.id, kind: "bug", duplicate: !!r.duplicate, message: r.duplicate ? "A report with that title is already on the board; it was not filed twice. Offer to upvote it." : "Filed on the public board as a bug and emailed to the builder with every field you passed. The account code, clip id and contact are not shown on the board.", board: tag(SITE + "/requests#" + r.id) }), { kind: "bug" });
   }
   if (name === "request_a_feature") {
     if (!args.title) return text({ ok: false, needs: "Ask the user what they want heistclips to do, then call again with it as title." });
@@ -302,6 +352,23 @@ async function readBody(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "null");
 }
 
+// When one of our tools fails, the result says report_a_bug exists and hands back what is
+// already known, so the assistant can OFFER to file it. It is never filed without the user.
+const NO_HINT = new Set(["report_a_bug", "request_a_feature", "list_feature_requests", "upvote_feature_request", "whats_new"]);
+export function withBugHint(out, tool, args = {}) {
+  if (!out || !out.isError || out.noBugHint || NO_HINT.has(tool)) return out;
+  const sc = out.structuredContent || {};
+  const errorText = String(sc.error || (out.content && out.content[0] && out.content[0].text) || "").slice(0, 300);
+  const num = (v) => (isFinite(Number(v)) && v !== "" && v != null ? Number(v) : undefined);
+  const prefill = { title: "", tool, error_text: errorText, failure: "error_returned", source: args.source || args.streamer || undefined, moment_start: num(args.start), moment_end: num(args.end), clip_id: args.clip_id || sc.clip_id || undefined, account: args.account || sc.account || undefined };
+  for (const k of Object.keys(prefill)) if (prefill[k] === undefined) delete prefill[k];
+  const hint = { hint: "If this looks like a heistclips bug, offer to report it; if the user agrees, call report_a_bug with these fields plus a title in their words. Never file it without asking.", prefill };
+  const body = typeof out.structuredContent === "object" && out.structuredContent ? { ...out.structuredContent, report_a_bug: hint } : { ok: false, error: errorText, report_a_bug: hint };
+  const next = { ...out, content: [{ type: "text", text: JSON.stringify(body, null, 1) }], structuredContent: body };
+  if (out.log) Object.defineProperty(next, "log", { value: out.log, enumerable: false });
+  return next;
+}
+
 let caller = "mcp", meta = { ip: "local", ua: "", client: "other" };
 async function handleOne(msg) {
   const { id, method, params } = msg || {};
@@ -319,6 +386,8 @@ async function handleOne(msg) {
     try { out = await callTool(params.name, params.arguments || {}, caller); }
     catch (e) { out = withLog({ content: [{ type: "text", text: "Error: " + e.message }], isError: true }, { err: /twitch|kick|gql/i.test(e.message) ? "upstream" : "exception" }); }
     const log = out.log || {};
+    out = withBugHint(out, tool, params.arguments || {});
+    delete out.noBugHint;
     await logCall(TOOLS.some((t) => t.name === tool) ? tool : "unknown", !out.isError && log.ok !== false && !log.err, Date.now() - t0, meta, out.isError && !log.err ? { ...log, err: "error" } : log);
     return ok(out);
   }
