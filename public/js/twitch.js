@@ -345,6 +345,18 @@ const HOOKS = {
     shock: ["Attends la fin…", "Personne ne l’a vu venir", `La réaction de ${w} 💀`],
     fail: ["Ça a tellement mal tourné 💀", `${w} ne s’en remettra jamais`, "Tout s’est effondré en 3 secondes"],
     reaction: ["Attends la fin…", "Le chat a explosé à ce moment-là", `${w} ne s’y attendait pas`] }) },
+  pt: { who: "Ele", quote: (p) => `“${p}” – o chat, na hora`, ratio: (n) => `O chat ficou ${n}× mais rápido aqui`, by: (w) => ({
+    funny: [`${w} NÃO estava pronto pra isso 😂`, "O chat ficou sem ar depois dessa", `É por isso que todo mundo assiste ${w}`],
+    hype: [`${w} acabou de fazer ISSO`, "A jogada mais limpa que você vai ver hoje", "O chat foi à loucura com essa"],
+    shock: ["Espera só…", "Ninguém viu essa chegando", `A reação de ${w} 💀`],
+    fail: ["Isso deu muito errado 💀", `${w} nunca vai superar essa`, "Desabou tudo em 3 segundos"],
+    reaction: ["Espera só…", "O chat surtou nesse momento", `${w} não esperava por essa`] }) },
+  es: { who: "Él", quote: (p) => `«${p}» – el chat, al instante`, ratio: (n) => `El chat iba ${n}× más rápido aquí`, by: (w) => ({
+    funny: [`${w} NO estaba listo para esto 😂`, "El chat se quedó sin aire con esto", `Por esto todo el mundo ve a ${w}`],
+    hype: [`${w} acaba de lograr ESTO`, "La jugada más limpia que verás hoy", "El chat se volvió loco con esto"],
+    shock: ["Espera…", "Nadie lo vio venir", `La reacción de ${w} 💀`],
+    fail: ["Esto salió fatal 💀", `${w} nunca va a superar esto`, "Todo se vino abajo en 3 segundos"],
+    reaction: ["Espera…", "El chat explotó en este momento", `${w} no se lo esperaba`] }) },
 };
 
 export function hooks(m, streamer, lang) {

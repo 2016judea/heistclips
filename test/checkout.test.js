@@ -12,6 +12,8 @@ test("a buyer only ever returns to our own clip tool", () => {
   assert.equal(backPath("//evil.example/clip", "fr"), "/fr/clip");
   assert.equal(backPath("/pricing", "de"), "/de/clip");
   assert.equal(backPath("", "en"), "/clip");
+  assert.equal(backPath("/pt/clip?q=alanzoka", "pt"), "/pt/clip?q=alanzoka");
+  assert.equal(backPath("/xx/clip", "es"), "/es/clip");
 });
 
 test("checkout keeps the price, speaks the buyer's language and comes back to the stream", () => {
@@ -26,6 +28,8 @@ test("checkout keeps the price, speaks the buyer's language and comes back to th
   assert.equal(f.get("allow_promotion_codes"), null); // no codes exist; the box only invites a hunt for one
   const en = sessionForm(pack, { origin: "https://heistclips.com", lang: "", back: "", device: "d1", pmc: null });
   assert.equal(en.get("locale"), "auto");
+  assert.equal(sessionForm(pack, { origin: "https://heistclips.com", lang: "pt", back: "", device: "d", pmc: null }).get("locale"), "pt-BR");
+  assert.equal(sessionForm(pack, { origin: "https://heistclips.com", lang: "es", back: "", device: "d", pmc: null }).get("cancel_url"), "https://heistclips.com/es/pricing");
   assert.equal(en.get("success_url"), "https://heistclips.com/clip?paid={CHECKOUT_SESSION_ID}");
   assert.equal(en.get("cancel_url"), "https://heistclips.com/pricing");
   assert.equal(en.get("payment_method_configuration"), null);

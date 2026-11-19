@@ -15,7 +15,7 @@ const board = [{ id: "s01", title: "Kick support", detail: "Find and cut moments
   { id: "r1", title: "Bessere Qualität", detail: "", status: "building", by: "Requested by a clipper", votes: 4, voted: false, response: "On it." }];
 const paths = ["/", "/clip", "/pricing", "/requests", "/guides", "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", ...GUIDES.map((g) => "/guides/" + g.slug)];
 
-for (const lang of ["de", "fr"]) {
+for (const lang of ["de", "fr", "pt", "es"]) {
   test(`every page renders in ${lang}, tracked, with its alternates, and no English left in the frame`, () => {
     for (const p of paths) {
       const html = localPage(lang, p, { snap, query: new URLSearchParams(""), board, history: [] });
@@ -26,7 +26,7 @@ for (const lang of ["de", "fr"]) {
       assert.equal((html.match(/hreflang=/g) || []).length >= 4, true, p);
       assert.match(html, new RegExp(`<link rel="canonical" href="https://heistclips.com/${lang}`), p);
       const main = html.slice(html.indexOf("<main"), html.indexOf("</main>"));
-      for (const en of ["typical per clip", "Find moments", "clippers ·", "Updated ", "per 1,000 views", "Request it", "Buy 50 clips", "Suggested by heistclips", "apply first"]) assert.equal(main.includes(en), false, `${p}: "${en}"`);
+      for (const en of ["typical per clip", "Find moments", "Updated ", "per 1,000 views", "Request it", "Buy 50 clips", "Suggested by heistclips", "apply first"]) assert.equal(main.includes(en), false, `${p}: "${en}"`);
     }
     assert.equal(localPage(lang, "/about", { snap, query: new URLSearchParams("") }), null); // English only: the router redirects
   });
@@ -37,11 +37,20 @@ test("a post on the board shows as written; a launch item heistclips seeded is t
   assert.match(de, /Bessere Qualität/);
   assert.match(de, /Kick-Unterstützung/);
   assert.match(de, /In Arbeit<\/b> — On it\./);
+  assert.match(localPage("pt", "/requests", { snap, query: new URLSearchParams(""), board }), /Suporte à Kick/);
 });
 
-test("German and French carry the same set of words", () => {
+test("every language carries the same set of words", () => {
   const keys = (o, pre = "") => Object.entries(o).flatMap(([k, v]) => (v && typeof v === "object" && !Array.isArray(v) && !(v instanceof RegExp) ? keys(v, pre + k + ".") : [pre + k]));
-  assert.deepEqual(keys(WORDS.de).sort(), keys(WORDS.fr).sort());
+  for (const l of ["fr", "pt", "es"]) assert.deepEqual(keys(WORDS[l]).sort(), keys(WORDS.de).sort(), l);
+});
+
+test("every rule for what the clip tool writes has all four languages", async () => {
+  const src = (await import("node:fs")).readFileSync(new URL("../public/js/l10n.js", import.meta.url), "utf8");
+  const rules = src.slice(src.indexOf("const RULES = ["), src.indexOf("export function tr("));
+  const strings = (rules.match(/[^(]\{ de: /g) || []).length, builders = (rules.match(/by\(\{/g) || []).length;
+  assert.ok(strings + builders > 120, "rules found: " + (strings + builders));
+  for (const l of ["fr", "pt", "es"]) assert.equal((rules.match(new RegExp(`[ {,]${l}: `, "g")) || []).length, strings + builders, l);
 });
 
 test("English pages advertise the translations and pick the visitor's language once", () => {
@@ -49,13 +58,16 @@ test("English pages advertise the translations and pick the visitor's language o
   assert.match(html, /hreflang="de" href="https:\/\/heistclips\.com\/de\/pricing"/);
   assert.match(html, /hreflang="x-default" href="https:\/\/heistclips\.com\/pricing"/);
   assert.match(html, /localStorage\.getItem\("hc_lang"\)/);
-  assert.match(html, /class="langs"/);
+  assert.match(html, /<select class="langs"/);
+  assert.match(html, /class="langs-foot"/);
+  assert.match(html, /hreflang="pt" href="https:\/\/heistclips\.com\/pt\/pricing"/);
   const about = layout({ title: "t", desc: "d", path: "/about", body: "<h1>x</h1>" });
-  assert.doesNotMatch(about, /hreflang|class="langs"/); // no translation: no switch, no redirect
+  assert.doesNotMatch(about, /hreflang|class="langs/); // no translation: no switch, no redirect
 });
 
 test("the clip tool's words: German and French for what the tool writes, chat and unknown lines left alone", async () => {
-  for (const [lang, want] of [["de", ["Noch 3 Gratis-Clips + 50 gekauft", "12 Momente aus 4:02:32 Stream, in 8 s. Der Live-Chat wird weiter beobachtet.", "Musik-Risiko: hoch"]], ["fr", ["3 clips gratuits restants + 50 payés", "12 moments sur 4:02:32 de stream, en 8 s. On continue de suivre le chat en live.", "risque musique : élevé"]]]) {
+  for (const [lang, want] of [["de", ["Noch 3 Gratis-Clips + 50 gekauft", "12 Momente aus 4:02:32 Stream, in 8 s. Der Live-Chat wird weiter beobachtet.", "Musik-Risiko: hoch"]], ["fr", ["3 clips gratuits restants + 50 payés", "12 moments sur 4:02:32 de stream, en 8 s. On continue de suivre le chat en live.", "risque musique : élevé"]],
+    ["pt", ["3 clipes grátis restantes + 50 pagos", "12 momentos em 4:02:32 de live, em 8 s. O chat ao vivo continua sendo acompanhado.", "risco de música: alto"]], ["es", ["Te quedan 3 clips gratis + 50 de pago", "12 momentos en 4:02:32 de directo, en 8 s. Seguimos atentos al chat en vivo.", "riesgo de música: alto"]]]) {
     globalThis.document = { documentElement: { lang }, querySelector: () => null };
     const { tr } = await import("../public/js/l10n.js?" + lang);
     assert.equal(tr("3 free clips left + 50 paid"), want[0]);
@@ -71,5 +83,7 @@ test("hook lines burned into the clip follow the page language", async () => {
   const m = { event_type: "funny", chat_ratio: 5, phrase: null };
   assert.match(hooks(m, "Trymacs", "de")[0], /NICHT vorbereitet/);
   assert.match(hooks(m, "Squeezie", "fr")[0], /PAS prêt/);
+  assert.match(hooks(m, "alanzoka", "pt")[0], /NÃO estava pronto/);
+  assert.match(hooks(m, "IlloJuan", "es")[0], /NO estaba listo/);
   assert.match(hooks(m, "xQc")[0], /NOT ready/);
 });

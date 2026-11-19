@@ -21,8 +21,9 @@ clip.
   *actually earned*, with budget runway, so you clip for the one that pays.
 - **Never a dead end.** A name typed with spaces, a clip link, a stream that isn't saved, a
   silent chat: each gets a plain answer and the live GTA streams you can clip right now.
-- **English, Deutsch, Français.** The tool, pricing, guides and board are at `/de` and `/fr`
-  (`lib/l10n_de.js`, `lib/l10n_fr.js`, `public/js/l10n.js`); hook lines follow the language.
+- **English, Deutsch, Français, Português, Español.** The tool, pricing, guides, ranker and board
+  are at `/de`, `/fr`, `/pt` and `/es` (`lib/l10n_<lang>.js`, `public/js/l10n.js`); hook lines
+  follow the language. Adding a page or a language: the three steps at the top of `lib/i18n.js`.
 
 ## Autopilot: a queue of ready clips
 

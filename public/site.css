@@ -185,9 +185,8 @@ pre{padding:12px;overflow-x:auto;white-space:pre}
 .cta .paste button{padding:12px 14px;white-space:nowrap}
 .cta .tap{display:flex;align-items:center;gap:10px;justify-content:center;text-align:center}
 .cta .small{margin:8px 0 0}
-.langs{margin-left:auto;display:flex;gap:2px;flex:none;font-size:12px;font-weight:700}
-.langs a{text-decoration:none;color:var(--mute);padding:6px 5px;border-radius:6px}
-.langs a.on{color:var(--ink);background:#1d1d23}
+.langs{margin-left:auto;flex:none;font:inherit;font-size:13px;font-weight:700;color:var(--ink);background:#1d1d23;border:1px solid var(--line);border-radius:8px;padding:6px 4px;min-height:36px;cursor:pointer}
+.langs-foot a[aria-current]{color:var(--ink)}
 .postbox{margin-top:10px;display:flex;flex-direction:column;gap:6px}
 .postbox textarea{font:inherit;font-size:16px;padding:10px;border-radius:10px;border:1px solid #3a3a44;background:#0f0f13;color:var(--ink);width:100%}
 .postrow{align-items:flex-start;text-align:left;gap:8px}

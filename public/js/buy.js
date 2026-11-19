@@ -3,8 +3,9 @@
 let device = null;
 try { device = localStorage.getItem("hc_device"); if (!device) { device = crypto.randomUUID(); localStorage.setItem("hc_device", device); } } catch (e) {}
 const lang = (document.documentElement.lang || "en").slice(0, 2);
-const T = { en: ["Opening checkout…", "Checkout failed: ", "try again"], de: ["Checkout wird geöffnet…", "Checkout fehlgeschlagen: ", "bitte nochmal versuchen"], fr: ["Ouverture du paiement…", "Le paiement a échoué : ", "réessaie"] }[lang] || ["Opening checkout…", "Checkout failed: ", "try again"];
-const isClip = (p) => /^\/(?:(?:de|fr)\/)?clip$/.test(p);
+const EN = ["Opening checkout…", "Checkout failed: ", "try again"];
+const T = { en: EN, de: ["Checkout wird geöffnet…", "Checkout fehlgeschlagen: ", "bitte nochmal versuchen"], fr: ["Ouverture du paiement…", "Le paiement a échoué : ", "réessaie"], pt: ["Abrindo o pagamento…", "O pagamento falhou: ", "tente de novo"], es: ["Abriendo el pago…", "El pago falló: ", "inténtalo de nuevo"] }[lang] || EN;
+const isClip = (p) => /^\/(?:(?:de|fr|pt|es)\/)?clip$/.test(p);
 
 // Where to send them after paying: the clip page they are on, or the one they came from.
 function backTo() {

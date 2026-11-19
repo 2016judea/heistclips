@@ -75,6 +75,18 @@ let current = { vod: null, chan: null, moments: [], clipper: null, live: null };
 
 let jumpT = Number(params.get("t")) || 0;
 
+// Two names within two keystrokes of each other ("ischowspeed" / "ishowspeed").
+function near(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return false;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length] <= 2;
+}
+
 // Never a dead end: say plainly what went wrong, then put live streams one tap away.
 function dead(why, html, exclude) {
   ph("clip_dead", { why });
@@ -131,7 +143,7 @@ async function start(q) {
         // A dead account with a famous near-namesake is usually a typo ("ischowspeed").
         let meant = "";
         if (!chan.is_live) {
-          const hit = (await searchChannels(inp.text || inp.login)).find((x) => x.login !== chan.login && x.followers >= 50000);
+          const hit = (await searchChannels(inp.text || inp.login)).find((x) => x.login !== chan.login && x.followers >= 50000 && near(x.login, chan.login));
           if (hit) meant = ` Did you mean <a href="/clip?q=${h(hit.login)}"><b>${h(hit.name)}</b></a>?`;
         }
         return dead(chan.is_live ? "live_no_vod" : "no_vods", (chan.is_live

@@ -27,6 +27,10 @@ test("language paths", () => {
   assert.deepEqual(splitLang("/de/clip"), { lang: "de", path: "/clip" });
   assert.deepEqual(splitLang("/fr"), { lang: "fr", path: "/" });
   assert.deepEqual(splitLang("/free"), { lang: "en", path: "/free" });
+  assert.deepEqual(splitLang("/pt/pricing"), { lang: "pt", path: "/pricing" });
+  assert.deepEqual(splitLang("/es"), { lang: "es", path: "/" });
+  assert.deepEqual(splitLang("/post"), { lang: "en", path: "/post" });
+  assert.equal(href("es", "/gta-6-clipping-campaigns"), "/es/gta-6-clipping-campaigns");
   assert.equal(isLocal("/campaigns/x"), false);
 });
 

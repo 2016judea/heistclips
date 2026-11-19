@@ -17,13 +17,18 @@ const NAMES = {
   en: (n) => [`heistclips – ${n} clips`, `${n} exported 9:16 clips. No expiry, no watermark.`],
   de: (n) => [`heistclips – ${n} Clips`, `${n} exportierte 9:16-Clips. Kein Ablaufdatum, kein Wasserzeichen.`],
   fr: (n) => [`heistclips – ${n} clips`, `${n} clips 9:16 exportés. Sans date limite, sans filigrane.`],
+  pt: (n) => [`heistclips – ${n} clipes`, `${n} clipes 9:16 exportados. Sem validade, sem marca d’água.`],
+  es: (n) => [`heistclips – ${n} clips`, `${n} clips 9:16 exportados. Sin caducidad, sin marca de agua.`],
 };
+// Stripe's name for each page language (Portuguese here is Brazil's).
+const STRIPE_LOCALE = { en: "auto", de: "de", fr: "fr", pt: "pt-BR", es: "es" };
+const LANG_RE = "de|fr|pt|es";
 
 // Only ever send a buyer back to our own clip tool, never to a URL the request made up.
 export function backPath(raw, lang) {
   const s = String(raw || "");
-  const m = s.match(/^\/(?:(de|fr)\/)?clip(\?[^#\s]{0,400})?$/);
-  if (!m) return (lang === "de" || lang === "fr" ? "/" + lang : "") + "/clip";
+  const m = s.match(new RegExp(`^/(?:(${LANG_RE})/)?clip(\\?[^#\\s]{0,400})?$`));
+  if (!m) return (NAMES[lang] && lang !== "en" ? "/" + lang : "") + "/clip";
   const q = new URLSearchParams((m[2] || "").slice(1));
   q.delete("paid");
   const qs = q.toString();
@@ -50,7 +55,7 @@ export function sessionForm(pack, { origin, lang, back, device, pmc }) {
     "payment_intent_data[statement_descriptor_suffix]": "HEISTCLIPS",
     "payment_intent_data[metadata][product]": "heistclips",
     // The page in the buyer's own language, the price in their own currency.
-    locale: l === "en" ? "auto" : l,
+    locale: STRIPE_LOCALE[l] || "auto",
     "adaptive_pricing[enabled]": "true",
   });
   if (pmc) f.set("payment_method_configuration", pmc);
