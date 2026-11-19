@@ -20,6 +20,24 @@ clip.
 - **Campaign ranker.** Every live clipping campaign ranked by what a typical approved clip has
   *actually earned*, with budget runway, so you clip for the one that pays.
 
+## Autopilot: a queue of ready clips
+
+`/queue`: pick the streamers you clip. Every 10 minutes heistclips reads each watched channel
+once (however many people watch it), keeps the moments where chat ran at least 2× its normal
+speed, and matches each to the best-paying live campaign that names that streamer and whose
+readable rules it passes. Where no campaign names the streamer, a GTA clip is offered the
+open "use our sound" campaigns, labelled as a general fit. No login: a secret link carries the
+queue between devices. A queued clip costs one clip only when exported. Optional web push or
+email when new clips land.
+
+| Path | What |
+|---|---|
+| `lib/autopilot.js` | Campaign match, general fit, the queue. Pure, tested. |
+| `lib/watch.js` | Watchlists, the per-channel incremental scan, push and mail. |
+| `api/queue.js` | The clipper's API. `queueFor(key)` is the function a connector tool calls. |
+| `api/autopilot.js` | The cron, and its cap: 25 channels or 85 s a run, 2 Kick channels, 30 mails a day. |
+| `scripts/dev_local.mjs` | Local server whose storage is a local folder. Use it for anything that writes. |
+
 ## Use it from an agent
 
 **MCP server** (no key, no account): `https://heistclips.com/mcp`

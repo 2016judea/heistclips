@@ -244,3 +244,54 @@ campaign that pays most for it.
 Watchlist.channels ↔ Watched stream (many clippers, one scan). Watched stream → Moment.
 Moment × Campaign (through streamer, game, rules) → Campaign match. Watchlist × Moment ×
 best Campaign match → Queue item. Queue item → Delivery. Queue item → Clip → (Post, later).
+
+## Autopilot reality check (filled 2026-11-19, against production data)
+
+### Clipper identity — fills
+queue_key: a random 144-bit key made on the first save, kept in the browser, carried in a
+private link; the record sits under a keyed-hash Blob path. device_ids, optional email (double
+opt-in: the first mail is only their own link), push subscriptions (endpoint only; pushes carry
+no content), paid_key (a bought pack follows the queue to the next device): all fill.
+
+### Watchlist — mostly fills
+channels: fills (Twitch and Kick; YouTube Live **can't fill**, no reader yet).
+campaign_ids / auto: fills (auto is the default; the API accepts a chosen set, the page does
+not offer the picker yet). platforms_i_post_on: **not built**. quiet hours: **not built**
+(pushes are spaced 20 min apart, mails 6 h).
+
+### Watched stream — fills
+One file per channel, one scan however many watch it. A first read covers at most the last
+6 h of the newest stream (measured: ~10 s, ~2,200 chat pages for KaiCenat's 28-hour stream);
+later reads cover only new minutes (measured: 5 channels in 8.4 s). next_scan_at is the
+cron's order (never-read, live, stalest), not a stored field.
+
+### Moment — fills, with one proxy
+game_at_that_moment: **partial**. A live scan records the game on stream at scan time (10-min
+resolution); a finished VOD carries one game for the whole VOD.
+
+### Campaign match — the weak joint, named as one
+| field | status |
+|---|---|
+| pays_for_streamer | **partial, and it decides everything**: only 31 campaign–streamer ties exist across 613 live campaigns (by a twitch.tv/kick.com link in the brief, or the streamer's name in the title), covering 22 streamers. KaiCenat and IShowSpeed have one each; alanzoka and caseoh_ have none. Campaigns whose streamer is only on YouTube cannot be tied. |
+| game_ok | fills for GTA campaigns (title says GTA, stream game is or is not GTA) |
+| length_ok | **partial**: 19 of 613 briefs carry a length rule we can parse; the rest is "length rule in the brief" |
+| audio_ok, tags_required, spoiler, watermark | **partial**: keyword flags only, shown as to-dos, never as passed. Most rules live behind a link in the brief (reachclipping.com/…), which we do not read |
+| platform_ok, language_ok, geo_ok | **not built** (no platforms on the watchlist yet) |
+| expected_$ | fills where the campaign has a record; a prize pool with no payouts yet shows as a pool, not as $0 |
+| general fit (added) | 6 live "use our sound over GTA clips" campaigns accept any GTA gameplay clip. Offered only when no campaign names the streamer, always labelled general, with "add their sound" as a to-do (the renderer does not add music) |
+
+### Queue item — fills except the file
+state, hook, caption (hook + derived tags; a campaign's required tags are a to-do): fill.
+file: **not built here**. Export opens /clip on the moment with no re-read (measured: editor
+open in 0.9 s, a 38-s clip rendered in ~41 s on a desktop Chrome). A phone cannot render in
+most mobile browsers; the finished-MP4 file waits on the server-side cut.
+
+### Delivery — partial
+push and email send; sent_at is kept per person. opened_at / exported_after come from
+PostHog (`queue_open` with `from`, `queue_export`), not from the store.
+
+### Call
+Not abandoning, and not hiding the gap: the queue is fully useful alone for the moments, hooks
+and one-tap export, and the campaign match is real for the 22 streamers a campaign names. The
+honest limit is that Content Rewards campaigns mostly do not say which channel they pay for.
+The Whop app closes that from the other side: there the campaign owner states the channel.

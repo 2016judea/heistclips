@@ -5,6 +5,7 @@ import { guidePage, guidesIndex, ratesPage, GUIDES } from "../lib/guides.js";
 import { getChannel } from "../public/js/twitch.js";
 import { loadBoard, publicList } from "../lib/requests.js";
 import { TOOLS as MCP_TOOLS } from "./mcp.js";
+import { queuePage } from "../lib/queuepage.js";
 
 const INDEXNOW_KEY = "066cce158f4bc73e04afdcb48bb189f7";
 
@@ -16,7 +17,7 @@ function send(res, status, body, type = "text/html; charset=utf-8", maxAge = 300
 }
 
 export function sitemapUrls(snap) {
-  const urls = ["/", "/clip", "/requests", "/gta-6-clipping-campaigns", "/gta-6-clipping-campaigns?f=gta", "/gta-6-clipping-campaigns?f=all", "/gta-6-clipping-rates-today", "/streamers", "/guides", "/pricing", "/connect", "/about", "/privacy", "/terms",
+  const urls = ["/", "/clip", "/queue", "/requests", "/gta-6-clipping-campaigns", "/gta-6-clipping-campaigns?f=gta", "/gta-6-clipping-campaigns?f=all", "/gta-6-clipping-rates-today", "/streamers", "/guides", "/pricing", "/connect", "/about", "/privacy", "/terms",
     ...GUIDES.map((g) => "/guides/" + g.slug),
     ...snap.campaigns.map((c) => "/campaigns/" + c.slug),
     ...(snap.streamers || []).filter((s) => s.platform === "twitch").map((s) => "/streamers/" + s.login)];
@@ -60,6 +61,7 @@ export default async function handler(req, res) {
       try { hist = (await getJSON("snapshot/history.json")) || []; } catch (e) {}
       return send(res, 200, ratesPage(snap, hist));
     }
+    if (p === "/queue") return send(res, 200, queuePage(), undefined, 3600);
     if (p === "/pricing") return send(res, 200, R.pricingPage(), undefined, 3600);
     if (p === "/connect") return send(res, 200, R.connectPage(MCP_TOOLS), undefined, 3600);
     if (p === "/about") return send(res, 200, R.aboutPage(), undefined, 3600);

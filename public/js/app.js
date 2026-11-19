@@ -6,6 +6,7 @@ import { getKickChannel, getKickVod } from "./kick.js";
 import { paywallHTML } from "./paywall.js";
 import { markSpoilers, spoilerCheck } from "./spoilers.js";
 import { fillHot, topLive } from "./hot.js";
+import { queueHandoff } from "./queuehand.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const h = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -176,6 +177,8 @@ async function analyse(vod, chan, note = "") {
 ${spoilToggle()}
 <div id="skipped"></div>
 <ol class="moments" id="moments"></ol>`);
+  const qm = await queueHandoff(vod, ph); // opened from /queue: the moment is already found
+  if (qm) { current.moments = [qm]; $("#st").innerHTML = qm.banner; renderMoments(); return openEditor(0); }
   if (live) startLive(vod);
   const t0 = performance.now();
   const secs = () => Math.round((performance.now() - t0) / 1000);
