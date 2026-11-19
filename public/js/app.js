@@ -4,6 +4,7 @@ import { Clipper, pickMime } from "./render.js?v=7";
 import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";
 import { paywallHTML } from "./paywall.js";
+import { markSpoilers, spoilerCheck } from "./spoilers.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const h = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -42,6 +43,29 @@ async function claimPurchase(session) {
   if (d.key) { store.set("hc_key", d.key); credits = d; }
   return d;
 }
+
+// ---- spoiler filter (public/js/spoilers.js) ---------------------------------------------------
+if (params.get("spoilers") === "skip") store.set("hc_nospoil", "1");
+const skipSpoilers = () => store.get("hc_nospoil") === "1";
+const spoilToggle = () => `<label class="spoiltoggle"><input type="checkbox" id="nospoil" ${skipSpoilers() ? "checked" : ""}> <span>Skip story spoilers <span class="small">(for campaigns that ban them)</span></span></label>`;
+function renderSkipped() {
+  const el = $("#skipped");
+  if (!el) return;
+  const sk = current.moments.map((m, i) => [m, i]).filter(([m]) => !m.live && !m.hidden && m.spoiler && m.spoiler.spoiler && !m.unskipped);
+  el.innerHTML = skipSpoilers() && sk.length ? `<details class="skipped" open><summary>Skipped ${sk.length} moment${sk.length === 1 ? "" : "s"} as possible spoilers</summary><ul>${sk.map(([m, i]) => `<li><b>${clock(m.t_start)} – ${clock(m.t_end)}</b> <span class="small">${h(m.spoiler.reason)}</span> <button class="linkbtn" data-unskip="${i}">Show it anyway</button></li>`).join("")}</ul></details>` : "";
+}
+document.addEventListener("change", (e) => {
+  if (e.target.id !== "nospoil") return;
+  store.set("hc_nospoil", e.target.checked ? "1" : "0");
+  ph("spoiler_filter", { on: e.target.checked, flagged: current.moments.filter((m) => m.spoiler && m.spoiler.spoiler).length });
+  renderMoments();
+});
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-unskip]");
+  if (!b) return;
+  current.moments[Number(b.dataset.unskip)].unskipped = true;
+  renderMoments();
+});
 
 // ---- flow ----------------------------------------------------------------------------------
 let current = { vod: null, chan: null, moments: [], clipper: null, live: null };
@@ -102,6 +126,8 @@ async function analyse(vod, chan) {
     `<div class="status" id="st"><span>Reading chat${live ? " so far" : ""}…${vod.platform === "kick" ? " Kick limits how fast chat can be read, so this takes about 2 minutes." : ""}</span><span class="bar"><i id="pb"></i></span><span id="pt"></span></div>
 <canvas class="curve" id="curve" width="900" height="70"></canvas>
 <p class="small"><span class="credit">${creditText()}</span></p>
+${spoilToggle()}
+<div id="skipped"></div>
 <ol class="moments" id="moments"></ol>`);
   if (live) startLive(vod);
   const t0 = performance.now();
@@ -112,7 +138,8 @@ async function analyse(vod, chan) {
     $("#st").innerHTML = `<span>Twitch stopped answering (${h(e.message)}). Try again in a minute.</span>`;
     return;
   }
-  ph("clip_moments", { n: res.moments.length, secs: Math.round((performance.now() - t0) / 1000), live, len: vod.length });
+  const flagged = markSpoilers(vod, res.moments);
+  ph("clip_moments", { spoilers: flagged, spoiler_filter: skipSpoilers(), n: res.moments.length, secs: Math.round((performance.now() - t0) / 1000), live, len: vod.length });
   $("#st").innerHTML = `<span>${res.moments.length} moments from ${clock(vod.length)} of stream, in ${Math.round((performance.now() - t0) / 1000)} s${live ? ". Watching live chat for new ones." : "."}</span>`;
   drawCurve($("#curve"), res.curve, vod.length, res.moments);
   const liveOnes = current.moments.filter((m) => m.live);
@@ -146,6 +173,7 @@ function chips(m) {
   if (m.clip_requests) c.push(`<span class="chip hot">${m.clip_requests} “clip it”</span>`);
   if (m.twitch_clips) c.push(`<span class="chip">already clipped on Twitch ${m.twitch_clips}× (${m.twitch_clip_views} views)</span>`);
   c.push(`<span class="chip risk-${m.music_risk.level}" title="${h(m.music_risk.why)}">music risk: ${m.music_risk.level}</span>`);
+  if (m.spoiler && m.spoiler.spoiler) c.push(`<span class="chip risk-high" title="${h(m.spoiler.reason)}">possible spoiler</span>`);
   if (m.live) c.push(`<span class="chip hot">live, ${Math.max(0, Math.round((Date.now() - m.found_at) / 60000))} min ago</span>`);
   return c.join("");
 }
@@ -174,7 +202,9 @@ function momentLi(m, i) {
 function renderMoments() {
   const ol = $("#moments");
   if (!ol) return;
-  const html = current.moments.map((m, i) => (m.live ? "" : momentLi(m, i))).join("");
+  const skip = skipSpoilers();
+  const html = current.moments.map((m, i) => (m.live || m.hidden || (skip && m.spoiler && m.spoiler.spoiler && !m.unskipped) ? "" : momentLi(m, i))).join("");
+  renderSkipped();
   ol.innerHTML = html || `<li class="note">Chat was steady the whole stream; no clear spikes. Try another stream, or <a href="/requests">tell us what you expected to find</a>.</li>`;
 }
 
@@ -321,6 +351,7 @@ async function startLive(vod) {
       ctx.stroke();
     },
     onMoment: (m) => {
+      m.spoiler = spoilerCheck(vod, m);
       current.moments.push(m);
       let ol = $("#livemoments");
       if (!ol) { $("#moments").insertAdjacentHTML("beforebegin", `<h3>Live moments</h3><ol class="moments" id="livemoments"></ol><h3>Earlier in this stream</h3>`); ol = $("#livemoments"); }

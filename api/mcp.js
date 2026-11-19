@@ -3,6 +3,7 @@
 // openWorldHint true because every tool reads data that comes from outside services.
 import { latestSnapshot } from "../lib/store.js";
 import { getChannel, getVod, parseInput, findMoments, clock } from "../public/js/twitch.js";
+import { markSpoilers } from "../public/js/spoilers.js";
 import { liveGtaStreams } from "../lib/streamers.js";
 import { getKickChannel, getKickVod, liveKickGta } from "../public/js/kick.js";
 import { loadBoard, publicList, vote, submit, notify, hashOf } from "../lib/requests.js";
@@ -34,10 +35,11 @@ export const TOOLS = [
   {
     name: "find_clip_moments",
     title: "Find the best moments to clip in a Twitch or Kick stream (live or VOD)",
-    description: "Finds the highlights worth clipping in a Twitch or Kick stream, live or a VOD, by reading chat: where chat exploded against its normal pace, 'clip it' requests, clips viewers already made. Returns timestamps, a clip window, event type, 3-5 hook lines for the first second, music-claim risk, and a cut_it link that opens the moment ready to render as a 9:16 clip for TikTok, Shorts or Reels. Use for 'best moments in xQc's stream', 'find highlights in this VOD', 'what should I clip from kick.com/<name>', 'clip this stream'. Pass a Twitch channel (the live stream if live, else the latest), a Kick channel as kick.com/<name>, or a VOD link or id. Chat in any language works (German, Spanish, Portuguese…); answer in the user's language. A 7-hour stream takes 15-40 seconds; Kick about 2 minutes.",
+    description: "Finds the highlights worth clipping in a Twitch or Kick stream, live or a VOD, by reading chat: where chat exploded against its normal pace, 'clip it' requests, clips viewers already made. Returns timestamps, a clip window, event type, 3-5 hook lines for the first second, music-claim risk, spoiler risk (set skip_spoilers for campaigns that ban story spoilers), and a cut_it link that opens the moment ready to render as a 9:16 clip for TikTok, Shorts or Reels. Use for 'best moments in xQc's stream', 'find highlights in this VOD', 'what should I clip from kick.com/<name>', 'clip this stream'. Pass a Twitch channel (the live stream if live, else the latest), a Kick channel as kick.com/<name>, or a VOD link or id. Chat in any language works (German, Spanish, Portuguese…); answer in the user's language. A 7-hour stream takes 15-40 seconds; Kick about 2 minutes.",
     inputSchema: { type: "object", properties: {
       source: { type: "string", description: "Twitch channel name or URL, a Kick channel URL (kick.com/<name>), or a VOD URL (twitch.tv/videos/… or kick.com/<name>/videos/…)" },
       limit: { type: "integer", minimum: 1, maximum: 15, description: "How many moments (default 8)" },
+      skip_spoilers: { type: "boolean", description: "true = leave out moments that look like story spoilers (chat warns about spoilers, talks about the ending, or reacts to a story scene), for campaigns that ban spoilers. Skipped moments come back in skipped_spoilers with the reason. Default false: every moment is returned with a spoiler_risk field." },
     }, required: ["source"], additionalProperties: false },
     annotations: { title: "Find moments", ...ANN },
   },
@@ -95,7 +97,7 @@ async function logCall(tool, ok, ms, meta) {
     const day = new Date().toISOString().slice(0, 10);
     await fetch("https://us.i.posthog.com/capture/", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(1500),
       body: JSON.stringify({ api_key: PH_KEY, event: "mcp_tool_call", distinct_id: "mcp_" + hashOf(day + "|" + meta.ip + "|" + meta.ua),
-        properties: { tool, ok, ms, client: meta.client, site: "heistclips", $process_person_profile: false, $lib: "heistclips-mcp" } }) });
+        properties: { tool, ok, ms, client: meta.client, client_ua: String(meta.ua).split(/[\/ ;(]/)[0].slice(0, 30), site: "heistclips", $process_person_profile: false, $lib: "heistclips-mcp" } }) });
   } catch (e) {}
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
@@ -163,14 +165,18 @@ export async function callTool(name, args = {}, caller = "mcp") {
     else return { ...text("Pass a Twitch or Kick channel (kick.com/<name>), or a twitch.tv/videos/ or Kick video link."), isError: true };
     if (!vod) return { ...text("That VOD does not exist or is not public."), isError: true };
     const r = await findMoments(vod, { k: Math.min(15, (args.limit || 8) + 3) });
-    const moments = r.moments.slice(0, args.limit || 8).map((m, i) => ({
+    markSpoilers(vod, r.moments);
+    const skipped = args.skip_spoilers ? r.moments.filter((m) => m.spoiler.spoiler) : [];
+    const kept = args.skip_spoilers ? r.moments.filter((m) => !m.spoiler.spoiler) : r.moments;
+    const moments = kept.slice(0, args.limit || 8).map((m, i) => ({
       rank: i + 1, start: clock(m.t_start), end: clock(m.t_end), t_start_s: m.t_start, t_end_s: m.t_end,
       chat_speed_vs_normal: m.chat_ratio + "x", event_type: m.event_type, clip_requests_in_chat: m.clip_requests,
       top_chat_phrase: m.phrase && m.phrase.text, already_clipped_on_twitch: m.twitch_clips, twitch_clip_views: m.twitch_clip_views,
-      music_risk: m.music_risk.level, music_note: m.music_risk.why, hooks: m.hooks,
+      music_risk: m.music_risk.level, music_note: m.music_risk.why, spoiler_risk: m.spoiler.level, spoiler_note: m.spoiler.reason, hooks: m.hooks,
       watch: m.url, cut_it: tag(`${SITE}/clip?q=${encodeURIComponent(vod.platform === "kick" ? vod.url : vod.id)}&t=${m.t_start}`),
     }));
-    return text({ stream: { platform: vod.platform || "twitch", channel: vod.channel_name, title: vod.title, game: vod.game, length: clock(vod.length), status: vod.status === "RECORDING" ? "live, still recording" : "finished", url: vod.url }, moments, note: moments.length ? "Cut any of these to 9:16 with hooks at the cut_it link." : "Chat was steady the whole stream; no clear spikes." });
+    return text({ stream: { platform: vod.platform || "twitch", channel: vod.channel_name, title: vod.title, game: vod.game, length: clock(vod.length), status: vod.status === "RECORDING" ? "live, still recording" : "finished", url: vod.url }, moments, spoiler_filter: args.skip_spoilers ? "on" : "off",
+      skipped_spoilers: skipped.map((m) => ({ start: clock(m.t_start), end: clock(m.t_end), reason: m.spoiler.reason, watch: m.url })), note: moments.length ? "Cut any of these to 9:16 with hooks at the cut_it link." : "Chat was steady the whole stream; no clear spikes." });
   }
   if (name === "live_gta_streams") {
     const [tw, kk] = await Promise.all([liveGtaStreams(40), liveKickGta(20).catch(() => [])]);

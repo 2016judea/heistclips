@@ -170,3 +170,9 @@ pre{padding:12px;overflow-x:auto;white-space:pre}
 .paywall b{font-size:17px;color:var(--ink)}
 .paywall p{margin:.3em 0}
 .paywall .actions{margin:10px 0 6px}
+.spoiltoggle{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:15px;cursor:pointer;min-height:44px}
+.spoiltoggle input{width:20px;height:20px;accent-color:var(--acc)}
+.skipped{border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin:0 0 12px;background:var(--panel)}
+.skipped summary{cursor:pointer;font-size:14px;color:var(--warn)}
+.skipped ul{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:8px}
+.skipped li{font-size:14px}
