@@ -178,3 +178,13 @@ pre{padding:12px;overflow-x:auto;white-space:pre}
 .skipped li{font-size:14px}
 .hot-h{margin:18px 0 8px}
 .moments>li:not(.moment){list-style:none}
+.cta{background:var(--panel);border:1px solid #3f4a1c;border-radius:16px;padding:14px;margin:10px 0 20px}
+.cta-h{display:block;font-size:18px;letter-spacing:-.01em}
+.cta .paste{margin:10px 0 8px;flex-wrap:nowrap}
+.cta .paste input{flex:1 1 0;padding:12px}
+.cta .paste button{padding:12px 14px;white-space:nowrap}
+.cta .tap{display:flex;align-items:center;gap:10px;justify-content:center;text-align:center}
+.cta .small{margin:8px 0 0}
+.langs{margin-left:auto;display:flex;gap:2px;flex:none;font-size:12px;font-weight:700}
+.langs a{text-decoration:none;color:var(--mute);padding:6px 5px;border-radius:6px}
+.langs a.on{color:var(--ink);background:#1d1d23}
