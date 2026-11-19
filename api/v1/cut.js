@@ -8,6 +8,7 @@
 import { waitUntil } from "@vercel/functions";
 import { cutJob } from "../../lib/cutjob.js";
 import { isTest } from "../../lib/marks.js";
+import { callerOf, openCaller } from "../../lib/callers.js";
 
 async function body(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -21,6 +22,10 @@ export default async function handler(req, res) {
   if (req.method !== "POST") { res.statusCode = 405; return res.end(JSON.stringify({ ok: false, error: "POST only" })); }
   const b = await body(req);
   if (isTest(req)) b.qa = true; // a test cut: charged, counted nowhere (lib/marks.js)
+  // Who a new account is counted against (lib/callers.js): the connector signs its caller; any
+  // other request is the address and user agent it came from, and never a hosted assistant.
+  b.caller = openCaller(b.caller_token) || callerOf(String(req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || "").split(",")[0].trim(), req.headers["user-agent"], { shared: false });
+  delete b.caller_token;
   let out;
   const work = cutJob(b).catch((e) => ({ ok: false, err: "crash", error: "Cut failed: " + e.message + ". Nothing was charged." }));
   try { waitUntil(work); } catch (e) { /* outside Vercel (local dev) there is nothing to keep alive */ }

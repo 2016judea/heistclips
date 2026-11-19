@@ -56,7 +56,7 @@ ended with no event (610 started, 478 done, 5 failed).
 | `clip_made` | `spend()` in `api/credits.js`: the one place every path spends a clip. **The one true count of clips.** | `path` (`browser`, `browser_server`, `connector`, `queue`), `platform`, `channel`, `vod_id`, `t_start`, `clip_secs`, `layout`, `mb`, `charged` (`free` or `paid`), `free_left`, `paid_left`, `house` (`true` on a clip cut by one of our own accounts, absent otherwise) |
 | `purchase` | `grant()` in `api/stripe-webhook.js`, once per paid Checkout session | `pack`, `clips`, `amount`, `currency`, `country`, `livemode`, `via` (`webhook` or `claim`) |
 | `server_cut` | `lib/cutjob.js`, `lib/queuecut.js`: every server cut, finished or failed, whether or not the caller was still waiting. The cutter's timings, not a count of clips (that is `clip_made`). | `ok`, `err` (`too_long`, `past_end`, `no_credits`, `segment`, `segment_timeout`, `ffmpeg`, `ffmpeg_timeout`, `empty`, `store`, `crash_<step>`, a source code such as `vod_missing`), `path` (`connector`, `browser_server`, `queue`), `clip_secs`, `platform`, `layout`, `source_quality` (the rendition read: `720p60`, `1080p60`, `chunked`, `kick-720p`…), `megabytes`, `charged`, and the time split in ms: `resolve_ms`, `account_ms`, `playlist_ms`, `download_ms`, `source_mb`, `queue_ms` (waiting for another cut's encode on the same instance), `encode_ms`, `upload_ms`, `commit_ms`, `total_ms`, `house` (`true` for our own accounts), `test` (`true` for a marked test cut) |
-| `mcp_tool_call` | `api/mcp.js`, one per connector tool call | `tool`, `ok`, `ms`, `client`, `client_ua`, `test` (`true` when the call carried the test header), `err` (short code; never the message), `status` (`cutting` when cut_clip handed back a job), `polls`; for `cut_clip` / `cut_clip_status` also `clip_secs`, `platform`, `layout`, `source_quality`, `megabytes`, `cut_ms` and the same time split as `server_cut`; for `find_clip_moments` also `platform`, `cache` (`miss`, `warm`, `stored`), `read_ms`, `stream_hours`, `live`, `moments`. No arguments, chat text or captions. |
+| `mcp_tool_call` | `api/mcp.js`, one per connector tool call | `tool`, `ok`, `ms`, `client`, `client_ua` (the user agent's first word, e.g. `Claude-User`, `Clipbot`), `client_ua_full` (the user agent's first 100 characters, from 2026-11-19 ~23:00 UTC: who is building on the connector; a bot's UA often names its project. Never the IP), `test` (`true` when the call carried the test header), `err` (short code; never the message; `caller_account_cap` and `rate_limited` are the per-caller limits below), `status` (`cutting` when cut_clip handed back a job), `polls`; for `cut_clip` / `cut_clip_status` also `clip_secs`, `platform`, `layout`, `source_quality`, `megabytes`, `cut_ms` and the same time split as `server_cut`; for `find_clip_moments` also `platform`, `cache` (`miss`, `warm`, `stored`), `read_ms`, `stream_hours`, `live`, `moments`. No arguments, chat text or captions. |
 | `bug_report` | `api/requests.js` (`bugEvent`), one per bug filed from the site or the connector | `via` (`website`, `mcp`), `step` (a tool or page step from a fixed list, else `other`), `platform`, `failure` (`error_returned`, `wrong_result`, `empty_or_broken_file`, `timeout`, `other`, `unspecified`), `has_stream`, `has_moment`, `has_error_text`, `lang`. Never the report's words. |
 
 `clip_made.path` is read from what the spender sends: `layout: "queue-server"` is the queue,
@@ -70,6 +70,23 @@ profile is created.
 (every `cut_clip`) before 2026-11-19 22:00 UTC: the caller was kept in a variable shared by all
 requests on an instance, so a 30 s cut was logged with whoever called last. Do not split cuts
 by client before that time.
+
+## Connector limits per caller (`lib/callers.js`)
+
+From 2026-11-19 ~23:00 UTC. A caller is its address plus the first word of its user agent;
+`Claude-User` (claude.ai, from Anthropic's shared servers) and `openai-mcp` are one pool each
+instead, because a limit per address would hit all of their users at once.
+
+- **New free accounts**: 3 a day per outside caller (`err: caller_account_cap` on cut_clip,
+  watch_streamer and posting_account), and 400 a day per pool (`account_cap`): Claude's own,
+  ChatGPT's, and every outside caller together. Markers: `acct-new/<day>/claude/…`,
+  `acct-new/<day>/caller/<keyed hash>/…`; the browser's `/post` accounts keep the flat
+  `acct-new/<day>/…` and are not limited. Count a day's new accounts with the whole prefix.
+- **find_clip_moments**: 120 an hour per outside caller (`err: rate_limited`, the message and
+  `resets_at` give the next whole UTC hour). One marker per call under `rl/find/<UTC hour>/<keyed hash>/`.
+- Outside callers get a `building_on_heistclips` line on every result pointing at request_a_feature.
+- Before this, 2026-11-19 19:00-21:45 UTC: UA `Clipbot` made 1,404 calls (1,215 find_clip_moments,
+  58 delivered free cuts across 6+ accounts, 4 posts) until it hit `no_credits`.
 
 ## Test and house clips (`lib/marks.js`)
 

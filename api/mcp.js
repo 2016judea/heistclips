@@ -11,6 +11,8 @@ import { queueTool } from "../lib/queuetool.js";
 import { findClipMoments } from "../lib/momentstool.js";
 import { JOB, newJobId, jobAgeMs, JOB_DEAD_MS, loadJob } from "../lib/cutjob.js";
 import { isTest } from "../lib/marks.js";
+import { callerOf, sealCaller, findGate, newAccountRefusal, isOutside, BUILDERS_LINE } from "../lib/callers.js";
+import { createAccount } from "../lib/accounts.js";
 
 const SITE = "https://heistclips.com";
 const BASE = process.env.HC_BASE || SITE; // where this server reaches its own /api/v1 functions
@@ -196,7 +198,8 @@ export function tag(url) {
 // One PostHog event per tool call: tool, ok/error, duration, a short failure code, and for
 // cuts the clip length, platform, layout and where the time went. No arguments, no chat text,
 // no captions, no IP. The id is a keyed hash of day + connection + client, so a connector user
-// counts once per day.
+// counts once per day. client_ua_full (the user agent's first 100 characters) is there to see
+// who is building on the connector: a bot's UA often names its project or a contact page.
 const LOG_KEYS = ["err", "status", "platform", "layout", "clip_secs", "source_quality", "megabytes", "cache", "read_ms", "stream_hours", "live", "moments", "polls",
   "resolve_ms", "account_ms", "playlist_ms", "download_ms", "source_mb", "queue_ms", "encode_ms", "upload_ms", "commit_ms", "cut_ms", "kind"];
 async function logCall(tool, ok, ms, meta, extra = {}) {
@@ -207,7 +210,7 @@ async function logCall(tool, ok, ms, meta, extra = {}) {
     for (const k of LOG_KEYS) if (extra[k] !== undefined && extra[k] !== null && typeof extra[k] !== "object") more[k] = typeof extra[k] === "string" ? extra[k].slice(0, 40) : extra[k];
     await fetch("https://us.i.posthog.com/capture/", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(1500),
       body: JSON.stringify({ api_key: PH_KEY, event: "mcp_tool_call", distinct_id: "mcp_" + hashOf(day + "|" + meta.ip + "|" + meta.ua),
-        properties: { tool, ok, ms, ...more, client: meta.client, client_ua: String(meta.ua).split(/[\/ ;(]/)[0].slice(0, 30), test: meta.test ? true : undefined, site: "heistclips", $process_person_profile: false, $lib: "heistclips-mcp" } }) });
+        properties: { tool, ok, ms, ...more, client: meta.client, client_ua: String(meta.ua).split(/[\/ ;(]/)[0].slice(0, 30), client_ua_full: String(meta.ua).slice(0, 100) || undefined, test: meta.test ? true : undefined, site: "heistclips", $process_person_profile: false, $lib: "heistclips-mcp" } }) });
   } catch (e) {}
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
@@ -316,7 +319,10 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
     return text({ generated_at: snap.generated_at, rank: snap.campaigns.indexOf(c) + 1, of: snap.campaigns.length, ...c, page: tag(`${SITE}/campaigns/${c.slug}`) });
   }
   if (name === "find_clip_moments") {
-    const { out, log } = await findClipMoments(args, { tag });
+    // Each read hits Twitch from our servers; one outside caller gets 120 an hour (lib/callers.js).
+    const gate = await findGate(meta.caller);
+    if (gate.refused) { const { err, ...pub } = gate.refused; return withLog({ ...text({ ok: false, ...pub }), isError: true }, { err }); }
+    const [{ out, log }] = await Promise.all([findClipMoments(args, { tag }), gate.counted]);
     return withLog(text(out), log);
   }
   if (name === "cut_clip_status") return cutStatus(args.job);
@@ -325,7 +331,8 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
     // The cut runs in its own function (ffmpeg, longer limit) and goes on to the end whether or
     // not anyone is still waiting. This call waits a safe while, then hands back the job code.
     const job = newJobId(), t0 = Date.now();
-    const cut = fetch(BASE + cutLane(), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...args, via: "mcp", job, ...(meta.test ? { qa: true } : {}) }) })
+    // caller_token: who a new account counts against, signed so a direct POST cannot claim it.
+    const cut = fetch(BASE + cutLane(), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...args, via: "mcp", job, ...(meta.test ? { qa: true } : {}), ...(meta.caller ? { caller_token: sealCaller(meta.caller) } : {}) }) })
       .then(async (r) => (await r.json().catch(() => null)) || { ok: false, err: "http_" + r.status, error: "The cut did not finish (" + r.status + "). Nothing was charged; try again." }, () => null);
     const d = await Promise.race([cut, sleep(CUT_WAIT_MS).then(() => undefined)]);
     if (d) return cutResult(d);
@@ -334,17 +341,25 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
     return stillCutting(job, Date.now() - t0, 0);
   }
   if (name === "post_clip" || name === "posting_account") {
+    // A new code is a new account with free clips, so it is made here, under the same per-caller
+    // limit as cut_clip (lib/callers.js), not by the browser's uncounted op:new.
+    if (name === "posting_account" && !args.account) {
+      const no = await newAccountRefusal(meta.caller);
+      if (no) { const { err, ...pub } = no; return withLog({ ...text({ ok: false, ...pub }), isError: !pub.need }, { err }); }
+      args = { ...args, account: (await createAccount("mcp", meta.caller)).code };
+    }
     const r = await fetch(BASE + "/api/v1/post", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(280000),
-      body: JSON.stringify(name === "post_clip" ? { ...args, op: "post", via: "mcp" } : { op: args.account ? "status" : "new", account: args.account, via: "mcp" }) });
+      body: JSON.stringify(name === "post_clip" ? { ...args, op: "post", via: "mcp" } : { op: "status", account: args.account, via: "mcp" }) });
     let d = await r.json().catch(() => ({ ok: false, error: "heistclips did not answer (" + r.status + ")." }));
-    if (name === "posting_account" && d.ok && !args.account) d = await (await fetch(BASE + "/api/v1/post", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "status", account: d.account }) })).json();
     if (d.manage) d.manage = tag(d.manage); if (d.connect) d.connect = tag(d.connect);
     delete d.open;
     return d.ok ? text(d) : { ...text(d), isError: !(d.needs_connect || d.not_open_yet) };
   }
   if (name === "my_clip_queue" || name === "watch_streamer") {
-    const d = await queueTool(name, args);
-    return d.ok ? text(d) : { ...text(d), isError: true };
+    const d = await queueTool(name, args, meta.caller);
+    if (d.ok) return text(d);
+    const { err, ...pub } = d;
+    return withLog({ ...text(pub), isError: !pub.need }, err ? { err } : {});
   }
   if (name === "live_gta_streams") {
     const [tw, kk] = await Promise.all([liveGtaStreams(40), liveKickGta(20).catch(() => [])]);
@@ -366,7 +381,7 @@ async function readBody(req) {
 // already known, so the assistant can OFFER to file it. It is never filed without the user.
 const NO_HINT = new Set(["report_a_bug", "request_a_feature", "list_feature_requests", "upvote_feature_request", "whats_new"]);
 // A call we refused because of what was passed (a 5-minute window, a wrong code) is not a bug.
-const CALLER_ERRS = new Set(["too_long", "too_short", "bad_time", "bad_window", "bad_account", "bad_job", "past_end", "account_cap", "no_credits", "bad_input", "youtube", "no_name"]);
+const CALLER_ERRS = new Set(["too_long", "too_short", "bad_time", "bad_window", "bad_account", "bad_job", "past_end", "account_cap", "caller_account_cap", "rate_limited", "no_credits", "bad_input", "youtube", "no_name"]);
 export function withBugHint(out, tool, args = {}) {
   if (!out || !out.isError || out.noBugHint || NO_HINT.has(tool) || CALLER_ERRS.has(out.log && out.log.err)) return out;
   const sc = out.structuredContent || {};
@@ -384,7 +399,18 @@ export function withBugHint(out, tool, args = {}) {
 // Who is calling travels with the request. It used to sit in two module variables, and one
 // instance serves many requests at once: a cut that took 30 s was logged with the client of
 // whoever called last, and a vote could be counted for another caller's address (2026-11-19).
-const NO_META = { ip: "local", ua: "", client: "other", test: false };
+// `caller` (lib/callers.js) is who the per-caller limits count against; null in-process.
+const NO_META = { ip: "local", ua: "", client: "other", test: false, caller: null };
+
+// Outside callers (not a hosted assistant's shared servers) get one more line on every result.
+export function withBuildersLine(out) {
+  const sc = out.structuredContent;
+  const next = sc && typeof sc === "object"
+    ? { ...out, structuredContent: { ...sc, building_on_heistclips: BUILDERS_LINE }, content: [{ type: "text", text: JSON.stringify({ ...sc, building_on_heistclips: BUILDERS_LINE }, null, 1) }] }
+    : { ...out, content: [...(out.content || []), { type: "text", text: BUILDERS_LINE }] };
+  if (out.log) Object.defineProperty(next, "log", { value: out.log, enumerable: false });
+  return next;
+}
 async function handleOne(msg, caller = "mcp", meta = NO_META) {
   const { id, method, params } = msg || {};
   const ok = (result) => ({ jsonrpc: "2.0", id, result });
@@ -403,6 +429,7 @@ async function handleOne(msg, caller = "mcp", meta = NO_META) {
     const log = out.log || {};
     out = withBugHint(out, tool, params.arguments || {});
     delete out.noBugHint;
+    if (isOutside(meta.caller)) out = withBuildersLine(out);
     await logCall(TOOLS.some((t) => t.name === tool) ? tool : "unknown", !out.isError && log.ok !== false && !log.err, Date.now() - t0, meta, out.isError && !log.err ? { ...log, err: "error" } : log);
     return ok(out);
   }
@@ -426,7 +453,7 @@ export default async function handler(req, res) {
   try { body = await readBody(req); } catch (e) { res.statusCode = 400; return res.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } })); }
   const caller = String(req.headers["x-forwarded-for"] || "local").split(",")[0].trim();
   const ua = String(req.headers["user-agent"] || "");
-  const meta = { ip: caller, ua, client: clientOf(ua), test: isTest(req) }; // x-hc-test: lib/marks.js
+  const meta = { ip: caller, ua, client: clientOf(ua), test: isTest(req), caller: callerOf(caller, ua) }; // x-hc-test: lib/marks.js
   const batch = Array.isArray(body);
   const out = (await Promise.all((batch ? body : [body]).map((m) => handleOne(m, caller, meta)))).filter(Boolean);
   if (!out.length) { res.statusCode = 202; return res.end(); }
