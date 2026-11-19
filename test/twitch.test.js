@@ -68,3 +68,22 @@ test("crude chat lines never become a hook", () => {
   const h = hooks({ event_type: "funny", chat_ratio: 4, phrase: topPhrase([{ text: "willy bussy" }, { text: "willy bussy" }]) }, "xQc");
   assert.ok(!h.some((x) => /bussy/i.test(x)));
 });
+
+test("parseInput: words, clips and other sites are never read as the wrong channel", () => {
+  assert.deepEqual(parseInput("kai cenat"), { kind: "search", text: "kai cenat", login: "kaicenat" });
+  assert.deepEqual(parseInput("isho'wspeed"), { kind: "channel", login: "ishowspeed" });
+  assert.deepEqual(parseInput("ishowspeed gta6"), { kind: "search", text: "ishowspeed", login: "ishowspeed" });
+  assert.deepEqual(parseInput("@IShowSpeed"), { kind: "channel", login: "ishowspeed" });
+  assert.deepEqual(parseInput("GTA "), { kind: "gta" });
+  assert.deepEqual(parseInput("gta 6 live"), { kind: "gta" });
+  assert.deepEqual(parseInput("https://www.twitch.tv/kaicenat/clip/SillyTubularOil-GTZ5PXa"), { kind: "clip", slug: "SillyTubularOil-GTZ5PXa" });
+  assert.deepEqual(parseInput("https://clips.twitch.tv/SillyTubularOil-GTZ5PXa"), { kind: "clip", slug: "SillyTubularOil-GTZ5PXa" });
+  assert.deepEqual(parseInput("twitch.tv/kaicenat/videos"), { kind: "channel", login: "kaicenat" });
+  assert.deepEqual(parseInput("https://www.twitch.tv/popout/kaicenat/chat"), { kind: "channel", login: "kaicenat" });
+  assert.deepEqual(parseInput("https://m.twitch.tv/kaicenat?sr=a"), { kind: "channel", login: "kaicenat" });
+  assert.deepEqual(parseInput("https://www.twitch.tv/videos/2932305259?t=1h2m3s"), { kind: "vod", id: "2932305259" });
+  assert.equal(parseInput("https://www.twitch.tv/directory/category/grand-theft-auto-vi").kind, "unknown");
+  assert.equal(parseInput("https://claude.ai/directory/heistclips").kind, "unknown");
+  assert.equal(parseInput("https://www.youtube.com/watch?v=abc").site, "youtube");
+  assert.equal(parseInput("").kind, "unknown");
+});

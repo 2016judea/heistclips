@@ -17,18 +17,81 @@ export async function gql(query) {
 
 const esc = (s) => String(s).replace(/[^A-Za-z0-9_]/g, "");
 
-// "https://www.twitch.tv/videos/123", "twitch.tv/xqc", "xqc", "123456789" -> what it is.
+// Words people add around a name when they treat the box as search ("ishowspeed gta6 live").
+const FILLER = /^(gta|gta5|gta6|gtav|gtavi|grand|theft|auto|v|vi|5|6|live|stream|streams|streaming|livestream|vod|vods|clip|clips|twitch|tv|the|latest|new|best|moments?)$/;
+const RESERVED = new Set(["videos", "directory", "settings", "p", "search", "downloads", "subscriptions", "wallet", "drops", "inventory", "turbo", "jobs", "store", "friends", "following", "u"]);
+const LOGIN = /^[A-Za-z0-9_]{3,25}$/;
+
+// What did they paste? A VOD, a channel, a Twitch clip, a Kick link, or words to search for.
+//   "https://www.twitch.tv/videos/123", "123456789"      -> vod
+//   "twitch.tv/xqc", "xqc", "@xQc", "twitch.tv/xqc/videos" -> channel
+//   "clips.twitch.tv/Slug", "twitch.tv/xqc/clip/Slug"     -> clip (resolved to its VOD and second)
+//   "kai cenat", "ishowspeed gta6"                        -> search (login = the words joined)
+//   "gta 6"                                               -> gta (no name in it: offer live streams)
+// Measured 2026-11-19: the old last-token regex read "kai cenat" as the channel "cenat", a clip
+// link as its last path word, and claude.ai/directory/heistclips as the channel "heistclips".
 export function parseInput(raw) {
   const s = String(raw || "").trim();
   let k = s.match(/kick\.com\/(?:video\/|[A-Za-z0-9_-]+\/videos\/)([0-9a-f]{8}-[0-9a-f-]{27})/i);
   if (k) return { kind: "kickvod", id: k[1].toLowerCase() };
   k = s.match(/^(?:https?:\/\/)?(?:www\.)?kick\.com\/([A-Za-z0-9_-]{2,40})\/?(?:\?.*)?$/i) || s.match(/^kick:([A-Za-z0-9_-]{2,40})$/i);
   if (k) return { kind: "kick", login: k[1].toLowerCase() };
-  let m = s.match(/videos\/(\d{6,})/) || s.match(/^(\d{8,})$/);
+  if (/(?:youtube\.com|youtu\.be)\//i.test(s)) return { kind: "unknown", site: "youtube" };
+  const c = s.match(/clips\.twitch\.tv\/([A-Za-z0-9_-]{4,})/i) || s.match(/twitch\.tv\/[A-Za-z0-9_]+\/clip\/([A-Za-z0-9_-]{4,})/i);
+  if (c && c[1] !== "embed") return { kind: "clip", slug: c[1] };
+  const m = s.match(/videos\/(\d{6,})/) || s.match(/^(\d{8,})$/) || s.match(/[?&]video=v?(\d{6,})/);
   if (m) return { kind: "vod", id: m[1] };
-  m = s.match(/(?:twitch\.tv\/)?@?([A-Za-z0-9_]{3,25})\/?(?:\?.*)?$/);
-  if (m && !/kick\.com|youtube|youtu\.be/.test(s)) return { kind: "channel", login: m[1].toLowerCase() };
-  return { kind: "unknown" };
+  const tw = s.match(/^(?:https?:\/\/)?(?:www\.|m\.|go\.)?twitch\.tv\/([^\s]*)$/i);
+  if (tw) {
+    const segs = tw[1].split(/[?#]/)[0].split("/").filter(Boolean);
+    const login = ["popout", "moderator", "embed"].includes(segs[0]) ? segs[1] : segs[0];
+    if (!login || RESERVED.has(login.toLowerCase()) || !LOGIN.test(login)) return { kind: "unknown", site: "twitch" };
+    return { kind: "channel", login: login.toLowerCase() };
+  }
+  if (/^https?:\/\//i.test(s) || /^[\w-]+(\.[\w-]+)+\/\S*$/.test(s)) return { kind: "unknown", site: "other" };
+  const words = s.toLowerCase().replace(/^@/, "").replace(/['’`´.]/g, "").split(/[^a-z0-9_]+/).filter(Boolean);
+  if (!words.length) return { kind: "unknown" };
+  const kept = words.filter((w) => !FILLER.test(w));
+  if (!kept.length) return { kind: "gta" };
+  if (kept.length === 1 && words.length === 1 && LOGIN.test(kept[0])) return { kind: "channel", login: kept[0] };
+  const login = kept.join("").slice(0, 25);
+  return { kind: "search", text: kept.join(" "), login: LOGIN.test(login) ? login : null };
+}
+
+// Twitch's own channel search, for names typed with spaces or typos ("ischowspeed").
+export async function searchChannels(text, first = 5) {
+  try {
+    const d = await gql(`query{ searchFor(userQuery:${JSON.stringify(String(text).slice(0, 60))}, platform:"web", target:{index:CHANNEL}){ channels{ edges{ item{ ... on User { login displayName profileImageURL(width:70) followers{ totalCount } stream{ viewersCount } } } } } } }`);
+    const edges = (d.searchFor && d.searchFor.channels && d.searchFor.channels.edges) || [];
+    return edges.map((e) => e.item).filter((u) => u && u.login).slice(0, first).map((u) => ({ login: u.login, name: u.displayName, avatar: u.profileImageURL, followers: (u.followers && u.followers.totalCount) || 0, live: !!u.stream, viewers: (u.stream && u.stream.viewersCount) || 0 }));
+  } catch (e) { return []; }
+}
+
+// A Twitch clip -> the VOD it was cut from and the second it starts at.
+export async function getClip(slug) {
+  const d = await gql(`query{ clip(slug:"${String(slug).replace(/[^A-Za-z0-9_-]/g, "")}"){ slug videoOffsetSeconds durationSeconds video{ id } broadcaster{ login } } }`);
+  const c = d.clip;
+  if (!c) return null;
+  return { slug: c.slug, vod_id: c.video && c.video.id, t: c.videoOffsetSeconds, duration: c.durationSeconds, login: c.broadcaster && c.broadcaster.login };
+}
+
+// Who is live in GTA this second, biggest first. `cuttable` = Twitch is saving the stream, so
+// there is video to cut from (some of the biggest streams are live with VODs switched off).
+export async function hotStreams({ first = 14, lang = "" } = {}) {
+  const out = [];
+  for (const name of ["Grand Theft Auto VI", "Grand Theft Auto V"]) {
+    try {
+      const d = await gql(`query{ game(name:"${name}"){ streams(first:${first}){ edges{ node{ viewersCount title language archiveVideo{ id } broadcaster{ login displayName profileImageURL(width:70) } } } } } }`);
+      for (const e of (d.game && d.game.streams && d.game.streams.edges) || []) {
+        const n = e.node;
+        if (!n.broadcaster) continue;
+        out.push({ login: n.broadcaster.login, name: n.broadcaster.displayName, avatar: n.broadcaster.profileImageURL, viewers: n.viewersCount, title: n.title, language: String(n.language || "").toLowerCase(), game: name === "Grand Theft Auto VI" ? "GTA VI" : "GTA V", cuttable: !!n.archiveVideo });
+      }
+    } catch (e) { /* a game Twitch does not list yet is not an error */ }
+    if (out.filter((x) => x.cuttable).length >= 6) break;
+  }
+  const mine = (x) => (lang && x.language === lang ? 1 : 0);
+  return out.sort((a, b) => b.cuttable - a.cuttable || mine(b) - mine(a) || b.viewers - a.viewers);
 }
 
 const VOD_FIELDS = `id title lengthSeconds status broadcastType createdAt publishedAt viewCount
@@ -278,17 +341,29 @@ export function hooks(m, streamer) {
 }
 
 // Whole pipeline for one VOD: curve -> peaks -> refined moments, plus Twitch's own clips.
-export async function findMoments(vod, { k = 10, step, onProgress, refine = true } = {}) {
+// `from`/`to` read only part of the stream (the last hours of a marathon come back in seconds).
+// When fewer than `fill` spikes clear the normal bar, the best of the smaller ones are added
+// and marked `quiet`, so a calm stream still returns its best moments instead of nothing.
+export async function findMoments(vod, { k = 10, step, onProgress, refine = true, from = 0, to, fill = 3 } = {}) {
+  const end = to == null ? vod.length : Math.min(to, vod.length);
+  const start = Math.max(0, Math.min(from, end));
+  const span = end - start;
   // Kick throttles (see kick.js), so it samples coarser: at most ~150 windows a stream.
-  const st = step || (vod.platform === "kick" ? Math.max(30, Math.ceil(vod.length / 150)) : vod.length > 12 * 3600 ? 60 : vod.length > 6 * 3600 ? 30 : vod.length > 2 * 3600 ? 20 : 10);
-  const { samples, messages } = await chatCurve(vod, { step: st, onProgress });
-  const peaks = findPeaks(samples, { k: vod.platform === "kick" ? Math.min(k, 6) : k, gap: vod.platform === "kick" ? Math.max(90, st * 1.5) : 90 });
+  const st = step || (vod.platform === "kick" ? Math.max(30, Math.ceil(span / 150)) : span > 12 * 3600 ? 60 : span > 6 * 3600 ? 30 : span > 2 * 3600 ? 20 : 10);
+  const { samples, messages } = await chatCurve(vod, { step: st, from: start, to: end, onProgress });
+  const kk = vod.platform === "kick" ? Math.min(k, 6) : k;
+  const gap = vod.platform === "kick" ? Math.max(90, st * 1.5) : 90;
+  let peaks = findPeaks(samples, { k: kk, gap });
+  if (peaks.length < fill) {
+    const soft = findPeaks(samples, { k: kk, gap, minRatio: 1.25 }).filter((p) => peaks.every((q) => Math.abs(q.t - p.t) >= gap)).slice(0, fill - peaks.length);
+    peaks = peaks.concat(soft.map((p) => ({ ...p, soft: true })));
+  }
   const moments = [];
   if (refine) {
     const refined = await pool(peaks, vod.platform === "kick" ? 1 : 3, (p) => refinePeak(vod, p, vod.platform === "kick" ? { before: 50, after: 20 } : {}));
-    for (const m of refined) if (m) moments.push(m);
+    refined.forEach((m, i) => { if (m) { if (peaks[i].soft) m.quiet = true; moments.push(m); } });
   } else {
-    for (const p of peaks) moments.push(momentFromMessages(vod, messages, p));
+    for (const p of peaks) { const m = momentFromMessages(vod, messages, p); if (p.soft) m.quiet = true; moments.push(m); }
   }
   // Two peaks that refine onto the same stretch are one moment; keep the stronger.
   moments.sort((a, b) => b.chat_ratio - a.chat_ratio);
@@ -304,6 +379,6 @@ export async function findMoments(vod, { k = 10, step, onProgress, refine = true
     m.hooks = hooks(m, vod.channel_name);
     m.score = Math.round(m.chat_ratio * 10 * (1 + Math.min(5, m.clip_requests) * 0.4) * (1 + Math.log10(1 + m.twitch_clip_views) * 0.3)) / 10;
   }
-  moments.sort((a, b) => b.score - a.score);
-  return { vod, curve: samples.map((s) => [Math.round(s.t), Math.round(s.rate * 100) / 100]), moments, twitch_clips: clips };
+  moments.sort((a, b) => (a.quiet ? 1 : 0) - (b.quiet ? 1 : 0) || b.score - a.score);
+  return { vod, curve: samples.map((s) => [Math.round(s.t), Math.round(s.rate * 100) / 100]), moments, twitch_clips: clips, messages: messages.length };
 }

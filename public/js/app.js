@@ -1,10 +1,11 @@
 // The clip tool: paste -> moments (with why) -> cut -> download.
-import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitchTime } from "./twitch.js";
+import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitchTime, searchChannels, getClip, refinePeak, hooks } from "./twitch.js";
 import { Clipper, pickMime } from "./render.js?v=7";
 import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";
 import { paywallHTML } from "./paywall.js";
 import { markSpoilers, spoilerCheck } from "./spoilers.js";
+import { fillHot, topLive } from "./hot.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const h = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -70,38 +71,79 @@ document.addEventListener("click", (e) => {
 // ---- flow ----------------------------------------------------------------------------------
 let current = { vod: null, chan: null, moments: [], clipper: null, live: null };
 
+let jumpT = Number(params.get("t")) || 0;
+
+// Never a dead end: say plainly what went wrong, then put live streams one tap away.
+function dead(why, html, exclude) {
+  ph("clip_dead", { why });
+  say(`<div class="note">${html}</div><h3 class="hot-h">Live in GTA right now. Tap one to clip it.</h3><div id="hot"><p class="small">Finding who’s live…</p></div>`);
+  fillHot($("#hot"), { exclude });
+}
+
 async function start(q) {
-  const inp = parseInput(q);
-  if (inp.kind === "unknown") return say(`<p>Paste a Twitch channel (like <b>twitch.tv/xqc</b>) or a VOD link (<b>twitch.tv/videos/…</b>).</p>`);
-  say(`<div class="status">Looking up ${h(inp.login || inp.id)}…</div>`);
+  let inp = parseInput(q);
+  if (inp.kind === "gta") return dead("no_name", `Whose stream? Type a streamer’s name or paste their link, or pick one below.`);
+  if (inp.kind === "unknown") return dead("bad_input_" + (inp.site || "text"), inp.site === "youtube"
+    ? `YouTube streams can’t be read yet: heistclips reads Twitch and Kick. <a href="/requests">Vote for YouTube Live</a>, or clip one of these.`
+    : `That isn’t a Twitch or Kick channel or video. Paste something like <b>twitch.tv/kaicenat</b>, <b>kick.com/adinross</b> or <b>twitch.tv/videos/…</b>`);
+  say(`<div class="status">Looking up ${h(inp.text || inp.login || inp.id || "that clip")}…</div>`);
   ph("clip_lookup", { kind: inp.kind });
   try {
     if (inp.kind === "kick") {
       const chan = await getKickChannel(inp.login);
-      if (!chan) return say(`<p>No Kick channel called <b>${h(inp.login)}</b>.</p>`);
+      if (!chan) return dead("kick_no_channel", `No Kick channel called <b>${h(inp.login)}</b>.`);
       current.chan = chan;
       const vod = chan.live_vod || chan.vods[0];
-      if (!vod) return say(`<div class="note"><b>${h(chan.name)}</b> has no saved Kick streams to read.</div>`);
+      if (!vod) return dead("kick_no_vod", `<b>${h(chan.name)}</b> has no saved Kick streams to read.`);
       return analyse(vod, chan);
     }
     if (inp.kind === "kickvod") {
       const vod = await getKickVod(inp.id);
-      if (!vod) return say(`<p>That Kick video doesn’t exist or isn’t public.</p>`);
+      if (!vod) return dead("kickvod_missing", `That Kick video doesn’t exist or isn’t public.`);
       return analyse(vod, null);
     }
-    if (inp.kind === "channel") {
-      const chan = await getChannel(inp.login);
-      if (!chan) return say(`<p>No Twitch channel called <b>${h(inp.login)}</b>.</p>`);
+    let note = "";
+    if (inp.kind === "clip") {
+      const c = await getClip(inp.slug);
+      if (!c) return dead("clip_missing", `That Twitch clip doesn’t exist any more.`);
+      const vod = c.vod_id ? await getVod(c.vod_id) : null;
+      if (vod) { jumpT = c.t || 0; return analyse(vod, null, `Opened the stream that clip was cut from, at the same second.`); }
+      if (!c.login) return dead("clip_no_vod", `The stream that clip came from has been deleted.`);
+      note = `The stream that clip came from has been deleted, so this is ${h(c.login)}’s latest stream. `;
+      inp = { kind: "channel", login: c.login };
+    }
+    if (inp.kind === "channel" || inp.kind === "search") {
+      let chan = inp.login ? await getChannel(inp.login) : null;
+      const empty = (c) => !c || (!c.live_vod && !c.vods.length);
+      // Typed with spaces, extra words or a typo: ask Twitch's own search who they meant.
+      if (!chan || (inp.kind === "search" && empty(chan))) {
+        const hits = await searchChannels(inp.text || inp.login);
+        const hit = hits.find((x) => x.followers >= 10000 || x.live);
+        const found = hit ? await getChannel(hit.login) : null;
+        if (found && (!empty(found) || found.is_live)) { note += `Showing <b>${h(found.name)}</b> for “${h(q)}”. `; chan = found; ph("clip_corrected", { kind: inp.kind }); }
+      }
+      if (!chan) return dead("no_channel", `No Twitch channel called <b>${h(inp.text || inp.login)}</b>.`);
       current.chan = chan;
       const vod = chan.live_vod || chan.vods[0];
-      if (!vod) return say(`<div class="note"><b>${h(chan.name)}</b> ${chan.is_live ? "is live but doesn’t save streams, so there’s no video to cut from." : "has no saved streams."}</div>`);
-      return analyse(vod, chan);
+      if (!vod) {
+        // A dead account with a famous near-namesake is usually a typo ("ischowspeed").
+        let meant = "";
+        if (!chan.is_live) {
+          const hit = (await searchChannels(inp.text || inp.login)).find((x) => x.login !== chan.login && x.followers >= 50000);
+          if (hit) meant = ` Did you mean <a href="/clip?q=${h(hit.login)}"><b>${h(hit.name)}</b></a>?`;
+        }
+        return dead(chan.is_live ? "live_no_vod" : "no_vods", (chan.is_live
+          ? `<b>${h(chan.name)}</b> is live, but Twitch isn’t saving this stream, so there’s no video to cut.`
+          : `<b>${h(chan.name)}</b> has no saved streams on Twitch.`) + meant, chan.login);
+      }
+      if (chan.is_live && !chan.live_vod) { note += `<b>${h(chan.name)}</b> is live right now, but Twitch isn’t saving this stream, so there’s no video of it to cut. These moments are from the last saved stream (${h(new Date(vod.created_at).toUTCString().slice(5, 11))}).`; ph("clip_live_unsaved", {}); }
+      return analyse(vod, chan, note);
     }
     const vod = await getVod(inp.id);
-    if (!vod) return say(`<p>That VOD doesn’t exist or isn’t public.</p>`);
+    if (!vod) return dead("vod_missing", `That VOD doesn’t exist or isn’t public.`);
     return analyse(vod, null);
   } catch (e) {
-    say(`<div class="note">Couldn’t reach Twitch: ${h(e.message)}. Try again.</div>`);
+    dead("twitch_error", `Couldn’t reach ${inp.kind && inp.kind.startsWith("kick") ? "Kick" : "Twitch"}: ${h(e.message)}. <a href="${h(location.href)}">Try again</a>.`);
   }
 }
 
@@ -117,13 +159,18 @@ function sourceCard(vod, chan) {
 ${others.length ? `<span class="small">Other streams: ${others.map((v) => `<a href="/clip?q=${encodeURIComponent(v.platform === "kick" ? v.url : v.id)}">${h(new Date(v.created_at).toUTCString().slice(5, 11))}</a>`).join(" · ")}</span>` : ""}</div></div>`;
 }
 
-async function analyse(vod, chan) {
+async function analyse(vod, chan, note = "") {
   current.vod = vod;
-  if (!playlistPath(vod)) return say(sourceCard(vod, chan) + `<div class="note">This stream’s video isn’t public (subscriber-only or deleted), so it can’t be cut.</div>`);
+  const noteHtml = note ? `<div class="note">${note}</div>` : "";
+  if (!playlistPath(vod)) {
+    ph("clip_dead", { why: "vod_private" });
+    say(noteHtml + sourceCard(vod, chan) + `<div class="note">This stream’s video isn’t public (subscriber-only or deleted), so it can’t be cut.</div><h3 class="hot-h">Live in GTA right now. Tap one to clip it.</h3><div id="hot"></div>`);
+    return fillHot($("#hot"), { exclude: vod.channel });
+  }
   const live = vod.status === "RECORDING";
-  say(sourceCard(vod, chan) +
+  say(noteHtml + sourceCard(vod, chan) +
     (live ? `<div class="livebar" id="livebar"><span class="pulse"></span><span id="livetxt">Connecting to chat…</span></div><canvas class="curve" id="livecurve" width="900" height="70"></canvas>` : "") +
-    `<div class="status" id="st"><span>Reading chat${live ? " so far" : ""}…${vod.platform === "kick" ? " Kick limits how fast chat can be read, so this takes about 2 minutes." : ""}</span><span class="bar"><i id="pb"></i></span><span id="pt"></span></div>
+    `<div class="status" id="st"><span id="stt">Reading chat${live ? " so far" : ""}…${vod.platform === "kick" ? " Kick limits how fast chat can be read, so this takes about 2 minutes." : ""}</span><span class="bar"><i id="pb"></i></span><span id="pt"></span></div>
 <canvas class="curve" id="curve" width="900" height="70"></canvas>
 <p class="small"><span class="credit">${creditText()}</span></p>
 ${spoilToggle()}
@@ -131,26 +178,82 @@ ${spoilToggle()}
 <ol class="moments" id="moments"></ol>`);
   if (live) startLive(vod);
   const t0 = performance.now();
+  const secs = () => Math.round((performance.now() - t0) / 1000);
+  const onProgress = (d, n) => { const pb = $("#pb"); if (pb) { pb.style.width = (100 * d / n) + "%"; $("#pt").textContent = `${d}/${n}`; } };
+  // A marathon that is still live takes 20-40 s to read end to end, and the newest moments are
+  // the ones a clipper wants. Read the last two hours first (a few seconds), show those, then
+  // read the rest underneath without moving what is already on screen.
+  let quick = null;
+  if (live && vod.platform !== "kick" && vod.length > 3 * 3600) {
+    try {
+      const r = await findMoments(vod, { k: 6, from: vod.length - 2 * 3600, fill: 0, onProgress });
+      if (current.vod !== vod) return;
+      if (r.moments.length) {
+        quick = r.moments;
+        markSpoilers(vod, quick);
+        ph("clip_first_moments", { n: quick.length, secs: secs() });
+        current.moments = [...quick, ...current.moments.filter((m) => m.live)];
+        $("#moments").insertAdjacentHTML("beforebegin", `<h3 id="recent-h">The last 2 hours</h3>`);
+        renderMoments();
+        const lo = $("#livemoments");
+        if (lo) lo.innerHTML = current.moments.map((m, i) => (m.live ? momentLi(m, i) : "")).reverse().join("");
+        $("#stt").textContent = `${quick.length} moments from the last 2 hours. Still reading the earlier ${clock(vod.length - 2 * 3600)}…`;
+        $("#pb").style.width = "0";
+      }
+    } catch (e) { /* the full read below reports any failure */ }
+  }
   let res;
   try {
-    res = await findMoments(vod, { k: 12, onProgress: (d, n) => { $("#pb").style.width = (100 * d / n) + "%"; $("#pt").textContent = `${d}/${n}`; } });
+    res = await findMoments(vod, { k: 12, onProgress });
   } catch (e) {
-    $("#st").innerHTML = `<span>Twitch stopped answering (${h(e.message)}). Try again in a minute.</span>`;
+    if (current.vod !== vod) return;
+    ph("clip_dead", { why: "read_failed" });
+    $("#st").innerHTML = `<span>${vod.platform === "kick" ? "Kick" : "Twitch"} stopped answering (${h(e.message)}). <a href="${h(location.href)}">Try again</a>${quick ? "" : ", or clip one of these"}.</span>`;
+    if (!quick) { $("#moments").insertAdjacentHTML("afterend", `<div id="hot"></div>`); fillHot($("#hot"), { exclude: vod.channel }); }
     return;
   }
+  if (current.vod !== vod) return;
   const flagged = markSpoilers(vod, res.moments);
-  ph("clip_moments", { spoilers: flagged, spoiler_filter: skipSpoilers(), n: res.moments.length, secs: Math.round((performance.now() - t0) / 1000), live, len: vod.length });
-  $("#st").innerHTML = `<span>${res.moments.length} moments from ${clock(vod.length)} of stream, in ${Math.round((performance.now() - t0) / 1000)} s${live ? ". Watching live chat for new ones." : "."}</span>`;
+  const nQuiet = res.moments.filter((m) => m.quiet).length;
+  ph("clip_moments", { spoilers: flagged, spoiler_filter: skipSpoilers(), n: res.moments.length + (quick ? quick.filter((q) => !res.moments.some((m) => m.t_start < q.t_end && m.t_end > q.t_start)).length : 0), secs: secs(), live, len: vod.length, quiet: nQuiet, msgs: res.messages });
   drawCurve($("#curve"), res.curve, vod.length, res.moments);
-  const liveOnes = current.moments.filter((m) => m.live);
-  current.moments = [...res.moments, ...liveOnes];
-  renderMoments();
-  const lo = $("#livemoments");
-  if (lo) lo.innerHTML = current.moments.map((m, i) => (m.live ? momentLi(m, i) : "")).reverse().join("");
-  const jump = Number(params.get("t"));
-  if (jump) {
-    const m = res.moments.find((x) => Math.abs(x.t_start - jump) < 30);
-    const idx = m ? res.moments.indexOf(m) : -1;
+  if (quick) {
+    const rest = res.moments.filter((m) => !quick.some((q) => m.t_start < q.t_end && m.t_end > q.t_start));
+    const base = current.moments.length;
+    current.moments.push(...rest);
+    rest.forEach((m) => (m.later = true));
+    if (rest.length) $("#moments").insertAdjacentHTML("afterend", `<h3>Earlier in this stream</h3><ol class="moments" id="moments2">${rest.map((m, i) => momentRow(m, base + i)).join("")}</ol>`);
+    renderSkipped();
+    $("#st").innerHTML = `<span>${quick.length + rest.length} moments from ${clock(vod.length)} of stream, in ${secs()} s. Watching live chat for new ones.</span>`;
+  } else {
+    $("#st").innerHTML = res.moments.length
+      ? `<span>${nQuiet === res.moments.length ? `Chat stayed calm all stream, so these are its ${res.moments.length} best moments, not big spikes.` : `${res.moments.length} moments from ${clock(vod.length)} of stream, in ${secs()} s`}${live ? ". Watching live chat for new ones." : nQuiet === res.moments.length ? "" : "."}</span>`
+      : `<span>${res.messages ? "Chat barely moved in this stream, so there is no moment worth cutting." : "Nobody typed in chat during this stream, so there is nothing to find moments from."}${live ? " Watching live chat for new ones." : ""}</span>`;
+    const liveOnes = current.moments.filter((m) => m.live);
+    current.moments = [...res.moments, ...liveOnes];
+    renderMoments();
+    const lo = $("#livemoments");
+    if (lo) lo.innerHTML = current.moments.map((m, i) => (m.live ? momentLi(m, i) : "")).reverse().join("");
+    if (!res.moments.length) {
+      ph("clip_dead", { why: res.messages ? "flat_chat" : "no_chat" });
+      const others = chan ? chan.vods.filter((v) => v.id !== vod.id).slice(0, 3) : [];
+      $("#moments").innerHTML = (others.length ? `<li class="note">Try ${h(vod.channel_name)}’s other streams: ${others.map((v) => `<a href="/clip?q=${encodeURIComponent(v.platform === "kick" ? v.url : v.id)}">${h(new Date(v.created_at).toUTCString().slice(5, 11))} · ${clock(v.length)}</a>`).join(" · ")}</li>` : "") +
+        `<li><h3 class="hot-h">Live in GTA right now. Tap one to clip it.</h3><div id="hot"></div></li>`;
+      fillHot($("#hot"), { exclude: vod.channel });
+    }
+  }
+  if (jumpT) {
+    let idx = current.moments.findIndex((x) => !x.live && Math.abs(x.t_start - jumpT) < 30);
+    if (idx < 0 && jumpT < vod.length) {
+      // They asked for an exact second (a Twitch clip link, or a link from the assistant): build that moment.
+      try {
+        const m = await refinePeak(vod, { t: jumpT + 20, base: 0 });
+        m.t_start = Math.max(0, jumpT - 4); m.t_end = Math.min(vod.length, m.t_start + 38);
+        m.twitch_clips = 0; m.twitch_clip_views = 0; m.hooks = hooks(m, vod.channel_name); m.score = m.chat_ratio; m.asked = true;
+        idx = current.moments.length; current.moments.push(m);
+        $("#moments").insertAdjacentHTML("afterbegin", momentLi(m, idx));
+      } catch (e) {}
+    }
     if (idx >= 0) openEditor(idx);
   }
 }
@@ -168,7 +271,9 @@ function drawCurve(cv, curve, len, moments) {
 
 function chips(m) {
   const c = [];
-  c.push(`<span class="chip hot">chat ${m.chat_ratio}× normal speed</span>`);
+  if (!m.asked) c.push(`<span class="chip${m.quiet ? "" : " hot"}">chat ${m.chat_ratio}× normal speed</span>`);
+  if (m.quiet) c.push(`<span class="chip">small spike</span>`);
+  if (m.asked) c.push(`<span class="chip hot">the second you linked</span>`);
   if (m.event_type !== "reaction") c.push(`<span class="chip">${h(m.event_type)}</span>`);
   if (m.clip_requests) c.push(`<span class="chip hot">${m.clip_requests} “clip it”</span>`);
   if (m.twitch_clips) c.push(`<span class="chip">already clipped on Twitch ${m.twitch_clips}× (${m.twitch_clip_views} views)</span>`);
@@ -199,13 +304,18 @@ function momentLi(m, i) {
 <div class="ed"></div></li>`;
 }
 
+// One row, or nothing if it is live (listed separately), hidden, or skipped as a spoiler.
+function momentRow(m, i) {
+  return m.live || m.hidden || (skipSpoilers() && m.spoiler && m.spoiler.spoiler && !m.unskipped) ? "" : momentLi(m, i);
+}
+
 function renderMoments() {
   const ol = $("#moments");
   if (!ol) return;
-  const skip = skipSpoilers();
-  const html = current.moments.map((m, i) => (m.live || m.hidden || (skip && m.spoiler && m.spoiler.spoiler && !m.unskipped) ? "" : momentLi(m, i))).join("");
   renderSkipped();
-  ol.innerHTML = html || `<li class="note">Chat was steady the whole stream; no clear spikes. Try another stream, or <a href="/requests">tell us what you expected to find</a>.</li>`;
+  ol.innerHTML = current.moments.map((m, i) => (m.later ? "" : momentRow(m, i))).join("");
+  const ol2 = $("#moments2");
+  if (ol2) ol2.innerHTML = current.moments.map((m, i) => (m.later ? momentRow(m, i) : "")).join("");
 }
 
 document.addEventListener("click", (e) => {
@@ -374,5 +484,14 @@ async function startLive(vod) {
     ph("purchase_claimed", { ok: !!d.key });
   }
   const q = app.dataset.q || params.get("q");
-  if (q) start(q);
+  if (q) return start(q);
+  // "Clip the top live GTA stream now": one tap from a guide or campaign page.
+  if (params.get("top")) {
+    say(`<div class="status">Finding the biggest live GTA stream…</div>`);
+    const top = await topLive().catch(() => null);
+    if (!top) return dead("no_live", `Nobody is live in GTA with a saved stream this minute.`);
+    ph("clip_top_live", { viewers: top.viewers });
+    try { history.replaceState(null, "", location.pathname + "?q=" + encodeURIComponent(top.login)); const inp = document.querySelector(".paste input[name=q]"); if (inp) inp.value = top.login; } catch (e) {}
+    start(top.login);
+  }
 })();
