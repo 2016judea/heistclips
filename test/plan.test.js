@@ -30,6 +30,8 @@ test("the checklist turns rules into steps and marks what it cannot read", () =>
   assert.ok(cap.tags.includes("#asianjeff") && cap.tags.includes("#gta6"));
   assert.match(cap.caption, /@asianjeff/);
   assert.match(cap.caption, /twitch\.tv\/asianjeff/);
+  // a dash in a hook becomes a comma, with no stray space before it
+  assert.match(captionFor({ hook: "“fff” – chat, instantly", streamer: { name: "K", login: "k" }, need }).caption, /^“fff”, chat, instantly\n/);
 });
 
 test("plan_my_clips: only what can pay at your size, moments with cut_clip arguments, nothing cut", async () => {
