@@ -222,3 +222,21 @@ pre{padding:12px;overflow-x:auto;white-space:pre}
 .reqfilter button{font:inherit;font-size:14px;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid #3a3a44;background:transparent;color:var(--mute);cursor:pointer}
 .reqfilter button.on{color:var(--ink);border-color:var(--ink)}
 .req[hidden]{display:none}
+/* Pay at your size (lib/sizeview.js, public/js/size.js) */
+.sizebar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0 4px}
+.sizebar[hidden]{display:none}
+.sizebar .lab{color:var(--mute);font-size:13px}
+.sizebar .seg{display:inline-flex;flex-wrap:wrap;gap:4px}
+.sizebar button{font:inherit;font-size:14px;min-height:40px;padding:0 12px;border-radius:999px;border:1px solid #3a3a44;background:transparent;color:var(--mute);cursor:pointer}
+.sizebar button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.cnum .you{display:flex;flex-direction:column;align-items:flex-end;margin-top:6px;padding-top:6px;border-top:1px solid var(--line)}
+.cnum .you b{font-size:16px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.cnum .you.zero b,.youstat .you.zero b{color:var(--warn)}
+.cnum .you span{white-space:normal;max-width:15ch;text-align:right;line-height:1.25}
+.meta.floor{color:var(--warn);font-size:13px}
+.meta.floor.unk{color:var(--mute)}
+.you-lede{font-size:16px;color:var(--mute)}
+.floorline b{color:var(--warn)}
+table.sizes tr.on td{background:#1b1f12;color:var(--ink)}
+table.sizes tr.on td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
+.youstat .you{display:block}

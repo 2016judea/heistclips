@@ -104,11 +104,27 @@ function payText(b) {
   const amt = b.expected_per_clip > 0 ? `<span class="amt">${money(b.expected_per_clip)} typical per clip</span>` : b.pool ? `<span class="amt">prize pool</span>` : `<span class="amt">new${b.cap_per_clip != null ? ", up to " + money(b.cap_per_clip) + " a clip" : ""}</span>`;
   return `${amt} · ${money(b.budget_left)} left · ${b.clippers.toLocaleString("en-US")} clipper${b.clippers === 1 ? "" : "s"}`;
 }
+// Pay at your size (public/js/size.js owns the switch and its words; the server sends `you`).
+let size = ["new", "5k", "50k"].includes(store.get("hc_size")) ? store.get("hc_size") : "new", sizeWords = null;
+try { sizeWords = JSON.parse($(".sizebar").dataset.l); } catch (e) {}
+const kv = (n) => (n >= 1e6 ? +(n / 1e6).toFixed(1) + "M" : n >= 1e3 ? +(n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + "k" : String(n));
+function youText(s) {
+  const L = sizeWords, v = s.you && s.you[size];
+  if (!L || !v) return "";
+  const f = v.floor;
+  const floor = !f ? "" : !f.known ? L.floorUnknown : f.pool > 0 ? L.floorPool.replace("{v}", kv(f.pool)) : f.clip > 0 ? L.floorClip.replace("{v}", kv(f.clip)) : "";
+  const odds = !(v.usd > 0) && v.chance > 0 ? " · " + L.oneIn.replace("{n}", Math.max(2, Math.round(1 / v.chance))) : "";
+  return `<span class="you${v.usd === 0 ? " zero" : ""}"><b>${v.usd == null ? "?" : money(v.usd)}</b> ${h(L.likely[size] + odds)}${floor && !(v.usd > 0) ? " · " + h(floor) : ""}</span>`;
+}
+const youKey = (s) => { const v = (s.you && s.you[size]) || {}; return [v.usd > 0 ? 2 : v.usd == null ? 1 : 0, v.usd || 0, v.avg || 0]; };
+function bySize(a, b) { const x = youKey(a), y = youKey(b); for (let i = 0; i < 3; i++) if (y[i] !== x[i]) return y[i] - x[i]; return 0; }
+document.addEventListener("hc:size", (e) => { size = e.detail.size; sizeWords = e.detail.labels; if (sug.length) renderPaying(); });
 function renderPaying() {
-  const rows = sug.filter((s) => !wanted.includes(s.key));
+  const rows = sug.filter((s) => !wanted.includes(s.key)).map((s, i) => [s, i]).sort((a, b) => bySize(a[0], b[0]) || a[1] - b[1]).map((x) => x[0]);
   const n = showAllPaying ? rows.length : wanted.length ? 4 : 6;
   $("#q-payh").hidden = !rows.length;
-  $("#q-pays").innerHTML = rows.slice(0, n).map((s) => `<li>${s.avatar ? `<img src="${h(s.avatar)}" alt="" loading="lazy">` : `<span class="ph">${h(s.name.slice(0, 1))}</span>`}<span class="who"><b>${h(s.name)}${s.live ? '<span class="q-live">LIVE</span>' : ""}</b><span>${payText(s.best)}</span></span><button class="btn sm" type="button" data-watch="${h(s.key)}" aria-label="Watch ${h(s.name)}">Watch</button></li>`).join("");
+  if ($("#q-size")) $("#q-size").hidden = !rows.length;
+  $("#q-pays").innerHTML = rows.slice(0, n).map((s) => `<li>${s.avatar ? `<img src="${h(s.avatar)}" alt="" loading="lazy">` : `<span class="ph">${h(s.name.slice(0, 1))}</span>`}<span class="who"><b>${h(s.name)}${s.live ? '<span class="q-live">LIVE</span>' : ""}</b><span>${payText(s.best)}</span>${youText(s)}</span><button class="btn sm" type="button" data-watch="${h(s.key)}" aria-label="Watch ${h(s.name)}">Watch</button></li>`).join("");
   $("#q-paymore").innerHTML = rows.length > n ? `<button class="btn sm ghost" type="button" id="q-payall">Show all ${rows.length}</button>` : "";
 }
 

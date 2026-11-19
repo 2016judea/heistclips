@@ -351,3 +351,55 @@ landed on a `/clip` link, 57% did. The new pages carry `src=` on every link into
 (`trend`, `streamer`, `streamer-vod`, `maker-twitch`, `maker-kick`), so the read is: `/clip`
 pageviews by `src`, and `clip_render_done` after them, in PostHog. Expected if these pages do
 nothing new: the 6.5% of the old landing pages.
+
+---
+
+# Pay at your size — ideal model (written 2026-11-19, before the floors were checked)
+
+## Need
+
+Running our own clipping channel showed the ranker's "typical per clip" is what established
+clippers earn. A new account with a few hundred views a clip earns $0 on most campaigns,
+because most pay nothing below a floor. The ideal answer to "what can I earn" is per clipper:
+given my views per clip, which campaigns pay me, how much, and what must I do to get paid.
+
+## Entities
+
+### Clipper size
+| field | question it answers |
+|---|---|
+| views per clip (median, spread), per platform | what does my ordinary clip get, and how often does one break out |
+
+### Campaign floor
+| field | question it answers |
+|---|---|
+| min payout per clip, per platform (with the rate) | how many views before a clip earns its first cent |
+| min views per clip | same, stated directly |
+| pool total-views bar | how many views my clips need together before I share a pool |
+| rules hidden until joined | could a rule I cannot see add another floor |
+| approval rate | how many of my clips get approved at all |
+| audience-country rule | do views from my audience count |
+
+### Likely pay (derived)
+| field | question |
+|---|---|
+| likely $ per clip at my size | what my typical clip earns here |
+| share of my clips that pay anything | is this a living or a lottery |
+| clips to pass a pool's bar | can I reach it at all |
+
+## Reality check (filled 2026-11-19, against 11 campaign pages and the live snapshot)
+
+| field | status |
+|---|---|
+| views per clip | **can't fill per clipper**: we never see their accounts. Proxy: three preset sizes (500 = the clip desk's prior for a new channel, EXPECTED.md; 5,000; 50,000) or the number the user gives the connector; spread assumed log-normal, sigma 1.6 (the desk's assumption, not measured on other clippers) |
+| min payout + rate | fills for every CPM campaign (618 of 618 in the snapshot carry `minPayout` per platform) |
+| min views per clip, pool bar | fills from each page's `configuration` block (`minClipViews`, `minCreatorViews`), public, but only for pages read since this change: the crawler re-reads pools first, then streamer and gaming campaigns (~26 pages per 30-minute run). Until read: "floor unknown, check the brief" |
+| hidden rules | **partial**: the page says how many rule files open after joining (`briefCounts`), not what they say. Named on the campaign page; never assumed to be empty |
+| approval rate | **can't fill**: not public |
+| audience-country rule | **partial**: `geo_priced` and a brief that mentions it; the share of a clipper's views that count is theirs to know |
+| spread | fills: per-clip floors run p10 1,000, median 1,500, p90 10,000 views. At 500 views a clip, 0 of 23 GTA and 0 of 92 gaming campaigns pay a typical clip; at 5,000 views, 12 GTA and 65 gaming do |
+
+### Call
+Build. The floors are public settings, not guesses, and they split the list completely by size,
+which is the whole point. Named limits: no approval rate, the spread is an assumption, and rules
+behind Join stay "check the brief".

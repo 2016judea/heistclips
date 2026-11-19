@@ -1,5 +1,32 @@
 [
   {
+    "id": "pay-at-your-size",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "See what a clip pays at your size",
+    "body": "Most campaigns pay nothing under a floor, like 10,000 views a clip. Every campaign now shows what a clip is likely to pay a new account, or one at about 5K or 50K views a clip, and you can sort by what can pay you now.",
+    "link": "/gta-6-clipping-campaigns",
+    "at": "2026-11-19T22:17:01.408Z",
+    "langs": {
+      "de": {
+        "title": "Sieh, was ein Clip bei deiner Größe bringt",
+        "body": "Die meisten Kampagnen zahlen nichts unter einer Untergrenze, zum Beispiel 10.000 Views pro Clip. Jede Kampagne zeigt jetzt, was ein Clip einem neuen Account oder einem mit etwa 5K oder 50K Views pro Clip wahrscheinlich bringt, und du kannst nach dem sortieren, was dir jetzt zahlt."
+      },
+      "fr": {
+        "title": "Vois ce qu’un clip rapporte à ta taille",
+        "body": "La plupart des campagnes ne paient rien sous un seuil, par exemple 10 000 vues par clip. Chaque campagne montre maintenant ce qu’un clip rapporte probablement à un nouveau compte, ou à un compte à environ 5K ou 50K vues par clip, et tu peux trier par ce qui peut te payer maintenant."
+      },
+      "pt": {
+        "title": "Veja o que um clipe paga no seu tamanho",
+        "body": "A maioria das campanhas não paga nada abaixo de um piso, como 10.000 views por clipe. Cada campanha agora mostra o que um clipe provavelmente paga a uma conta nova, ou a uma com cerca de 5K ou 50K views por clipe, e você pode ordenar pelo que pode te pagar agora."
+      },
+      "es": {
+        "title": "Mira lo que paga un clip a tu tamaño",
+        "body": "La mayoría de las campañas no pagan nada por debajo de un mínimo, como 10.000 vistas por clip. Cada campaña muestra ahora lo que probablemente paga un clip a una cuenta nueva, o a una con unas 5K o 50K vistas por clip, y puedes ordenar por lo que te puede pagar ya."
+      }
+    }
+  },
+  {
     "id": "safari-clips-now-have-sound-and-a",
     "date": "2026-11-19",
     "type": "fixed",
