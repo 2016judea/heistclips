@@ -55,6 +55,15 @@ test("nothing is charged when the cut fails, the store fails, or there are no cl
   }
   const r = await cutJob({ source: "v1", start: 10, end: 200 }, clean(deps()));
   assert.equal(r.err, "too_long");
+  // a second over the cap is cut at the cap and says so; the clip is still made and charged once
+  const d61 = deps(), t61 = await cutJob({ source: "v1", start: 100, end: 161 }, clean(d61));
+  assert.equal(t61.ok, true); assert.match(t61.trimmed, /first 60 seconds/); assert.equal(d61.calls.cut, 1);
+  // an exception names the step it happened in, and a charge that throws does not lose the clip
+  const boom = await cutJob({ source: "v1", start: 100, end: 130 }, { ...clean(deps()), resolveVod: async () => { throw new Error("gql 502"); } });
+  assert.equal(boom.ok, false); assert.equal(boom.err, "crash_resolve");
+  let n = 0;
+  const kept = await cutJob({ source: "v1", start: 100, end: 130 }, { ...clean(deps()), creditCall: async (a) => { if (a === "start") return { ok: true, ticket: "t" }; n++; throw new Error("blob list 500"); } });
+  assert.equal(kept.ok, true); assert.equal(kept.charged, false); assert.equal(n, 1); assert.ok(kept.download);
   assert.equal(await loadJob("cjnope"), null);
 });
 
