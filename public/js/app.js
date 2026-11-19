@@ -1,15 +1,19 @@
 // The clip tool: paste -> moments (with why) -> cut -> download.
 import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitchTime, searchChannels, getClip, refinePeak, hooks } from "./twitch.js";
-import { Clipper, pickMime, camPreset, clampBox, CAM_DEFAULT } from "./render.js?v=15";
+import { Clipper, pickMime, camPreset, clampBox, CAM_DEFAULT } from "./render.js?v=16";
 import { FX } from "./fx.js?v=3";
 import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";
 import { paywallHTML } from "./paywall.js";
 import { markSpoilers, spoilerCheck } from "./spoilers.js";
-import "./post.js?v=1"; // Post to YouTube / TikTok buttons; listens for hc:rendered
+import "./post.js?v=2"; // Post to YouTube / TikTok buttons; listens for hc:rendered
 import { fillHot, topLive } from "./hot.js";
 import { queueHandoff } from "./queuehand.js";
-import { serverCut, SERVER_MAX_S } from "./servercut.js?v=1";
+import { serverCut, SERVER_MAX_S } from "./servercut.js?v=2";
+import { keepClean, flagged, mask } from "./wordguard.js";
+import { vodChapters, gameAt, isGta, shortGame } from "./games.js?v=1";
+import { campaignPanel } from "./campaign.js?v=1";
+import { FaceCheck, boxAround, cornerFor } from "./facecam.js?v=1";
 
 const $ = (s, el = document) => el.querySelector(s);
 const h = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -93,6 +97,27 @@ details.more[open]>summary{margin-bottom:10px}
 .nudge button{min-width:46px;min-height:40px;padding:0 8px;touch-action:manipulation}
 #est{margin:0}
 @media (max-width:720px){.stage{max-width:210px;margin:0 auto}}
+.hookwarn{color:#ffd08a;margin:6px 0 0}
+.camp{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.camp .small{margin:0}
+.camp-pick{display:flex;flex-direction:column;gap:4px;min-width:0}
+.camp-pick label{font-size:14px;font-weight:600}
+.camp-pick select{min-height:42px;font-size:16px;background:#141418;color:inherit;border:1px solid var(--line);border-radius:8px;padding:0 8px;width:100%;max-width:100%;text-overflow:ellipsis}
+.ckbody{display:flex;flex-direction:column;gap:8px}
+.ck{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:14px}
+.ck li{padding-left:22px;position:relative;overflow-wrap:anywhere}
+.ck li::before{position:absolute;left:0;top:0;width:16px;text-align:center;font-weight:700}
+.ck li.ok::before{content:"✓";color:var(--ok)}.ck li.bad::before{content:"✕";color:#ff7a86}.ck li.todo::before{content:"•";color:var(--mute)}
+.ck .tags{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
+.tag{font-size:13px;border-radius:999px;padding:4px 12px;min-height:36px;background:#1d1d23;color:inherit;border:1px solid var(--line);cursor:pointer;touch-action:manipulation}
+.tag.off{opacity:.55;text-decoration:line-through}
+.capline{display:flex;gap:6px}.capline .btn{min-height:40px}
+.ckmore summary{cursor:pointer;font-size:14px;font-weight:600;min-height:32px;display:flex;align-items:center}
+.ckmore ul{margin:6px 0;padding-left:18px;font-size:13px;color:var(--mute)}.ckmore li{margin:4px 0}
+.gamewarn{margin:0}
+.facemiss .actions{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+.facemiss .btn{min-height:40px}
+.submitwin{margin-top:10px}.submitwin .cd{font-variant-numeric:tabular-nums;margin-left:4px;color:var(--acc)}.submitwin .cd.late{color:#ff7a86}.submitwin .actions{margin-top:8px}.submitwin p{margin:6px 0 0}
 </style>`);
 
 
@@ -151,8 +176,35 @@ document.addEventListener("click", (e) => {
   renderMoments();
 });
 
+// ---- game per moment (public/js/games.js) ----------------------------------------------------
+// Each moment is labelled with the game on screen at its peak (Twitch chapters; Kick's category),
+// and clippers can hide the moments that are not GTA.
+const onlyGta = () => store.get("hc_onlygta") === "1";
+function gameOf(m) {
+  if (!m.game && current.chapters && current.chapters.length) {
+    const t = m.t_peak != null ? m.t_peak : m.t_start;
+    m.game = gameAt(current.chapters, t);
+    const c = current.chapters.find((x) => t >= x.start && t < x.end) || current.chapters[0];
+    m.gameSource = c ? c.src : null;
+  }
+  return m.game || null;
+}
+const offGta = (m) => !m.live && onlyGta() && gameOf(m) && !isGta(m.game);
+function gtaToggle() {
+  const el = $("#gtatoggle"); if (!el) return;
+  const non = current.moments.filter((m) => !m.live && !m.hidden && gameOf(m) && !isGta(m.game)).length;
+  el.hidden = !non;
+  const n = $("#gtahid", el); if (n) n.textContent = onlyGta() ? `(${non} hidden)` : `(${non} aren’t GTA)`;
+}
+document.addEventListener("change", (e) => {
+  if (e.target.id !== "onlygta") return;
+  store.set("hc_onlygta", e.target.checked ? "1" : "0");
+  ph("game_filter", { on: e.target.checked, non_gta: current.moments.filter((m) => gameOf(m) && !isGta(m.game)).length, n: current.moments.length });
+  renderMoments();
+});
+
 // ---- flow ----------------------------------------------------------------------------------
-let current = { vod: null, chan: null, moments: [], clipper: null, live: null };
+let current = { vod: null, chan: null, moments: [], clipper: null, live: null, chapters: null, panel: null };
 
 let jumpT = Number(params.get("t")) || 0;
 
@@ -256,6 +308,17 @@ ${others.length ? `<span class="small">Other streams: ${others.map((v) => `<a hr
 
 async function analyse(vod, chan, note = "") {
   current.vod = vod;
+  current.chapters = null;
+  vodChapters(vod).then((ch) => {
+    if (current.vod !== vod) return;
+    current.chapters = ch;
+    if (!ch.length) return;
+    // Label the rows in place: re-drawing the list would close an editor that is already open.
+    document.querySelectorAll(".moment[data-i]").forEach((li) => { const m = current.moments[Number(li.dataset.i)], c = m && li.querySelector(".chips"); if (c) c.innerHTML = chips(m); });
+    if (!current.clipper && onlyGta()) renderMoments(); else gtaToggle();
+    if (current.panel) current.panel.update();
+    ph("moment_games", { chapters: ch.length, games: new Set(ch.map((c) => c.game)).size, non_gta: current.moments.filter((m) => gameOf(m) && !isGta(m.game)).length });
+  }).catch(() => {});
   const noteHtml = note ? `<div class="note">${note}</div>` : "";
   if (!playlistPath(vod)) {
     ph("clip_dead", { why: "vod_private" });
@@ -269,6 +332,7 @@ async function analyse(vod, chan, note = "") {
 <canvas class="curve" id="curve" width="900" height="70"></canvas>
 <p class="small"><span class="credit">${creditText()}</span></p>
 ${spoilToggle()}
+<label class="spoiltoggle" id="gtatoggle" hidden><input type="checkbox" id="onlygta" ${onlyGta() ? "checked" : ""}> <span>Only GTA moments</span> <span class="small" id="gtahid"></span></label>
 <div id="skipped"></div>
 <ol class="moments" id="moments"></ol>`);
   const qm = await queueHandoff(vod, ph); // opened from /queue: the moment is already found
@@ -368,6 +432,8 @@ function drawCurve(cv, curve, len, moments) {
 
 function chips(m) {
   const c = [];
+  const g = gameOf(m);
+  if (g) c.push(`<span class="chip game${isGta(g) ? "" : " risk-medium"}" data-notr>${h(shortGame(g))}</span>`);
   if (!m.asked) c.push(`<span class="chip${m.quiet ? "" : " hot"}">chat ${m.chat_ratio}× normal speed</span>`);
   if (m.quiet) c.push(`<span class="chip">small spike</span>`);
   if (m.asked) c.push(`<span class="chip hot">the second you linked</span>`);
@@ -403,13 +469,14 @@ function momentLi(m, i) {
 
 // One row, or nothing if it is live (listed separately), hidden, or skipped as a spoiler.
 function momentRow(m, i) {
-  return m.live || m.hidden || (skipSpoilers() && m.spoiler && m.spoiler.spoiler && !m.unskipped) ? "" : momentLi(m, i);
+  return m.live || m.hidden || (skipSpoilers() && m.spoiler && m.spoiler.spoiler && !m.unskipped) || offGta(m) ? "" : momentLi(m, i);
 }
 
 function renderMoments() {
   const ol = $("#moments");
   if (!ol) return;
   renderSkipped();
+  gtaToggle();
   ol.innerHTML = current.moments.map((m, i) => (m.later ? "" : momentRow(m, i))).join("");
   const ol2 = $("#moments2");
   if (ol2) ol2.innerHTML = current.moments.map((m, i) => (m.later ? momentRow(m, i) : "")).join("");
@@ -442,6 +509,10 @@ async function openEditor(i) {
   const win = { s: m.t_start, e: m.t_end };
   const mprops = () => ({ t_start: Math.round(win.s), clip_secs: Math.round(win.e - win.s) });
   ph("moment_cut_open", { rank: i + 1, live: !!m.live, ...mprops(), server_mode: serverMode });
+  // Hook word guard (public/js/wordguard.js): a suggested line with a word that gets a post removed
+  // or demonetized is dropped, never offered. A line the clipper types is theirs: it gets a warning.
+  if (!m.hooksGuarded) { const g = keepClean(m.hooks || []); m.hooks = g.kept; m.hooksGuarded = true; if (g.dropped.length) ph("hook_guarded", { dropped: g.dropped.length, kept: g.kept.length }); }
+  if (!m.hooks.length) m.hooks = keepClean(hooks({ ...m, phrase: null }, current.vod.channel_name)).kept;
   ed.innerHTML = `<div class="editor">
 <div><div class="stage"><canvas></canvas></div><p class="small" id="vstat">Loading video…</p></div>
 <div class="ctrls">
@@ -449,12 +520,15 @@ async function openEditor(i) {
 <div class="actions"><button class="btn" id="rec" ${mime === null && !serverMode ? "disabled" : ""}>Render 9:16 clip</button><button class="btn ghost" id="pv">▶ Preview</button></div>
 <p class="small" id="est"></p>
 <p class="small" id="srvnote" hidden></p>
+<div class="note facemiss" id="facemiss" hidden></div>
+<div class="camp" id="camp" hidden></div>
 <p class="credit">${creditText()}</p>
 ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.level}: ${h(m.music_risk.why)}.</div>` : ""}
 <div class="dl" id="dl"></div>
 </div>
 <fieldset class="opts" id="opts">
 <div><label>Hook (first thing they read). Edit any line.</label><div class="hooks">${m.hooks.map((t, k) => `<label><input type="radio" name="hk" value="${k}" ${k === 0 ? "checked" : ""}><input type="text" value="${h(t)}" data-hook="${k}"></label>`).join("")}<label><input type="radio" name="hk" value="none"><span>No hook</span></label></div>
+<p class="small hookwarn" id="hookwarn" hidden></p>
 <div class="seg" data-k="hookMode" style="margin-top:6px"><button data-v="always">Hook whole clip</button><button data-v="first">First 3 s only</button></div></div>
 <div><label>Clip window</label>
 <div class="tl" id="tl"><canvas width="640" height="56"></canvas><div class="tl-sel" id="tlsel"><i class="tl-h" data-h="s"></i><i class="tl-h" data-h="e"></i></div></div>
@@ -489,7 +563,8 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   cl.opts.hook = pref.hook === "none" ? "" : m.hooks[0] || "";
   if (pref.hook === "none") ed.querySelector('input[name="hk"][value="none"]').checked = true;
   const savePref = () => { const sel = ed.querySelector('input[name="hk"]:checked'); pref = { ...pref, layout: cl.opts.layout, hookMode: cl.opts.hookMode, chat: !!cl.opts.chat, quality: cl.opts.quality, hook: sel && sel.value === "none" ? "none" : "on" }; store.set("hc_ed", JSON.stringify(pref)); };
-  cl.chat = (m.chat || []).map((x) => ({ t: x.t, text: x.text }));
+  // The chat overlay is burned into the video too: a guarded word in it is masked (f***).
+  cl.chat = (m.chat || []).map((x) => ({ t: x.t, text: mask(x.text) }));
   const vstat = $("#vstat", ed);
   try { const saved = camSaved; if (saved && saved.cam) Object.assign(cl.opts, { cam: clampBox(saved.cam), camOut: saved.camOut || "top", camStyle: saved.camStyle || "split", punch: !!saved.punch, camFx: FX.includes(saved.camFx) ? saved.camFx : "none" }); } catch (e) {}
   cl.opts.punchFallback = m.t_peak;
@@ -530,6 +605,9 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   // hammering them to move a long way). Now: drag either edge or the whole window on a strip that
   // shows chat speed around the moment, type a time, or step 1, 5 or 15 s; a held button repeats.
   const tl = $("#tl", ed), tlc = $("canvas", tl), sel = $("#tlsel", ed), tis = $("#tis", ed), tie = $("#tie", ed);
+  // Campaign checklist beside Render (public/js/campaign.js).
+  const panel = campaignPanel({ root: $("#camp", ed), vod: current.vod, win, ph, hook: () => cl.opts.hook, game: () => ({ game: gameOf(m), source: m.gameSource || (current.vod.platform === "kick" ? "kick" : null) }) });
+  current.panel = panel;
   const maxLen = () => (serverMode ? SERVER_MAX_S : LOCAL_MAX_S);
   // A still-live VOD keeps growing, so the length read when the page opened is no limit
   // (clamping to it put the end before the start: a 0-byte file, 2026-11-18).
@@ -569,6 +647,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
     if (document.activeElement !== tie) tie.value = clock(win.e);
     $("#win", ed).textContent = `${Math.round(win.e - win.s)} s`;
     showEst();
+    if (panel) panel.update(); // the campaign's length rule, against the window as it is now
   }
   let tdrag = null;
   tl.addEventListener("pointerdown", (e) => {
@@ -613,13 +692,24 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   // not change and people clicked the field again and again (45 rage clicks on these inputs).
   ed.addEventListener("focusin", (e) => { const k = e.target.dataset && e.target.dataset.hook; if (k == null) return; const r = ed.querySelector(`input[name="hk"][value="${k}"]`); if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event("input", { bubbles: true })); } });
   ed.addEventListener("change", (e) => { if (e.target.name === "hk") { savePref(); ph("editor_option", { k: "hook", v: e.target.value === "none" ? "none" : "line" + e.target.value }); } });
+  // A typed line with a guarded word is the clipper's call: say what it risks, change nothing.
+  let warned = false;
+  const hookTyped = () => { const sel = ed.querySelector('input[name="hk"]:checked'); return !!sel && sel.value !== "none" && cl.opts.hook !== m.hooks[Number(sel.value)]; };
+  const warnHook = () => {
+    const el = $("#hookwarn", ed); if (!el) return;
+    const bad = cl.opts.hook && flagged(cl.opts.hook);
+    el.hidden = !bad;
+    if (bad) { el.textContent = `“${mask(cl.opts.hook)}”: a word in this line can get a post removed or demonetized on TikTok and YouTube. It’s your line, so it stays. Change it if you want the post to stay up.`; if (!warned) { warned = true; ph("hook_typed_warn", {}); } }
+  };
   ed.addEventListener("input", (e) => {
     const k = e.target.dataset.k;
     if (k) { cl.opts[k] = Number(e.target.value); cl.draw(); }
     const sel = ed.querySelector('input[name="hk"]:checked');
     cl.opts.hook = !sel || sel.value === "none" ? "" : ed.querySelector(`[data-hook="${sel.value}"]`).value;
+    warnHook();
     cl.draw();
   });
+  ed.addEventListener("change", (e) => { if (e.target.name === "hk") warnHook(); });
   const opts = $("#opts", ed);
   // Phone / no recorder: the server cuts it. It has no chat overlay, facecam styles or pan, so
   // those rows go, and the preview shows what the server will make.
@@ -649,6 +739,63 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   });
   reSpan(); paintWin();
   syncCam(); syncSegs(); placeBox(); cl.fxPreview(); applyMode();
+
+  // ---- facecam check (public/js/facecam.js) -------------------------------------------------
+  // After the video loads, and whenever the box, corner or layout changes: is the facecam box on
+  // a face? If not, offer the face we found (one tap) or the full frame. Never blocks a render.
+  let faceChk = null, faceDismissed = false, faceTimer = 0, faceRun = 0;
+  const faceEl = $("#facemiss", ed);
+  const camNow = () => (serverMode ? camPreset(cl.srvCorner || "tr", { w: 0.28, h: 0.35 }) : cl.opts.cam || CAM_DEFAULT);
+  const hideFace = () => { faceEl.hidden = true; faceEl.innerHTML = ""; };
+  function showFace(face) {
+    const corner = face && serverMode ? cornerFor(face) : null;
+    const canMove = face && (!serverMode || corner);
+    faceEl.dataset.corner = corner || "";
+    faceEl.innerHTML = `<b>The facecam box isn’t on a face.</b> ${face ? (canMove ? "We found one." : "We found one, away from the corners: use the full frame.") : "We couldn’t find one in this clip."}
+<div class="actions">${canMove ? `<button type="button" class="btn sm" data-face="move">Move the box to the face</button>` : ""}<button type="button" class="btn sm${canMove ? " ghost" : ""}" data-face="fit">Use full frame</button><button type="button" class="btn sm ghost" data-face="keep">Keep it</button></div>`;
+    faceEl.hidden = false;
+    faceEl._face = face;
+  }
+  async function faceCheck(why) {
+    const run = ++faceRun;
+    if (cl.opts.layout !== "split" || faceDismissed) return hideFace();
+    const t0 = performance.now();
+    try {
+      if (!faceChk) {
+        const frames = await cl.grabFrames(win.s, 5, Math.max(1, Math.min(2, (win.e - win.s) / 5)));
+        if (!frames.length) return; // the editor was busy (a preview or a render): try on the next change
+        faceChk = new FaceCheck(frames);
+      }
+      const hits = await faceChk.inBox(camNow());
+      if (run !== faceRun) return;
+      if (faceChk.onFace(hits)) { hideFace(); if (why === "load") ph("facecam_check", { result: "ok", hits, ms: Math.round(performance.now() - t0), server_mode: serverMode }); return; }
+      const face = await faceChk.findFace();
+      if (run !== faceRun || cl.opts.layout !== "split") return;
+      showFace(face);
+      ph("facecam_check", { result: face ? "miss_found" : "miss_none", why, ms: Math.round(performance.now() - t0), server_mode: serverMode });
+    } catch (e) { /* a help, never a gate */ }
+  }
+  const faceSoon = (why) => { clearTimeout(faceTimer); faceTimer = setTimeout(() => faceCheck(why), 250); };
+  box.addEventListener("pointerup", () => faceSoon("drag"));
+  ed.addEventListener("click", (e) => {
+    const f = e.target.closest("[data-face]");
+    if (f) {
+      const how = f.dataset.face, face = faceEl._face;
+      if (how === "move" && face) {
+        if (serverMode && faceEl.dataset.corner) { cl.srvCorner = faceEl.dataset.corner; cl.opts.cam = camPreset(cl.srvCorner, { w: 0.28, h: 0.35 }); segOn("srvcam", cl.srvCorner); }
+        else cl.opts.cam = clampBox(boxAround(face, (cl.video.videoWidth || 16) / (cl.video.videoHeight || 9)));
+        placeBox(); saveCam(); cl.draw();
+      } else if (how === "fit") {
+        cl.opts.layout = "fit"; segOn("layout", "fit"); savePref(); syncCam();
+        const row = ed.querySelector("#srvcamrow"); if (row) row.hidden = true;
+        cl.draw(); showEst();
+      } else faceDismissed = true;
+      hideFace();
+      ph("facecam_fix", { how, server_mode: serverMode });
+      return;
+    }
+    if (e.target.closest('.seg[data-k="campreset"] button, .seg[data-k="srvcam"] button, .seg[data-k="layout"] button') || e.target.id === "uselocal" || e.target.id === "useserver") faceSoon("change");
+  });
   // On a slow connection the first picture can arrive after load() returns: say so, not "0×0".
   const showSource = () => {
     if (cl.video.videoWidth) { delete vstat.dataset.wait; vstat.textContent = `${cl.video.videoWidth}×${cl.video.videoHeight} source · renders at 1080×1920`; return; }
@@ -672,6 +819,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
     }
     catch (e2) { vstat.textContent = "Couldn’t load the video: " + e.message + (m.live ? " (live moments need ~30 s before the video catches up; try again shortly)" : ""); return; }
   }
+  faceCheck("load");
   $("#pv", ed).onclick = async () => { ph("clip_preview", { layout: cl.opts.layout }); $("#pv", ed).disabled = true; try { await cl.playWindow(win.s, win.e); } finally { $("#pv", ed).disabled = false; } };
   // ---- render ---------------------------------------------------------------------------
   const say = (html) => ($("#dl", ed).querySelector(".rnote") || $("#dl", ed).insertAdjacentElement("afterbegin", Object.assign(document.createElement("div"), { className: "note rnote" }))).innerHTML = html;
@@ -690,7 +838,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
     mount.querySelector("[data-dl]").addEventListener("click", () => ph("clip_download", { ...mprops(), ext, mb: Math.round(mb * 10) / 10, path: server ? "browser_server" : "browser" }));
     const sh = mount.querySelector("[data-share]");
     if (sh) sh.addEventListener("click", async () => { ph("clip_share", { ...mprops(), path: server ? "browser_server" : "browser" }); try { await navigator.share({ files: [file] }); } catch (e) {} });
-    if (blob) document.dispatchEvent(new CustomEvent("hc:rendered", { detail: { blob, ext, mount, caption: cl.opts.hook || "" } }));
+    if (blob) document.dispatchEvent(new CustomEvent("hc:rendered", { detail: { blob, ext, mount, caption: panel.caption() || cl.opts.hook || "", campaign: panel.campaign || null } }));
     return { mb, mount };
   }
   // A clip that came out silent where the stream has sound (seen on Safari): offer the server's
@@ -739,7 +887,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
       ph("clip_render_start", { ...common(), len: lenNow, live: !!m.live, vod_live: current.vod.status === "RECORDING" });
       const tick = setInterval(() => { const sx = Math.round((performance.now() - t0) / 1000); vstat.textContent = `Cutting your clip on our server… ${sx} s (about a minute; keep this page open)`; progress("server", sx < 240 ? sx : 240); }, 1000);
       try {
-        const d = await serverCut({ vod: current.vod, start: win.s, end: win.e, layout: cl.opts.layout, corner: cl.srvCorner || "tr", hook: cl.opts.hook || "", device });
+        const d = await serverCut({ vod: current.vod, start: win.s, end: win.e, layout: cl.opts.layout, corner: cl.srvCorner || "tr", hook: cl.opts.hook || "", hookTyped: hookTyped(), device });
         clearInterval(tick);
         if (!d.ok) {
           if (d.need === "buy") showPaywall();

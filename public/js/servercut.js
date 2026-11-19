@@ -21,8 +21,8 @@ async function code(device) {
 
 export const SERVER_MAX_S = 60;
 
-export async function serverCut({ vod, start, end, layout, corner, hook, device }) {
+export async function serverCut({ vod, start, end, layout, corner, hook, hookTyped, device }) {
   const source = vod.platform === "kick" ? `https://kick.com/video/${vod.id}` : String(vod.id);
-  const r = await post("/api/v1/cut", { source, start: Math.round(start), end: Math.round(end), layout, facecam: corner || "tr", hook: hook || "", account: await code(device), via: "web" });
+  const r = await post("/api/v1/cut", { source, start: Math.round(start), end: Math.round(end), layout, facecam: corner || "tr", hook: hook || "", hook_typed: !!hookTyped, account: await code(device), via: "web" });
   return r.json().catch(() => ({ ok: false, error: "The server did not answer (" + r.status + "). Nothing was charged." }));
 }

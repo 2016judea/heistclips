@@ -32,6 +32,18 @@ Events about one moment also carry `t_start` (the clip's first second in the str
 | `moment_skip`, `spoiler_filter`, `live_moment` | list actions | |
 | `editor_option` | a layout, hook mode, chat, quality or hook choice | `k`, `v` |
 | `facecam_box`, `facecam_preset`, `facecam_camOut`, `facecam_camStyle`, `facecam_punch`, `facecam_camFx` | facecam choices | |
+| `hook_guarded` | suggested hook lines were dropped by the word guard (`public/js/wordguard.js`) when an editor opened | `dropped`, `kept` |
+| `hook_typed_warn` | a line the clipper typed has a guarded word; they were warned, nothing was blocked (once per editor) | |
+| `facecam_check` | the facecam box was checked for a face (`public/js/facecam.js`): on load (`ok` is sent only then) and after each box, corner or layout change | `result` (`ok`, `miss_found`, `miss_none`), `why`, `hits`, `ms`, `server_mode` |
+| `facecam_fix` | a button on the facecam warning | `how` (`move`, `fit`, `keep`), `server_mode` |
+| `moment_games` | the stream's game chapters arrived (`public/js/games.js`) | `chapters`, `games`, `non_gta` |
+| `game_filter` | "Only GTA moments" was switched | `on`, `non_gta`, `n` |
+| `campaign_pick` | a campaign was picked in the editor's checklist (`public/js/campaign.js`) | `slug` (null = none), `pays_for` (`handle`, `name`, `general`, `queue`), `options` |
+| `checklist_shown` | the picked campaign's rules arrived | `slug`, `lines`, `caption_rules`, `check`, `length_rule`, `game_rule`, `docs_unread` |
+| `caption_tag_toggle` | a tag the campaign asks for was taken out of the caption or put back | `on`, `kind` (`hashtag`, `mention`, `disclosure`, `name`, `cta`, `text`) |
+| `caption_copy` / `campaign_brief_open` | Copy caption / Read the brief | `ok` / `slug` |
+| `submit_window_shown` | a post went up from the editor and the 30-minute submit clock started (`public/js/post.js`) | `campaign` (null = none picked), `provider`, `private` |
+| `submit_click` | the submit link under that clock | `campaign`, `secs_left` |
 | `clip_window` | the clip window was changed | `how` (`drag_s`, `drag_e`, `drag_move`, `typed_s`, `typed_e`, `step`), `d`, `edge`, `presses` |
 | `render_mode` | a phone switched between the server cut and rendering on the phone | `server` |
 | `clip_preview` | Preview | `layout` |

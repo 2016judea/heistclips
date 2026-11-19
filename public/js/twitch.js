@@ -3,6 +3,7 @@
 // moment-finding costs us nothing per stream hour: the visitor's browser does the reading.
 
 import { kickCommentPage, kickRate } from "./kick.js";
+import { flagged } from "./wordguard.js";
 
 const GQL = "https://gql.twitch.tv/gql";
 const CID = "kimne78kx3ncx6brgo4mv6wki5h1ko"; // Twitch's own public web client id
@@ -211,8 +212,9 @@ export function topPhrase(msgs) {
   if (EMOTE_WORDS[w]) return { text: EMOTE_WORDS[w], n: best.n, emote: best.s, words: false };
   if (/^(k{3,}|(ha){2,}h?|(ja){2,}j?|(he){3,}|lo+l+|lmf?a+o+|x+d+|w{2,}|l{2,}|\?+|!+)$/i.test(w)) return { text: best.s, n: best.n, words: false };
   const emoteName = /^\S+$/.test(best.s) && /[a-z][A-Z]/.test(best.s);
-  // A hook goes on someone's post in big letters: never chat's slurs or crude lines.
-  if (/\b(fuck|shit|cunt|nigg|fag|retard|bussy|dick|pussy|cock|porn|sex|rape|kys|whore|slut|bitch)\w*/i.test(best.s)) return { text: best.s, n: best.n, words: false };
+  // A hook goes on someone's post in big letters: never chat's slurs or crude lines, in any
+  // language (public/js/wordguard.js). words:false keeps it out of every hook.
+  if (flagged(best.s)) return { text: best.s, n: best.n, words: false, guarded: true };
   return { text: best.s, n: best.n, words: /\p{L}{3,}/u.test(best.s) && !emoteName };
 }
 

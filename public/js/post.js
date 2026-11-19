@@ -86,6 +86,33 @@ async function upload(acct, blob, ext, onPct) {
   return st.id;
 }
 
+// Content Rewards takes a clip's link only in the first 30 minutes after it is posted, and only
+// from an account linked there (desk/submit.js learned it on our own channel, 2026-11-19). So a
+// post ends with that clock: the campaign picked in the editor (public/js/campaign.js) and its
+// submit page, or the campaign list when none was picked.
+export function submitBox(where, camp, r, now = Date.now()) {
+  const mins = (camp && camp.submit_min) || 30, until = now + mins * 60000;
+  const el = document.createElement("div");
+  el.className = "note submitwin";
+  const priv = r && /^(private|SELF_ONLY)$/.test(String(r.privacy || ""));
+  el.innerHTML = `<b>${camp ? `Submit to ${esc(camp.title)} within ${mins} min` : `Submit it to a campaign within ${mins} min`}</b> <b class="cd" data-cd>${mins}:00 left</b>
+<p class="small">Content Rewards takes a clip’s link only in the first ${mins} minutes after posting, and only from an account you linked there.${priv ? " This post is private right now: make it public first, then submit." : ""}</p>
+<div class="actions">${camp ? `<a class="btn sm" href="${esc(camp.url)}" target="_blank" rel="noopener" data-submit>Open ${esc(camp.title)} to submit</a>` : `<a class="btn sm" href="/gta-6-clipping-campaigns" target="_blank" rel="noopener" data-submit>Find a campaign that pays</a>`}</div>`;
+  where.appendChild(el);
+  const cd = el.querySelector("[data-cd]");
+  const tick = () => {
+    if (!el.isConnected) return clearInterval(t);
+    const left = Math.max(0, Math.round((until - Date.now()) / 1000));
+    cd.textContent = left ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} left` : "Time’s up: this post can’t be submitted any more";
+    cd.classList.toggle("late", left < 300);
+    if (!left) clearInterval(t);
+  };
+  const t = setInterval(tick, 1000); tick();
+  el.querySelector("[data-submit]").addEventListener("click", () => ph("submit_click", { campaign: camp ? camp.slug : null, secs_left: Math.max(0, Math.round((until - Date.now()) / 1000)) }));
+  ph("submit_window_shown", { campaign: camp ? camp.slug : null, provider: r && r.platform, private: !!priv });
+  return el;
+}
+
 let openMemo = null;
 async function postBox(detail) {
   const { blob, ext, mount, caption } = detail;
@@ -121,6 +148,8 @@ async function postBox(detail) {
       if (!r.ok) { msg.innerHTML = r.needs_connect ? `${esc(r.error)} <a href="/post" target="_blank" rel="noopener">Open the connect page</a>.` : esc(r.error); ph("post_fail", { provider: p }); return; }
       msg.innerHTML = `Posted to ${LABEL[p]}${r.url ? `: <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>` : ""}. ${esc(r.note || "")}${r.studio ? ` <a href="${esc(r.studio)}" target="_blank" rel="noopener">Open in YouTube Studio</a>` : ""}`;
       ph("post_done", { provider: p, privacy: r.privacy });
+      const old = box.querySelector(".submitwin"); if (old) old.remove();
+      submitBox(box, detail.campaign || null, { ...r, platform: p });
     } catch (err) { msg.textContent = "Couldn’t post: " + err.message; ph("post_fail", { provider: p }); }
     finally { box.querySelectorAll("[data-post]").forEach((x) => (x.disabled = false)); }
   });

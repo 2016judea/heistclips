@@ -152,6 +152,25 @@ export class Clipper {
   cancel() { this.cancelled = true; }
   checkCancel() { if (this.cancelled) throw Object.assign(new Error("cancelled"), { cancelled: true }); }
 
+  // Frames for the facecam check (public/js/facecam.js): n frames `gap` s apart from t, each a
+  // canvas at most 1280 wide. The preview is not redrawn while it runs, and Preview or Render
+  // stop it (grabStop), so a check never holds the editor up. [] when the video is busy.
+  async grabFrames(t, n = 5, gap = 2) {
+    const v = this.video;
+    if (!v.videoWidth || !v.paused) return [];
+    this.grabStop = false;
+    const w = Math.min(1280, v.videoWidth), hh = Math.round(w * v.videoHeight / v.videoWidth), back = v.currentTime, out = [];
+    const quiet = (x) => new Promise((ok) => { const done = () => { v.removeEventListener("seeked", done); ok(); }; v.addEventListener("seeked", done); v.currentTime = Math.max(0, x); setTimeout(done, 6000); });
+    for (let i = 0; i < n; i++) {
+      await quiet(t + i * gap);
+      if (this.grabStop) return [];
+      const c = document.createElement("canvas"); c.width = w; c.height = hh;
+      try { c.getContext("2d").drawImage(v, 0, 0, w, hh); out.push(c); } catch (e) { return []; }
+    }
+    if (!this.grabStop) await this.seek(back);
+    return out;
+  }
+
   seek(t) {
     const v = this.video;
     return new Promise((ok) => {
@@ -401,6 +420,7 @@ export class Clipper {
 
   async playWindow(start, end) {
     const v = this.video;
+    this.grabStop = true;
     this.clipStart = start;
     this.ensureAudio(); await this.resumeAudio().catch(() => {});
     if (Math.abs(v.currentTime - start) > 0.3) await this.seek(start);
@@ -445,6 +465,7 @@ export class Clipper {
   // handing back an empty file. cancel() stops it at the next step (the error has .cancelled).
   async record(start, end, onState) {
     const v = this.video;
+    this.grabStop = true;
     this.cancelled = false;
     // phase and the two timings are for analytics (ANALYTICS.md): where a render is, how long each part took
     this.phase = "load"; const tLoad = performance.now();

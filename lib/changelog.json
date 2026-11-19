@@ -1,5 +1,140 @@
 [
   {
+    "id": "hooks-never-suggest-words-that-get-posts",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "Hooks never suggest words that get posts taken down",
+    "body": "Hook ideas come from chat, so they could pick up slurs or crude words. Those lines are now dropped in every language, and the chat overlay and server cuts mask them (f***). A line you type yourself stays yours: you get a warning, never a block.",
+    "link": "/clip",
+    "at": "2026-11-19T22:27:19.506Z",
+    "langs": {
+      "de": {
+        "title": "Hooks schlagen keine Wörter mehr vor, die Posts löschen lassen",
+        "body": "Hook-Ideen kommen aus dem Chat und konnten so Beleidigungen oder vulgäre Wörter übernehmen. Solche Zeilen fallen jetzt in jeder Sprache weg, und das Chat-Overlay und Server-Schnitte maskieren sie (f***). Eine Zeile, die du selbst tippst, bleibt deine: Du bekommst eine Warnung, nie eine Sperre."
+      },
+      "fr": {
+        "title": "Les hooks ne proposent plus de mots qui font supprimer un post",
+        "body": "Les idées de hook viennent du chat, elles pouvaient donc reprendre des insultes ou des mots crus. Ces lignes sont maintenant retirées dans toutes les langues, et l’overlay du chat et les coupes serveur les masquent (f***). Une ligne que tu tapes toi-même reste la tienne : tu reçois un avertissement, jamais un blocage."
+      },
+      "pt": {
+        "title": "Os hooks não sugerem mais palavras que derrubam posts",
+        "body": "As ideias de hook vêm do chat, então podiam pegar xingamentos ou palavras pesadas. Essas linhas agora saem em todos os idiomas, e o overlay do chat e os cortes no servidor mascaram essas palavras (f***). Uma linha que você digita é sua: você recebe um aviso, nunca um bloqueio."
+      },
+      "es": {
+        "title": "Los hooks ya no sugieren palabras que tumban posts",
+        "body": "Las ideas de hook salen del chat, así que podían recoger insultos o palabras groseras. Esas líneas ahora se quitan en todos los idiomas, y el overlay del chat y los cortes del servidor las ocultan (f***). Una línea que escribes tú es tuya: recibes un aviso, nunca un bloqueo."
+      }
+    }
+  },
+  {
+    "id": "a-campaign-checklist-beside-render",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "A campaign checklist beside Render",
+    "body": "Pick the campaign you are clipping for and its rules show next to the Render button: the clip length checked against your window, the game, and the tags and #ad it asks for, added to your caption (tap one to take it out). Anything we could not read says check the brief, with the link.",
+    "link": "/clip",
+    "at": "2026-11-19T22:27:19.453Z",
+    "langs": {
+      "de": {
+        "title": "Eine Kampagnen-Checkliste neben Rendern",
+        "body": "Wähl die Kampagne, für die du clippst, und ihre Regeln stehen neben dem Render-Knopf: die Clip-Länge geprüft gegen deinen Ausschnitt, das Spiel, und die Tags und #ad, die sie verlangt, schon in deiner Caption (antippen zum Entfernen). Was wir nicht lesen konnten, heißt „Briefing lesen“, mit Link."
+      },
+      "fr": {
+        "title": "Une checklist de campagne à côté du rendu",
+        "body": "Choisis la campagne pour laquelle tu clippes et ses règles s’affichent à côté du bouton de rendu : la durée vérifiée sur ta fenêtre, le jeu, et les tags et le #ad qu’elle demande, ajoutés à ta légende (touche-en un pour le retirer). Ce qu’on n’a pas pu lire indique « lire le brief », avec le lien."
+      },
+      "pt": {
+        "title": "Uma checklist da campanha ao lado de Renderizar",
+        "body": "Escolha a campanha para a qual você está clipando e as regras aparecem ao lado do botão de renderizar: a duração conferida com o seu trecho, o jogo, e as tags e o #ad que ela pede, já na sua legenda (toque em uma para tirar). O que não conseguimos ler aparece como ler o briefing, com o link."
+      },
+      "es": {
+        "title": "Una checklist de la campaña junto a Renderizar",
+        "body": "Elige la campaña para la que clipeas y sus reglas aparecen junto al botón de renderizar: la duración revisada contra tu tramo, el juego, y las etiquetas y el #ad que pide, ya en tu descripción (toca una para quitarla). Lo que no pudimos leer dice leer el brief, con el enlace."
+      }
+    }
+  },
+  {
+    "id": "every-moment-shows-its-game",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Every moment shows its game",
+    "body": "Moments now show the game that was on screen, from the stream's Twitch chapters (on Kick, the stream's category). Tick Only GTA moments to hide the rest. If your campaign pays for GTA only, a moment from another game is flagged before you render.",
+    "link": "/clip",
+    "at": "2026-11-19T22:27:19.402Z",
+    "langs": {
+      "de": {
+        "title": "Jeder Moment zeigt sein Spiel",
+        "body": "Momente zeigen jetzt das Spiel, das gerade lief, aus den Twitch-Kapiteln des Streams (bei Kick die Kategorie des Streams). Hak „Nur GTA-Momente“ an, um den Rest auszublenden. Zahlt deine Kampagne nur für GTA, wird ein Moment aus einem anderen Spiel vor dem Rendern markiert."
+      },
+      "fr": {
+        "title": "Chaque moment affiche son jeu",
+        "body": "Les moments affichent maintenant le jeu qui était à l’écran, d’après les chapitres Twitch du stream (sur Kick, la catégorie du stream). Coche « Seulement les moments GTA » pour masquer le reste. Si ta campagne ne paie que GTA, un moment d’un autre jeu est signalé avant le rendu."
+      },
+      "pt": {
+        "title": "Cada momento mostra o jogo",
+        "body": "Os momentos agora mostram o jogo que estava na tela, pelos capítulos da Twitch da live (na Kick, a categoria da live). Marque Só momentos de GTA para esconder o resto. Se a sua campanha só paga GTA, um momento de outro jogo é marcado antes de renderizar."
+      },
+      "es": {
+        "title": "Cada momento muestra su juego",
+        "body": "Los momentos ahora muestran el juego que estaba en pantalla, según los capítulos de Twitch del directo (en Kick, la categoría del directo). Marca Solo momentos de GTA para ocultar el resto. Si tu campaña solo paga GTA, un momento de otro juego se marca antes de renderizar."
+      }
+    }
+  },
+  {
+    "id": "we-check-that-the-facecam-box-is",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "We check that the facecam box is on a face",
+    "body": "If the facecam box sits on gameplay instead of the streamer, the editor tells you and moves it onto the face in one tap, or switches to the full frame. It runs in your browser and costs nothing.",
+    "link": "/clip",
+    "at": "2026-11-19T22:27:19.351Z",
+    "langs": {
+      "de": {
+        "title": "Wir prüfen, ob der Facecam-Rahmen auf einem Gesicht ist",
+        "body": "Liegt der Facecam-Rahmen auf Gameplay statt auf dem Streamer, sagt dir der Editor das und setzt ihn mit einem Tipp aufs Gesicht oder nimmt das ganze Bild. Das läuft in deinem Browser und kostet nichts."
+      },
+      "fr": {
+        "title": "On vérifie que le cadre de la facecam est sur un visage",
+        "body": "Si le cadre de la facecam est sur le gameplay au lieu du streamer, l’éditeur te le dit et le place sur le visage en une touche, ou passe à l’image entière. Ça tourne dans ton navigateur et ça ne coûte rien."
+      },
+      "pt": {
+        "title": "A gente confere se a caixa da facecam está num rosto",
+        "body": "Se a caixa da facecam estiver no gameplay em vez do streamer, o editor avisa e coloca no rosto com um toque, ou passa para o quadro inteiro. Roda no seu navegador e não custa nada."
+      },
+      "es": {
+        "title": "Revisamos que el recuadro de la facecam esté sobre una cara",
+        "body": "Si el recuadro de la facecam está sobre el gameplay en vez del streamer, el editor te avisa y lo pone en la cara con un toque, o pasa al cuadro completo. Funciona en tu navegador y no cuesta nada."
+      }
+    }
+  },
+  {
+    "id": "a-30-minute-clock-after-you-post",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "A 30 minute clock after you post",
+    "body": "Content Rewards only takes a clip link in the first 30 minutes after posting. When you post from heistclips, a countdown shows how long you have left, with the link to submit to your campaign. The connector's post_clip says the same.",
+    "link": "/clip",
+    "at": "2026-11-19T22:27:19.299Z",
+    "langs": {
+      "de": {
+        "title": "Eine 30-Minuten-Uhr nach dem Posten",
+        "body": "Content Rewards nimmt einen Clip-Link nur in den ersten 30 Minuten nach dem Posten an. Wenn du über heistclips postest, zeigt ein Countdown, wie viel Zeit du noch hast, mit dem Link zum Einreichen bei deiner Kampagne. post_clip im Connector sagt dasselbe."
+      },
+      "fr": {
+        "title": "Un compte à rebours de 30 minutes après ton post",
+        "body": "Content Rewards n’accepte le lien d’un clip que dans les 30 minutes après sa publication. Quand tu postes depuis heistclips, un compte à rebours montre le temps qu’il te reste, avec le lien pour soumettre à ta campagne. post_clip dans le connecteur dit la même chose."
+      },
+      "pt": {
+        "title": "Um relógio de 30 minutos depois de postar",
+        "body": "A Content Rewards só aceita o link de um clipe nos primeiros 30 minutos depois de postar. Quando você posta pelo heistclips, uma contagem regressiva mostra quanto tempo falta, com o link para enviar à sua campanha. O post_clip do conector diz o mesmo."
+      },
+      "es": {
+        "title": "Un reloj de 30 minutos después de publicar",
+        "body": "Content Rewards solo acepta el enlace de un clip en los primeros 30 minutos después de publicarlo. Cuando publicas desde heistclips, una cuenta atrás muestra cuánto tiempo te queda, con el enlace para enviarlo a tu campaña. post_clip en el conector dice lo mismo."
+      }
+    }
+  },
+  {
     "id": "plan-my-clips",
     "date": "2026-11-19",
     "type": "new",
