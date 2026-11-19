@@ -237,6 +237,8 @@ pre{padding:12px;overflow-x:auto;white-space:pre}
 .meta.floor.unk{color:var(--mute)}
 .you-lede{font-size:16px;color:var(--mute)}
 .floorline b{color:var(--warn)}
+table.sizes th,table.sizes td{white-space:normal}
+table.sizes td:not(:first-child){white-space:nowrap}
 table.sizes tr.on td{background:#1b1f12;color:var(--ink)}
 table.sizes tr.on td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
 .youstat .you{display:block}
