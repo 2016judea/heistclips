@@ -47,6 +47,22 @@
       "destination": "/api/v1/post?op=callback&provider=:provider"
     },
     {
+      "source": "/experiences/:id(exp_[A-Za-z0-9]+)/:rest*",
+      "destination": "/api/whop?view=exp&id=:id"
+    },
+    {
+      "source": "/experiences/:id(exp_[A-Za-z0-9]+)",
+      "destination": "/api/whop?view=exp&id=:id"
+    },
+    {
+      "source": "/dashboard/:id(biz_[A-Za-z0-9]+)/:rest*",
+      "destination": "/api/whop?view=dash&id=:id"
+    },
+    {
+      "source": "/dashboard/:id(biz_[A-Za-z0-9]+)",
+      "destination": "/api/whop?view=dash&id=:id"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/api/page?p=/$1"
     }
