@@ -51,13 +51,30 @@ email when new clips land.
 claude mcp add --transport http heistclips https://heistclips.com/mcp
 ```
 
-Tools: `find_clip_moments`, `rank_clipping_campaigns`, `clipping_campaign_details`, `live_gta_streams`,
-`list_feature_requests`, `upvote_feature_request`, `request_a_feature`. Works as a ChatGPT
+Tools: `find_clip_moments`, `cut_clip`, `post_clip`, `posting_account`, `rank_clipping_campaigns`,
+`clipping_campaign_details`, `live_gta_streams`, `list_feature_requests`, `upvote_feature_request`,
+`request_a_feature`. Works as a ChatGPT
 connector (developer mode), a Claude custom connector, and a Grok connector
 (grok.com/connectors).
 
 **Claude Code / Codex skill:** copy `skill/heistclips/` into `~/.claude/skills/` (or your
 agent's skills folder). It teaches the agent to find moments and cut clips with the CLI.
+
+### Cut and post without the editor
+
+`cut_clip` cuts a 5-60 s window on the server (ffmpeg in `api/v1/cut.js`) and returns an MP4
+link kept for 72 hours; it spends one clip credit through `api/credits.js`, like a browser
+render. `post_clip` posts that file to YouTube or TikTok for an account that connected them at
+`/post`. A platform is offered only when its OAuth client is in the environment:
+
+| Platform | Env vars | Redirect URI to register | Scopes |
+|---|---|---|---|
+| YouTube | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `https://heistclips.com/oauth/youtube/callback` | `youtube.upload` |
+| TikTok | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` | `https://heistclips.com/oauth/tiktok/callback` | `user.info.basic`, `video.upload`, `video.publish` |
+
+Tokens are AES-256-GCM sealed with `TOKEN_ENC_KEY` inside the account record, which sits under a
+keyed-hash Blob path (`lib/accounts.js`). Until each platform's own review passes, posts arrive
+private; `lib/social.js` says what is held back.
 
 ## CLI (local, needs Node 20+ and ffmpeg)
 
