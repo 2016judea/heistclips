@@ -208,3 +208,5 @@ pre{padding:12px;overflow-x:auto;white-space:pre}
 /* Four cards read as a 2x2 block, not three and an orphan. */
 .three.four{grid-template-columns:repeat(2,1fr)}
 @media (max-width:560px){.three.four{grid-template-columns:1fr}}
+/* The hidden attribute always wins: .btn sets display and was un-hiding the closed TikTok button (2026-11-19). */
+[hidden]{display:none !important}
