@@ -75,12 +75,13 @@ void main(){
     q = c + (p-c)*mix(1./1.75, 1., smoothstep(.7, 1.35, s));
     col = cam(q);
   } else if (fx == 2) {           // fisheye: a real lens curve, dark corners, a little colour split
-    vec2 d = (p-.5)*vec2(asp, 1.);
-    float R = .5*length(vec2(asp, 1.)), rn = length(d)/R, th = 1.12;
+    vec2 fc = vec2(.5, .46);
+    vec2 d = (p-fc)*vec2(asp, 1.);
+    float R = .5*length(vec2(asp, 1.)), rn = length(d)/R, th = 1.17;
     float k = rn > 0.0001 ? tan(rn*th)/tan(th)/rn : th/tan(th);
     vec2 u = d/vec2(asp, 1.);
-    col = vec3(cam(.5 + u*k*1.02).r, cam(.5 + u*k).g, cam(.5 + u*k*.98).b);
-    col *= 1. - .6*smoothstep(.55, 1.05, rn);
+    col = vec3(cam(fc + u*k*1.025).r, cam(fc + u*k).g, cam(fc + u*k*.975).b);
+    col *= 1. - .88*smoothstep(.5, 1., rn);
   } else if (fx == 3) {           // shake: zoom in and rattle, driven from the sound
     vec2 d = (p-.5)*vec2(asp, 1.);
     float cs = cos(shk.z), sn = sin(shk.z);
@@ -88,7 +89,7 @@ void main(){
     q = .5 + d/vec2(asp, 1.) + shk.xy;
     col = cam(q);
   } else if (fx == 5) {           // jelly: the picture wobbles, more when it gets loud
-    float a = .012 + .04*e;
+    float a = .024 + .036*e;
     vec2 z = .5 + (p-.5)*(1. - 2.4*a);
     q = z + a*vec2(sin(z.y*9. + t*5.2) + .5*sin(z.y*17. - t*7.1), cos(z.x*8. + t*4.4) + .5*cos(z.x*15. + t*6.3));
     col = cam(q);
