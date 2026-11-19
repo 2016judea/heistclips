@@ -8,6 +8,7 @@ import { splitLang, href, isLocal } from "../lib/i18n.js";
 import { localPage } from "../lib/pages_l10n.js";
 import { TOOLS as MCP_TOOLS } from "./mcp.js";
 import { queuePage } from "../lib/queuepage.js";
+import { loadPitch, pitchPage } from "../lib/pitch.js";
 
 const INDEXNOW_KEY = "066cce158f4bc73e04afdcb48bb189f7";
 
@@ -63,7 +64,13 @@ export default async function handler(req, res) {
     }
     if (p === "/") return send(res, 200, R.homePage(snap));
     let fm;
-    if ((fm = p.match(/^\/for\/([A-Za-z0-9_-]{2,64})$/i))) return send(res, 200, R.homePage(snap, "/for/" + fm[1]), undefined, 300);
+    if ((fm = p.match(/^\/for\/([A-Za-z0-9_-]{2,64})$/i))) {
+      // A slug with a stored pitch (a streamer clippers pull with no campaign paying) gets its
+      // own page; every other slug keeps the home page, as the 11/16 links expect.
+      const pitch = await loadPitch(fm[1].toLowerCase());
+      if (pitch) return send(res, 200, pitchPage(snap, pitch), undefined, 300);
+      return send(res, 200, R.homePage(snap, "/for/" + fm[1]), undefined, 300);
+    }
     if (p === "/requests") return send(res, 200, R.requestsPage(publicList(await loadBoard())), undefined, 30);
     if (p === "/.well-known/openai-apps-challenge") {
       if (!process.env.OPENAI_APPS_CHALLENGE) return send(res, 404, "not set", "text/plain", 10);
