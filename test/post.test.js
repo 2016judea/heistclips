@@ -93,3 +93,17 @@ test("hook lines wrap to at most three and drop emoji; times parse from seconds 
   assert.equal(seconds(3506), 3506); assert.equal(seconds("58:26"), 3506); assert.equal(seconds("1:02:03"), 3723); assert.equal(seconds("0h58m26s"), 3506);
   assert.ok(Number.isNaN(seconds("soon")));
 });
+
+test("TikTok chunks follow its size rules", async () => {
+  const { tiktokChunks } = await import("../lib/social.js");
+  const MB = 1024 * 1024;
+  assert.deepEqual(tiktokChunks(3 * MB), { chunk: 3 * MB, count: 1 });
+  assert.deepEqual(tiktokChunks(64 * MB), { chunk: 64 * MB, count: 1 });
+  for (const size of [65 * MB, 96.2 * MB | 0, 200 * MB, 500 * MB + 7]) {
+    const { chunk, count } = tiktokChunks(size);
+    assert.ok(chunk >= 5 * MB && chunk <= 64 * MB);
+    assert.equal(count, Math.floor(size / chunk));
+    const last = size - chunk * (count - 1);
+    assert.ok(last >= chunk && last <= 128 * MB, "last chunk " + last);
+  }
+});
