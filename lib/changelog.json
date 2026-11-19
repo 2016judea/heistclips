@@ -1,5 +1,32 @@
 [
   {
+    "id": "plan-my-clips",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Ask Claude or ChatGPT to plan your clips",
+    "body": "Tell the heistclips connector how many views your clips get. plan_my_clips answers with only the campaigns that can pay you, the moments to clip, the rules to follow and a caption with the tags they ask for.",
+    "link": "/connect",
+    "at": "2026-11-19T22:17:24.256Z",
+    "langs": {
+      "de": {
+        "title": "Lass Claude oder ChatGPT deine Clips planen",
+        "body": "Sag dem heistclips-Connector, wie viele Views deine Clips holen. plan_my_clips antwortet nur mit Kampagnen, die dir zahlen können, den Momenten zum Clippen, den Regeln und einer Caption mit den Tags, die sie verlangen."
+      },
+      "fr": {
+        "title": "Demande à Claude ou ChatGPT de planifier tes clips",
+        "body": "Dis au connecteur heistclips combien de vues font tes clips. plan_my_clips répond avec seulement les campagnes qui peuvent te payer, les moments à clipper, les règles à suivre et une légende avec les tags qu’elles demandent."
+      },
+      "pt": {
+        "title": "Peça ao Claude ou ao ChatGPT para planejar seus clipes",
+        "body": "Diga ao conector do heistclips quantas views seus clipes fazem. O plan_my_clips responde só com as campanhas que podem te pagar, os momentos para clipar, as regras a seguir e uma legenda com as tags que elas pedem."
+      },
+      "es": {
+        "title": "Pide a Claude o ChatGPT que planee tus clips",
+        "body": "Dile al conector de heistclips cuántas vistas hacen tus clips. plan_my_clips responde solo con las campañas que te pueden pagar, los momentos para clipear, las reglas a seguir y un texto con las etiquetas que piden."
+      }
+    }
+  },
+  {
     "id": "pay-at-your-size",
     "date": "2026-11-19",
     "type": "new",

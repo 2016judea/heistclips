@@ -13,6 +13,9 @@ import { JOB, newJobId, jobAgeMs, JOB_DEAD_MS, loadJob } from "../lib/cutjob.js"
 import { isTest } from "../lib/marks.js";
 import { callerOf, sealCaller, findGate, newAccountRefusal, isOutside, BUILDERS_LINE } from "../lib/callers.js";
 import { createAccount } from "../lib/accounts.js";
+import { planMyClips } from "../lib/plan.js";
+import { floorLine } from "../lib/atsize.js";
+import { loadTrend } from "../lib/trend.js";
 
 const SITE = "https://heistclips.com";
 const BASE = process.env.HC_BASE || SITE; // where this server reaches its own /api/v1 functions
@@ -31,6 +34,20 @@ export const TOOLS = [
       limit: { type: "integer", minimum: 1, maximum: 50, description: "How many to return (default 10)" },
     }, additionalProperties: false },
     annotations: { title: "Rank clipping campaigns", ...ANN },
+  },
+  {
+    name: "plan_my_clips",
+    title: "Plan my clips: which campaigns pay at my size, what to clip, the rules and a caption",
+    description: "A clipping plan for the user's size: only the campaigns that can actually pay a clip with their views (most campaigns pay nothing under a floor: a $10 minimum payout at $1 per 1K views pays nothing under 10,000 views, and pools pay nothing until your clips pass a total-views bar). For each: what a typical clip of theirs is likely to earn, the floor in plain words, the best moments to clip right now from that streamer's stream (with why chat reacted and hooks), the campaign's rule checklist (game, length, tags, disclosure, anything unread marked 'check the brief'), a ready caption with the required tags, and the exact cut_clip arguments and an editor link for each moment. Use for 'what should I clip today', 'which campaign can I actually earn from', 'I get about 800 views a clip, what pays', 'plan my clips for kaicenat'. Pass views_per_clip if the user says how many views their clips get (or account_size), and streamers/platforms if they name them. Never cuts or posts anything. Takes 5-25 seconds the first time a stream is read. Answer in the user's language.",
+    inputSchema: { type: "object", properties: {
+      views_per_clip: { type: "number", minimum: 1, description: "The user's typical views per clip, if they say it. Overrides account_size." },
+      account_size: { type: "string", enum: ["new", "5k", "50k"], description: "If they do not give a number: new = a new account, about 500 views a clip (default); 5k = about 5,000; 50k = about 50,000" },
+      streamers: { type: "array", items: { type: "string" }, maxItems: 10, description: "Streamers they clip: Twitch names or links, or kick.com/<name>. Leave out to consider every streamer a live campaign pays for." },
+      platforms: { type: "array", items: { type: "string", enum: ["tiktok", "youtube", "instagram", "x"] }, description: "Where they post. Leave out for any." },
+      limit: { type: "integer", minimum: 1, maximum: 5, description: "How many campaigns to plan (default 3)" },
+      moments_per_campaign: { type: "integer", minimum: 1, maximum: 5, description: "Moments per campaign (default 3)" },
+    }, additionalProperties: false },
+    annotations: { title: "Plan my clips", ...ANN },
   },
   {
     name: "clipping_campaign_details",
@@ -215,7 +232,7 @@ async function logCall(tool, ok, ms, meta, extra = {}) {
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
 
-export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back; if it answers status 'cutting', call cut_clip_status with the job code instead of cutting again), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do. If something heistclips did went wrong (an error, a broken or silent clip, wrong moments), offer report_a_bug and, if the user agrees, file it with everything you already know: stream, moment, tool, error text. whats_new lists the latest fixes and features.";
+export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back; if it answers status 'cutting', call cut_clip_status with the job code instead of cutting again), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use plan_my_clips when the user asks what to clip today or which campaign they can actually earn from: it takes their views per clip (or account size) and returns only campaigns that can pay at that size, with moments, the rule checklist, a caption with the required tags and cut_clip arguments (most campaigns pay nothing below a floor, so a new account's answer differs from the ranking). Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views (each row also says what a new account's typical clip is likely to earn and the floor), and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do. If something heistclips did went wrong (an error, a broken or silent clip, wrong moments), offer report_a_bug and, if the user agrees, file it with everything you already know: stream, moment, tool, error text. whats_new lists the latest fixes and features.";
 
 // A tool result may carry `log`: analytics fields for this call. It never reaches the client.
 const withLog = (result, log) => Object.defineProperty(result, "log", { value: log, enumerable: false });
@@ -263,7 +280,10 @@ const text = (obj) => ({ content: [{ type: "text", text: typeof obj === "string"
 
 const brief = (c, i) => ({
   rank: i + 1, title: c.title, owner: c.owner, id: c.id,
-  typical_per_clip: c.expected_per_clip, earned_per_clip_raw: c.earned_per_clip, rate_per_1k: c.rate_per_1k, per_post: c.per_post, cap_per_clip: c.cap_per_clip,
+  typical_per_clip: c.expected_per_clip, earned_per_clip_raw: c.earned_per_clip,
+  likely_per_clip: c.at_size ? { new_account: c.at_size.new.usd, about_5k_views: c.at_size["5k"].usd, about_50k_views: c.at_size["50k"].usd } : undefined,
+  floor: c.floor ? floorLine(c) || "no floor: every view pays" : undefined,
+  rate_per_1k: c.rate_per_1k, per_post: c.per_post, cap_per_clip: c.cap_per_clip,
   budget_left: c.budget_left, days_left: c.days_left, clippers: c.clippers_count, approved_clips: c.approved_clips,
   platforms: c.platforms, is_gta: c.is_gta, apply_first: c.approval_required,
   page: tag(`${SITE}/campaigns/${c.slug}`), join: c.source_url,
@@ -309,7 +329,7 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
     let list = snap.campaigns.filter(f === "gta" ? (c) => c.is_gta : f === "all" ? () => true : (c) => c.is_gaming);
     if (args.platform) list = list.filter((c) => c.platforms.includes(args.platform));
     const lim = Math.min(50, args.limit || 10);
-    return text({ generated_at: snap.generated_at, method: "typical_per_clip = budget paid on approved clips minus the top 3 earners, / the rest of approved clips, cut if the budget runs out within 3 days. null = no track record yet (ranked after, by cap).", summary: snap.summary, filter: f, total: list.length, campaigns: list.slice(0, lim).map(brief), more: tag(`${SITE}/gta-6-clipping-campaigns`) });
+    return text({ generated_at: snap.generated_at, method: "typical_per_clip = budget paid on approved clips minus the top 3 earners, / the rest of approved clips, cut if the budget runs out within 3 days. null = no track record yet (ranked after, by cap). It reflects established clippers: likely_per_clip is what a typical clip earns at three account sizes after the campaign's floor (0 = pays nothing at that size, null = floor unknown). For the user's own size and a plan, call plan_my_clips.", summary: snap.summary, filter: f, total: list.length, campaigns: list.slice(0, lim).map(brief), more: tag(`${SITE}/gta-6-clipping-campaigns`) });
   }
   if (name === "clipping_campaign_details") {
     const snap = await latestSnapshot();
@@ -324,6 +344,17 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
     if (gate.refused) { const { err, ...pub } = gate.refused; return withLog({ ...text({ ok: false, ...pub }), isError: true }, { err }); }
     const [{ out, log }] = await Promise.all([findClipMoments(args, { tag }), gate.counted]);
     return withLog(text(out), log);
+  }
+  if (name === "plan_my_clips") {
+    // Every stream it reads counts against the same per-caller find limit as find_clip_moments.
+    const gatedFind = async (a, o) => {
+      const gate = await findGate(meta.caller);
+      if (gate.refused) return { out: { found: false, message: gate.refused.error } };
+      const [r] = await Promise.all([findClipMoments(a, o), gate.counted]);
+      return r;
+    };
+    const { out, log } = await planMyClips(args, { tag, deps: { snapshot: latestSnapshot, trend: loadTrend, findClipMoments: gatedFind } });
+    return withLog(out.ok === false ? { ...text(out), isError: true } : text(out), log);
   }
   if (name === "cut_clip_status") return cutStatus(args.job);
   if (name === "cut_clip") {
