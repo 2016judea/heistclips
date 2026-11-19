@@ -43,6 +43,25 @@ export function pickMime() {
   return opts.find((t) => MediaRecorder.isTypeSupported(t)) || "";
 }
 
+// Twitch lists a segment whose audio it deleted for licensed music as "N-unmuted.ts", a file its
+// CDN answers 403 for; the one it serves is "N-muted.ts". Read as listed, a window that touched a
+// muted stretch stopped loading at that segment: "Loading the video… 21%" for two minutes, then a
+// recording that froze (zackrawrr 2932469290, 378 of 3,901 segments, 2026-11-19). lib/cut.js
+// already did this for the server cut.
+export function fixMutedPlaylist(text) { return String(text).replace(/-unmuted\.ts/g, "-muted.ts"); }
+
+// End of the buffered run that holds `now`. A hole up to `gap` s is hopped (hls.js skips those in
+// playback), and a run left behind by an earlier seek is not counted.
+export function runEnd(ranges, now, gap = 0.5) {
+  let end = null;
+  for (const [s, e] of ranges) {
+    if (end == null) { if (s <= now + 0.5 && e >= now - 0.1) end = e; }
+    else if (s <= end + gap) end = Math.max(end, e);
+    else break;
+  }
+  return end == null ? now : end;
+}
+
 export class Clipper {
   constructor(canvas) {
     this.canvas = canvas;
@@ -63,8 +82,22 @@ export class Clipper {
     if (this.hls) { this.hls.destroy(); this.hls = null; }
     const v = this.video;
     if (window.Hls && window.Hls.isSupported()) {
-      const hls = new window.Hls({ maxBufferLength: 60, maxMaxBufferLength: 120, startPosition: Math.max(0, start), enableWorker: true, backBufferLength: 60 });
+      const Base = window.Hls.DefaultConfig.loader;
+      class PlaylistLoader extends Base {
+        load(context, config, callbacks) {
+          const ok = callbacks.onSuccess;
+          callbacks.onSuccess = (resp, ...rest) => { if (typeof resp.data === "string") resp.data = fixMutedPlaylist(resp.data); ok(resp, ...rest); };
+          super.load(context, config, callbacks);
+        }
+      }
+      const hls = new window.Hls({ maxBufferLength: 50, maxMaxBufferLength: 60, startPosition: Math.max(0, start), enableWorker: true, backBufferLength: 60, pLoader: PlaylistLoader });
       this.hls = hls;
+      // What the loader is doing, so a wait can say what it is waiting for (record()).
+      const net = (this.net = { bytes: 0, frag: null, fatal: null, full: false });
+      const E = window.Hls.Events;
+      hls.on(E.FRAG_LOADING, (e, d) => { net.frag = d.frag; });
+      hls.on(E.FRAG_LOADED, (e, d) => { net.bytes += (d.frag.stats && d.frag.stats.total) || 0; net.frag = null; });
+      hls.on(E.ERROR, (e, d) => { if (d.fatal) net.fatal = d.details || "error"; if (d.details === "bufferFullError") net.full = true; });
       await new Promise((ok, bad) => {
         hls.on(window.Hls.Events.MANIFEST_PARSED, (e, d) => {
           // A master playlist (Kick) has several renditions: take the sharpest up to 1440p.
@@ -80,7 +113,13 @@ export class Clipper {
       await new Promise((ok, bad) => { v.onloadedmetadata = ok; v.onerror = () => bad(new Error("video failed to load")); });
     } else throw new Error("This browser cannot play the stream video.");
     await this.seek(start);
+    if (this.net && this.net.fatal && !v.videoWidth) throw new Error("video: " + this.net.fatal);
   }
+
+  ranges() { const b = this.video.buffered, out = []; for (let i = 0; i < b.length; i++) out.push([b.start(i), b.end(i)]); return out; }
+  loadedBytes() { const n = this.net; return n ? n.bytes + ((n.frag && n.frag.stats && n.frag.stats.loaded) || 0) : 0; }
+  cancel() { this.cancelled = true; }
+  checkCancel() { if (this.cancelled) throw Object.assign(new Error("cancelled"), { cancelled: true }); }
 
   seek(t) {
     const v = this.video;
@@ -92,11 +131,7 @@ export class Clipper {
     });
   }
 
-  bufferedTo(t) {
-    const b = this.video.buffered, now = this.video.currentTime;
-    for (let i = 0; i < b.length; i++) if (b.start(i) <= now + 0.5 && b.end(i) >= t - 0.3) return true;
-    return false;
-  }
+  bufferedTo(t) { return this.bufferedEnd() >= t - 0.3; }
 
   // A Twitch VOD of a stream that is still going is a growing (EVENT) playlist: hls.js treats it
   // as live and keeps reloading it, and the media only reaches as far as Twitch has written.
@@ -112,11 +147,7 @@ export class Clipper {
     return v.seekable.length ? v.seekable.end(v.seekable.length - 1) : 0;
   }
 
-  bufferedEnd() {
-    const b = this.video.buffered, now = this.video.currentTime;
-    for (let i = 0; i < b.length; i++) if (b.start(i) <= now + 0.5) return b.end(i);
-    return now;
-  }
+  bufferedEnd() { return runEnd(this.ranges(), this.video.currentTime); }
 
   // ---- drawing --------------------------------------------------------------------------
   draw(tOverride) {
@@ -365,20 +396,23 @@ export class Clipper {
         const chk = () => {
           sampleLevel(a.level, buf, bins, Math.floor((v.currentTime - start) * 4));
           onState && onState("Finding the loudest second…", 0.3 * Math.min(1, (v.currentTime - start) / (end - start)));
-          if (v.currentTime >= end || v.ended || performance.now() - t0 > ((end - start) / 4) * 1000 + 20000) return ok();
+          if (this.cancelled || v.currentTime >= end || v.ended || performance.now() - t0 > ((end - start) / 4) * 1000 + 20000) return ok();
           requestAnimationFrame(chk);
         };
         chk();
       });
     } finally { v.pause(); v.playbackRate = 1; a.monitor.gain.value = 1; }
+    this.checkCancel();
     this.loud.seed(bins);
     return loudestSecond(bins, start);
   }
 
-  // Record [start, end] in real time. onState(msg, frac) reports progress. Throws, before
-  // anything is recorded where it can, instead of handing back an empty file.
+  // Record [start, end] in real time. onState(msg, frac, detail) reports progress; detail says
+  // what a wait is waiting for. Throws, before anything is recorded where it can, instead of
+  // handing back an empty file. cancel() stops it at the next step (the error has .cancelled).
   async record(start, end, onState) {
     const v = this.video;
+    this.cancelled = false;
     if (!(end - start >= 2)) throw new Error("the clip window is empty (its end is before its start). Reset it with the buttons and render again");
     this.clipStart = start;
     const mime = pickMime();
@@ -393,27 +427,44 @@ export class Clipper {
       if (Date.now() - tw > 90000) throw new Error(`that moment isn't in Twitch's recording yet (it's ${Math.ceil(behind)} s ahead of it). Try again in a minute`);
       onState && onState(`Waiting for the live video to catch up (${Math.ceil(behind)} s to go)…`, 0);
       await sleep(1000);
+      this.checkCancel();
     }
     await this.seek(start);
     // Pre-buffer the whole window so the recording never freezes on a stall. Never restart the
     // loader while it is working: hls.startLoad() aborts the segment in flight, and calling it
     // every 400 ms meant a 10 s segment that takes longer than that never arrived (2026-11-19).
+    //
+    // The buffer is sized in seconds here, to the window plus a margin. hls.js's byte figure
+    // (maxBufferSize) only ever RAISES the buffer above maxBufferLength, never caps it below, so
+    // it is left alone: lifting it to 600 MB (a wrong guess at the 21% stall, 2026-11-19) made a
+    // 20 Mbps Kick source hold up to 300 MB.
     if (this.hls) {
       const c = this.hls.config;
       c.maxBufferLength = Math.max(c.maxBufferLength, end - start + 12);
-      c.maxMaxBufferLength = Math.max(c.maxMaxBufferLength, c.maxBufferLength * 2);
+      c.maxMaxBufferLength = Math.max(c.maxMaxBufferLength, c.maxBufferLength);
       c.backBufferLength = Math.max(c.backBufferLength, end - start + 15);
-      // hls.js also caps the buffer in BYTES (60 MB by default). A 1080p60 or 1440p source runs past
-      // that before a 40 s window is in, so loading sat at ~70% until the 2-minute timeout (2026-11-19).
-      c.maxBufferSize = Math.max(c.maxBufferSize || 0, 600 * 1000 * 1000);
     }
-    const t0 = Date.now();
-    let seen = -1, moved = Date.now();
-    while (!this.bufferedTo(end) && Date.now() - t0 < 120000) {
-      const got = this.bufferedEnd();
-      if (got > seen + 0.05) { seen = got; moved = Date.now(); }
-      else if (this.hls && Date.now() - moved > 20000) { this.hls.startLoad(Math.max(0, v.currentTime)); moved = Date.now(); }
-      onState && onState("Loading the video…", Math.max(0, Math.min(1, (got - start) / (end - start))) * 0.3);
+    // No fixed time limit: while bytes arrive the wait goes on and says so; when they stop it
+    // says that, restarts the loader up to three times, then fails with the reason. It used to
+    // give up silently after 120 s and record a window that was not there.
+    const site = /kick/i.test(String(this.url)) ? "Kick" : "Twitch";
+    let seen = -1, seenBytes = -1, moved = Date.now(), restarts = 0;
+    while (!this.bufferedTo(end)) {
+      this.checkCancel();
+      const got = this.bufferedEnd(), bytes = this.loadedBytes(), idle = Date.now() - moved;
+      // The browser's own buffer is full (a long window of a very high bitrate source): start
+      // with what is in; the recorder holds whenever playback has to wait for more.
+      if (this.net && this.net.full && got - v.currentTime >= Math.min(15, end - start)) break;
+      if (got > seen + 0.05 || bytes > seenBytes) { seen = Math.max(seen, got); seenBytes = bytes; moved = Date.now(); }
+      else if ((this.net && this.net.fatal) || idle > 20000) {
+        if (restarts >= 3) throw new Error(this.net && this.net.fatal ? `${site} refused part of this video (${this.net.fatal}). Try a different clip window` : `the video stopped arriving from ${site}. Check your connection and render again`);
+        restarts++;
+        if (this.net) this.net.fatal = null;
+        if (this.hls) this.hls.startLoad(Math.max(0, v.currentTime));
+        moved = Date.now(); seenBytes = this.loadedBytes();
+      }
+      const detail = idle > 4000 || restarts ? `no data from ${site} for ${Math.round(idle / 1000)} s` + (restarts ? `, retry ${restarts} of 3` : "") : bytes ? `${Math.round(bytes / 1e6)} MB in` : "";
+      onState && onState("Loading the video…", Math.max(0, Math.min(1, (got - start) / (end - start))) * 0.3, detail);
       await sleep(400);
     }
     if (this.opts.layout === "split" && (this.opts.punch || fxNeedsLoud(this.opts.camFx)) && this.punchWin !== start + "-" + end) {
@@ -437,7 +488,9 @@ export class Clipper {
     const onWait = () => { if (rec.state === "recording") rec.pause(); };
     const onPlay = () => { if (rec.state === "paused" && !document.hidden) rec.resume(); };
     // A hidden tab stops drawing frames: hold the video and the recording until it's back.
+    let lastT = -1, lastMove = performance.now();
     const onVis = () => {
+      lastMove = performance.now();
       if (document.hidden) { v.pause(); if (rec.state === "recording") rec.pause(); onState && onState("Paused: keep this tab open while it records", null); }
       else if (rec.state === "paused") { v.play().catch(() => {}); }
     };
@@ -456,7 +509,14 @@ export class Clipper {
           if (!rvfc) { this.draw(); frames++; }
           lv.getFloatTimeDomainData(buf);
           for (let i = 0; i < buf.length; i += 8) loudest = Math.max(loudest, Math.abs(buf[i]));
-          if (!document.hidden) onState && onState("Recording…", 0.3 + 0.7 * Math.min(1, (v.currentTime - start) / (end - start)));
+          // The picture has to keep moving: a recording that waits on video says so, and one that
+          // has waited 25 s fails with the reason (it used to sit at one percentage for good).
+          const now = performance.now();
+          if (v.currentTime > lastT + 0.01) { lastT = v.currentTime; lastMove = now; }
+          const held = document.hidden ? 0 : now - lastMove;
+          if (this.cancelled) { failed = Object.assign(new Error("cancelled"), { cancelled: true }); return ok(); }
+          if (held > 25000) { failed = new Error("the video stopped arriving part-way through the recording. Check your connection and render again"); return ok(); }
+          if (!document.hidden) onState && onState("Recording…", 0.3 + 0.7 * Math.min(1, (v.currentTime - start) / (end - start)), held > 2000 ? `waiting for more video (${Math.round(held / 1000)} s)` : "");
           if (v.currentTime >= end || v.ended) return ok();
           requestAnimationFrame(tick);
         };
@@ -471,7 +531,7 @@ export class Clipper {
     }
     const type = (mime || "video/webm").split(";")[0];
     const blob = new Blob(chunks, { type });
-    if (failed) throw new Error(failed.message || String(failed));
+    if (failed) throw failed instanceof Error ? failed : new Error(failed.message || String(failed));
     if (!blob.size) throw new Error("the recording came out empty");
     const secs = end - start;
     const fps = Math.min(60, Math.round(frames / Math.max(1, secs)));

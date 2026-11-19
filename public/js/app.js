@@ -1,6 +1,6 @@
 // The clip tool: paste -> moments (with why) -> cut -> download.
 import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitchTime, searchChannels, getClip, refinePeak, hooks } from "./twitch.js";
-import { Clipper, pickMime, camPreset, clampBox, CAM_DEFAULT } from "./render.js?v=11";
+import { Clipper, pickMime, camPreset, clampBox, CAM_DEFAULT } from "./render.js?v=12";
 import { FX } from "./fx.js?v=2";
 import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";
@@ -445,12 +445,18 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
     cl.draw();
   });
   syncCam(); syncSegs(); placeBox(); cl.fxPreview();
+  // On a slow connection the first picture can arrive after load() returns: say so, not "0×0".
+  const showSource = () => {
+    if (cl.video.videoWidth) { delete vstat.dataset.wait; vstat.textContent = `${cl.video.videoWidth}×${cl.video.videoHeight} source · renders at 1080×1920`; return; }
+    vstat.dataset.wait = "1"; vstat.textContent = "Loading video… (slow connection)";
+    cl.video.addEventListener("loadeddata", () => { if (vstat.dataset.wait) { showSource(); cl.draw(); } }, { once: true });
+  };
   const url = playlistPath(current.vod, "chunked");
   try {
     if (current.vod.platform === "kick" && m.live) current.vod.length = (Date.now() - current.vod.start_ms) / 1000;
     await cl.load(url, win.s);
     if (current.vod.status === "RECORDING") current.vod.length = Math.max(current.vod.length || 0, cl.availableEnd());
-    vstat.textContent = `${cl.video.videoWidth}×${cl.video.videoHeight} source · renders at 1080×1920`;
+    showSource();
   } catch (e) {
     // "chunked" is Twitch's source rendition; fall back to the next sharpest one that loads.
     try {
@@ -458,13 +464,15 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
       let ok = false;
       for (const q of ["1080p60", "720p60"]) { try { await cl.load(playlistPath(current.vod, q), win.s); ok = true; break; } catch (e3) {} }
       if (!ok) throw e;
-      vstat.textContent = `${cl.video.videoWidth}×${cl.video.videoHeight} source · renders at 1080×1920`;
+      showSource();
     }
     catch (e2) { vstat.textContent = "Couldn’t load the video: " + e.message + (m.live ? " (live moments need ~30 s before the video catches up; try again shortly)" : ""); return; }
   }
   $("#pv", ed).onclick = async () => { ph("clip_preview", { layout: cl.opts.layout }); $("#pv", ed).disabled = true; try { await cl.playWindow(win.s, win.e); } finally { $("#pv", ed).disabled = false; } };
   $("#rec", ed).onclick = async () => {
     const btn = $("#rec", ed);
+    // While a render runs the same button is its way out.
+    if (btn.dataset.busy) { btn.disabled = true; cl.cancel(); ph("clip_render_cancel", {}); return; }
     btn.disabled = true;
     try { cl.ensureAudio(); cl.audio.ac.resume().catch(() => {}); } catch (e) {} // sound starts only inside a click
     const say = (html) => ($("#dl", ed).querySelector(".rnote") || $("#dl", ed).insertAdjacentElement("afterbegin", Object.assign(document.createElement("div"), { className: "note rnote" }))).innerHTML = html;
@@ -479,8 +487,10 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
     }
     ph("clip_render_start", { cam_fx: cl.opts.layout === "split" ? cl.opts.camFx : null, layout: cl.opts.layout, hook: !!cl.opts.hook, chat: cl.opts.chat, len: lenNow, live: !!m.live, vod_live: current.vod.status === "RECORDING" });
     const old = $("#dl", ed).querySelector(".rnote"); if (old) old.remove();
+    const label = btn.textContent;
+    btn.dataset.busy = "1"; btn.textContent = "Cancel"; btn.disabled = false; $("#pv", ed).disabled = true;
     try {
-      const out = await cl.record(win.s, win.e, (msg, f) => { vstat.textContent = f == null ? msg : `${msg} ${Math.round(f * 100)}%`; });
+      const out = await cl.record(win.s, win.e, (msg, f, more) => { vstat.textContent = (f == null ? msg : `${msg} ${Math.round(f * 100)}%`) + (more ? ` · ${more}` : ""); });
       const c = await creditCall("commit", { ticket: t.ticket, bytes: out.blob.size, meta: { vod: current.vod.id, t: Math.round(win.s), layout: cl.opts.layout } }).catch(() => ({}));
       const href = URL.createObjectURL(out.blob);
       const name = `${current.vod.channel}-${twitchTime(win.s)}-${cl.opts.layout}.${out.ext}`;
@@ -490,10 +500,13 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
       vstat.textContent = "Done. Pick another hook and render again for a second, different post.";
       ph("clip_render_done", { cam_fx: cl.opts.layout === "split" ? cl.opts.camFx : null, fx_loud_beats: cl.opts.layout === "split" && (cl.opts.camFx === "shake" || cl.opts.camFx === "wobble") ? out.fxHits : null, cam_style: cl.opts.layout === "split" ? cl.opts.camStyle : null, cam_out: cl.opts.camOut, punch_at: cl.opts.punch && cl.punchAt != null ? Math.round((cl.punchAt - win.s) * 10) / 10 : null, mb: Math.round(mb * 10) / 10, ext: out.ext, fps: out.fps, mbps: out.mbps, source: out.source, charged: !!c.ok, sound: out.sound, vod_live: current.vod.status === "RECORDING" });
     } catch (e) {
-      vstat.textContent = "Render failed: " + e.message + ". Nothing was charged.";
-      say("Render failed: " + h(e.message) + ". <b>Nothing was charged.</b>");
-      ph("clip_render_fail", { err: String(e.message).slice(0, 80), vod_live: current.vod.status === "RECORDING", len: lenNow });
-    } finally { btn.disabled = false; }
+      if (e.cancelled) { vstat.textContent = "Cancelled. Nothing was charged."; cl.seek(win.s); }
+      else {
+        vstat.textContent = "Render failed: " + e.message + ". Nothing was charged.";
+        say("Render failed: " + h(e.message) + ". <b>Nothing was charged.</b>");
+        ph("clip_render_fail", { err: String(e.message).slice(0, 80), vod_live: current.vod.status === "RECORDING", len: lenNow });
+      }
+    } finally { delete btn.dataset.busy; btn.textContent = label; btn.disabled = false; $("#pv", ed).disabled = false; }
   };
 }
 

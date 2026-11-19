@@ -26,6 +26,29 @@ const s = (n) => (n === "1" ? "" : "s");
 // One builder per language where a string is not enough; `by` picks the current language's.
 const by = (o) => (m) => o[lang](m);
 
+// What a render is waiting for (the part after " · "), and why one failed. render.js writes these.
+const sub = (table, x) => { for (const r of table) if (r[0].test(x)) return x.replace(r[0], r[1][lang]); return x; };
+const MORE = [
+  [/^(\d+) MB in$/, { de: "$1 MB geladen", fr: "$1 Mo reçus", pt: "$1 MB recebidos", es: "$1 MB recibidos" }],
+  [/^no data from (Twitch|Kick) for (\d+) s, retry (\d) of 3$/, { de: "seit $2 s keine Daten von $1, Versuch $3 von 3", fr: "aucune donnée de $1 depuis $2 s, essai $3 sur 3", pt: "sem dados da $1 há $2 s, tentativa $3 de 3", es: "sin datos de $1 desde hace $2 s, intento $3 de 3" }],
+  [/^no data from (Twitch|Kick) for (\d+) s$/, { de: "seit $2 s keine Daten von $1", fr: "aucune donnée de $1 depuis $2 s", pt: "sem dados da $1 há $2 s", es: "sin datos de $1 desde hace $2 s" }],
+  [/^waiting for more video \((\d+) s\)$/, { de: "wartet auf mehr Video ($1 s)", fr: "en attente de la suite de la vidéo ($1 s)", pt: "esperando mais vídeo ($1 s)", es: "esperando más video ($1 s)" }],
+];
+const more = (x) => (x ? " · " + sub(MORE, x) : "");
+const ERR = [
+  [/^the clip window is empty \(its end is before its start\)\. Reset it with the buttons and render again$/, { de: "der Clip-Ausschnitt ist leer (das Ende liegt vor dem Start). Setz ihn mit den Knöpfen neu und render nochmal", fr: "la fenêtre du clip est vide (la fin est avant le début). Règle-la avec les boutons et relance le rendu", pt: "o trecho está vazio (o fim vem antes do início). Ajuste com os botões e renderize de novo", es: "el tramo está vacío (el final está antes del inicio). Ajústalo con los botones y renderiza otra vez" }],
+  [/^This browser cannot record video\. Use Chrome, Edge or Safari on a computer\.?$/, { de: "Dieser Browser kann kein Video aufnehmen. Nimm Chrome, Edge oder Safari am Computer", fr: "Ce navigateur ne peut pas enregistrer de vidéo. Utilise Chrome, Edge ou Safari sur un ordinateur", pt: "Este navegador não grava vídeo. Use Chrome, Edge ou Safari no computador", es: "Este navegador no puede grabar video. Usa Chrome, Edge o Safari en un ordenador" }],
+  [/^the browser blocked the sound, so the clip would be silent\. Click Render again$/, { de: "der Browser hat den Ton blockiert, der Clip wäre stumm. Klick nochmal auf Rendern", fr: "le navigateur a bloqué le son, le clip serait muet. Relance le rendu", pt: "o navegador bloqueou o som, então o clipe ficaria mudo. Clique em Renderizar de novo", es: "el navegador bloqueó el sonido, así que el clip saldría mudo. Pulsa Renderizar otra vez" }],
+  [/^that part of the stream isn't in the video$/, { de: "dieser Teil des Streams ist nicht im Video", fr: "cette partie du stream n’est pas dans la vidéo", pt: "essa parte da live não está no vídeo", es: "esa parte del directo no está en el video" }],
+  [/^that moment isn't in Twitch's recording yet \(it's (\d+) s ahead of it\)\. Try again in a minute$/, { de: "dieser Moment ist noch nicht in der Twitch-Aufnahme (er liegt $1 s davor). Versuch es in einer Minute nochmal", fr: "ce moment n’est pas encore dans l’enregistrement de Twitch (il a $1 s d’avance). Réessaie dans une minute", pt: "esse momento ainda não está na gravação da Twitch (está $1 s à frente). Tente de novo em um minuto", es: "ese momento todavía no está en la grabación de Twitch (va $1 s por delante). Inténtalo otra vez en un minuto" }],
+  [/^(Twitch|Kick) refused part of this video \((.*)\)\. Try a different clip window$/, { de: "$1 hat einen Teil dieses Videos verweigert ($2). Versuch einen anderen Clip-Ausschnitt", fr: "$1 a refusé une partie de cette vidéo ($2). Essaie une autre fenêtre de clip", pt: "a $1 recusou parte deste vídeo ($2). Tente outro trecho", es: "$1 rechazó parte de este video ($2). Prueba con otro tramo" }],
+  [/^the video stopped arriving from (Twitch|Kick)\. Check your connection and render again$/, { de: "von $1 kam kein Video mehr an. Check deine Verbindung und render nochmal", fr: "la vidéo a cessé d’arriver depuis $1. Vérifie ta connexion et relance le rendu", pt: "o vídeo parou de chegar da $1. Confira sua conexão e renderize de novo", es: "el video dejó de llegar desde $1. Revisa tu conexión y renderiza otra vez" }],
+  [/^the video stopped arriving part-way through the recording\. Check your connection and render again$/, { de: "mitten in der Aufnahme kam kein Video mehr an. Check deine Verbindung und render nochmal", fr: "la vidéo a cessé d’arriver en plein enregistrement. Vérifie ta connexion et relance le rendu", pt: "o vídeo parou de chegar no meio da gravação. Confira sua conexão e renderize de novo", es: "el video dejó de llegar a mitad de la grabación. Revisa tu conexión y renderiza otra vez" }],
+  [/^the recording came out empty$/, { de: "die Aufnahme war leer", fr: "l’enregistrement est sorti vide", pt: "a gravação saiu vazia", es: "la grabación salió vacía" }],
+  [/^the browser's video encoder stopped$/, { de: "der Video-Encoder des Browsers hat aufgehört", fr: "l’encodeur vidéo du navigateur s’est arrêté", pt: "o codificador de vídeo do navegador parou", es: "el codificador de video del navegador se detuvo" }],
+];
+const err = (x) => sub(ERR, x);
+
 const RULES = [
   // ---- looking up, reading
   [/^Looking up (.+)…$/, { de: "Suche $1…", fr: "Recherche de $1…", pt: "Procurando $1…", es: "Buscando $1…" }],
@@ -129,6 +152,7 @@ const RULES = [
   [/^Show it anyway$/, { de: "Trotzdem zeigen", fr: "L’afficher quand même", pt: "Mostrar mesmo assim", es: "Mostrar igual" }],
   // ---- the editor
   [/^Loading video…$/, { de: "Video wird geladen…", fr: "Chargement de la vidéo…", pt: "Carregando o vídeo…", es: "Cargando el video…" }],
+  [/^Loading video… \(slow connection\)$/, { de: "Video wird geladen… (langsame Verbindung)", fr: "Chargement de la vidéo… (connexion lente)", pt: "Carregando o vídeo… (conexão lenta)", es: "Cargando el video… (conexión lenta)" }],
   [/^Layout$/, { de: "Layout", fr: "Mise en page", pt: "Layout", es: "Formato" }],
   [/^Facecam \+ gameplay$/, { de: "Facecam + Gameplay", fr: "Facecam + gameplay", pt: "Facecam + gameplay", es: "Facecam + gameplay" }],
   [/^Full frame, blurred fill$/, { de: "Ganzes Bild, unscharfer Rand", fr: "Image entière, fond flouté", pt: "Quadro inteiro, fundo desfocado", es: "Cuadro completo, fondo desenfocado" }],
@@ -146,6 +170,12 @@ const RULES = [
   [/^Big head$/, { de: "Riesenkopf", fr: "Grosse tête", pt: "Cabeção", es: "Cabezón" }], [/^Fisheye$/, { de: "Fischauge", fr: "Fisheye", pt: "Olho de peixe", es: "Ojo de pez" }],
   [/^Shake when loud$/, { de: "Wackeln, wenn es laut wird", fr: "Tremble quand ça crie", pt: "Treme quando grita", es: "Tiembla cuando hay gritos" }],
   [/^Deep fried$/, { de: "Deep Fried", fr: "Deep fried", pt: "Deep fried", es: "Deep fried" }], [/^Jelly$/, { de: "Wackelpudding", fr: "Gelée", pt: "Gelatina", es: "Gelatina" }],
+  [/^Loading the video… (\d+)%(?: · (.*))?$/, by({ de: (m) => `Video wird geladen… ${m[1]} %` + more(m[2]), fr: (m) => `Chargement de la vidéo… ${m[1]} %` + more(m[2]), pt: (m) => `Carregando o vídeo… ${m[1]}%` + more(m[2]), es: (m) => `Cargando el video… ${m[1]} %` + more(m[2]) })],
+  [/^Recording… (\d+)%(?: · (.*))?$/, by({ de: (m) => `Aufnahme läuft… ${m[1]} %` + more(m[2]), fr: (m) => `Enregistrement… ${m[1]} %` + more(m[2]), pt: (m) => `Gravando… ${m[1]}%` + more(m[2]), es: (m) => `Grabando… ${m[1]} %` + more(m[2]) })],
+  [/^Waiting for the live video to catch up \((\d+) s to go\)… 0%$/, { de: "Warte, bis das Live-Video nachzieht (noch $1 s)…", fr: "On attend que la vidéo du live rattrape (encore $1 s)…", pt: "Esperando o vídeo ao vivo alcançar (faltam $1 s)…", es: "Esperando a que el video en vivo alcance (faltan $1 s)…" }],
+  [/^Paused: keep this tab open while it records$/, { de: "Pausiert: Lass diesen Tab offen, solange aufgenommen wird", fr: "En pause : garde cet onglet ouvert pendant l’enregistrement", pt: "Pausado: deixe esta aba aberta enquanto grava", es: "En pausa: deja esta pestaña abierta mientras graba" }],
+  [/^Cancel$/, { de: "Abbrechen", fr: "Annuler", pt: "Cancelar", es: "Cancelar" }],
+  [/^Cancelled\. Nothing was charged\.$/, { de: "Abgebrochen. Es wurde nichts berechnet.", fr: "Annulé. Rien n’a été débité.", pt: "Cancelado. Nada foi cobrado.", es: "Cancelado. No se cobró nada." }],
   [/^Finding the loudest second… (\d+)%$/, { de: "Suche die lauteste Sekunde… $1 %", fr: "Recherche de la seconde la plus forte… $1 %", pt: "Procurando o segundo mais alto… $1%", es: "Buscando el segundo más fuerte… $1 %" }],
   [/^Facecam size$/, { de: "Größe der Facecam", fr: "Taille de la facecam", pt: "Tamanho da facecam", es: "Tamaño de la facecam" }],
   [/^Pan gameplay$/, { de: "Gameplay verschieben", fr: "Décaler le gameplay", pt: "Mover o gameplay", es: "Mover el gameplay" }],
@@ -170,8 +200,8 @@ const RULES = [
     pt: (m) => `Não deu para carregar o vídeo: ${m[1]}` + (m[2] ? " (momento ao vivo precisa de uns 30 s até o vídeo alcançar; tente de novo já já)" : ""),
     es: (m) => `No se pudo cargar el video: ${m[1]}` + (m[2] ? " (un momento en vivo necesita unos 30 s hasta que el video lo alcance; inténtalo de nuevo en un momento)" : "") })],
   [/^Done\. Pick another hook and render again for a second, different post\.$/, { de: "Fertig. Nimm einen anderen Hook und render nochmal: das ist dein zweiter, anderer Post.", fr: "C’est prêt. Choisis un autre hook et relance le rendu pour un deuxième post, différent.", pt: "Pronto. Escolha outro gancho e renderize de novo para um segundo post, diferente.", es: "Listo. Elige otro gancho y renderiza otra vez para una segunda publicación, distinta." }],
-  [/^Render failed: (.*?)\. Nothing was charged\.$/, { de: "Rendern fehlgeschlagen: $1. Es wurde nichts berechnet.", fr: "Le rendu a échoué : $1. Rien n’a été débité.", pt: "A renderização falhou: $1. Nada foi cobrado.", es: "El render falló: $1. No se cobró nada." }],
-  [/^Render failed: (.*?)\.$/, { de: "Rendern fehlgeschlagen: $1.", fr: "Le rendu a échoué : $1.", pt: "A renderização falhou: $1.", es: "El render falló: $1." }],
+  [/^Render failed: (.*?)\. Nothing was charged\.$/, by({ de: (m) => `Rendern fehlgeschlagen: ${err(m[1])}. Es wurde nichts berechnet.`, fr: (m) => `Le rendu a échoué : ${err(m[1])}. Rien n’a été débité.`, pt: (m) => `A renderização falhou: ${err(m[1])}. Nada foi cobrado.`, es: (m) => `El render falló: ${err(m[1])}. No se cobró nada.` })],
+  [/^Render failed: (.*?)\.$/, by({ de: (m) => `Rendern fehlgeschlagen: ${err(m[1])}.`, fr: (m) => `Le rendu a échoué : ${err(m[1])}.`, pt: (m) => `A renderização falhou: ${err(m[1])}.`, es: (m) => `El render falló: ${err(m[1])}.` })],
   [/^Nothing was charged\.$/, { de: "Es wurde nichts berechnet.", fr: "Rien n’a été débité.", pt: "Nada foi cobrado.", es: "No se cobró nada." }],
   [/^Download (\w+) · (.*)$/, { de: "$1 herunterladen · $2", fr: "Télécharger le $1 · $2", pt: "Baixar $1 · $2", es: "Descargar $1 · $2" }],
   [/^Cut from the (.+) source\.$/, { de: "Geschnitten aus der $1-Quelle.", fr: "Coupé depuis la source $1.", pt: "Cortado da fonte $1.", es: "Cortado de la fuente $1." }],
