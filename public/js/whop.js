@@ -100,7 +100,7 @@ document.addEventListener("click", async (e) => {
     picked = results.find((c) => c.id === p.dataset.pick);
     document.querySelectorAll("[data-pick]").forEach((b) => b.classList.toggle("on", b === p));
     $("#w-st").textContent = "Campaign: " + picked.title;
-    if (!$("#w-ch").value.trim() && picked.suggested_channels.length) $("#w-ch").value = picked.suggested_channels.map((k) => (k.startsWith("kick:") ? "kick.com/" + k.slice(5) : k.slice(7))).join(", ");
+    if (picked.suggested_channels.length) $("#w-ch").value = picked.suggested_channels.map((k) => (k.startsWith("kick:") ? "kick.com/" + k.slice(5) : k.slice(7))).join(", ");
     $("#w-save").disabled = false;
     return;
   }
