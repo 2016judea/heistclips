@@ -2,7 +2,7 @@
 // same-origin /tv/ proxy, a canvas draws the layout, hook and chat, and MediaRecorder encodes
 // in real time on the visitor's own hardware. Nothing is uploaded; nothing costs us compute.
 
-import { CamFx, Loud, shake, fxNeedsLoud, fxMoves, BIGHEAD_PAD } from "./fx.js?v=2";
+import { CamFx, Loud, shake, fxNeedsLoud, fxMoves, BIGHEAD_PAD } from "./fx.js?v=3";
 
 export const W = 1080, H = 1920;
 

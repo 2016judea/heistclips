@@ -89,7 +89,7 @@ void main(){
     q = .5 + d/vec2(asp, 1.) + shk.xy;
     col = cam(q);
   } else if (fx == 5) {           // jelly: the picture wobbles, more when it gets loud
-    float a = .024 + .036*e;
+    float a = .045 + .035*e;
     vec2 z = .5 + (p-.5)*(1. - 2.4*a);
     q = z + a*vec2(sin(z.y*9. + t*5.2) + .5*sin(z.y*17. - t*7.1), cos(z.x*8. + t*4.4) + .5*cos(z.x*15. + t*6.3));
     col = cam(q);
@@ -116,6 +116,10 @@ export const BIGHEAD_PAD = 0.14;
 export class CamFx {
   constructor() {
     this.cv = document.createElement("canvas");
+    // Only the facecam goes to the shader, never the whole video frame: a 1440p frame is 3.7 million
+    // pixels to hand over 60 times a second, the facecam is a tenth of that. Measured 2026-11-19 on
+    // a busy laptop: whole-frame uploads left 5 of 8 big-head exports near 47 fps.
+    this.crop = document.createElement("canvas"); this.cctx = this.crop.getContext("2d", { alpha: false });
     const gl = (this.gl = this.cv.getContext("webgl", { alpha: false, antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false }));
     if (!gl) return;
     const sh = (type, s) => { const x = gl.createShader(type); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
@@ -141,8 +145,11 @@ export class CamFx {
     const cw = Math.round(w * (1 + 2 * pad)), ch = Math.round(h * (1 + 2 * pad));
     if (this.cv.width !== cw || this.cv.height !== ch) { this.cv.width = cw; this.cv.height = ch; }
     gl.viewport(0, 0, cw, ch);
-    try { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video); } catch (err) { return null; }
-    gl.uniform4f(this.u.src, src.x / vw, src.y / vh, src.w / vw, src.h / vh);
+    const k = Math.min(1, w / src.w, h / src.h), sw = Math.max(2, Math.round(src.w * k)), sh = Math.max(2, Math.round(src.h * k));
+    if (this.crop.width !== sw || this.crop.height !== sh) { this.crop.width = sw; this.crop.height = sh; }
+    this.cctx.drawImage(video, src.x, src.y, src.w, src.h, 0, 0, sw, sh);
+    try { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, this.crop); } catch (err) { return null; }
+    gl.uniform4f(this.u.src, 0, 0, 1, 1);
     gl.uniform2f(this.u.res, w, h); gl.uniform1f(this.u.pad, pad); gl.uniform1i(this.u.fx, FX_ID[fx]);
     gl.uniform1f(this.u.t, t % 1000); gl.uniform1f(this.u.e, e);
     gl.uniform4f(this.u.shk, shk ? shk.dx : 0, shk ? shk.dy : 0, shk ? shk.rot : 0, shk ? shk.zoom : 1);

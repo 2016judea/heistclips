@@ -1,7 +1,7 @@
 // The clip tool: paste -> moments (with why) -> cut -> download.
 import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitchTime, searchChannels, getClip, refinePeak, hooks } from "./twitch.js";
-import { Clipper, pickMime, camPreset, clampBox, CAM_DEFAULT } from "./render.js?v=12";
-import { FX } from "./fx.js?v=2";
+import { Clipper, pickMime, camPreset, clampBox, CAM_DEFAULT } from "./render.js?v=13";
+import { FX } from "./fx.js?v=3";
 import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";
 import { paywallHTML } from "./paywall.js";
@@ -364,7 +364,8 @@ async function openEditor(i) {
 <label style="margin-top:10px">Put the facecam</label><div class="seg" data-k="camOut"><button data-v="top">On top</button><button data-v="bottom">At the bottom</button></div>
 <label style="margin-top:10px">Facecam style</label><div class="seg" data-k="camStyle"><button data-v="split">Panel</button><button data-v="rounded">Rounded box</button><button data-v="circle">Circle</button></div>
 <div class="seg" data-k="punch" style="margin-top:6px"><button data-v="0">No zoom</button><button data-v="1">Punch-in on the loudest second</button></div>
-<label style="margin-top:10px">Funny facecam</label><div class="seg" data-k="camFx"><button data-v="none">Off</button><button data-v="bighead">Big head</button><button data-v="fisheye">Fisheye</button><button data-v="shake">Shake when loud</button><button data-v="fried">Deep fried</button><button data-v="wobble">Jelly</button></div></div>
+<label style="margin-top:10px">Funny facecam</label><div class="seg" data-k="camFx"><button data-v="none">Off</button><button data-v="bighead">Big head</button><button data-v="fisheye">Fisheye</button><button data-v="shake">Shake when loud</button><button data-v="fried">Deep fried</button><button data-v="wobble">Jelly</button></div>
+<p class="small" id="fxhint" hidden>Big head and Fisheye blow up the middle of the box. Drag the box so the face is in the middle.</p></div>
 <div><label>Pan gameplay</label><input type="range" min="-1" max="1" step="0.05" value="0" data-k="pan"></div>
 <div><label>Hook (first thing they read). Edit any line.</label><div class="hooks">${m.hooks.map((t, k) => `<label><input type="radio" name="hk" value="${k}" ${k === 0 ? "checked" : ""}><input type="text" value="${h(t)}" data-hook="${k}"></label>`).join("")}<label><input type="radio" name="hk" value="none"><span>No hook</span></label></div>
 <div class="seg" data-k="hookMode" style="margin-top:6px"><button data-v="always" class="on">Hook whole clip</button><button data-v="first">First 3 s only</button></div></div>
@@ -411,7 +412,7 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
   });
   const endDrag = () => { if (drag) { drag = null; saveCam(); ph("facecam_box", { w: Math.round(cl.opts.cam.w * 100), h: Math.round(cl.opts.cam.h * 100) }); } };
   box.addEventListener("pointerup", endDrag); box.addEventListener("pointercancel", endDrag);
-  const syncCam = () => ($("#camrow", ed).hidden = cl.opts.layout !== "split");
+  const syncCam = () => { $("#camrow", ed).hidden = cl.opts.layout !== "split"; $("#fxhint", ed).hidden = !(cl.opts.camFx === "bighead" || cl.opts.camFx === "fisheye"); };
   ed.addEventListener("click", (e) => {
     const b = e.target.closest(".seg button");
     if (b) {
@@ -495,7 +496,7 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
       const href = URL.createObjectURL(out.blob);
       const name = `${current.vod.channel}-${twitchTime(win.s)}-${cl.opts.layout}.${out.ext}`;
       const mb = out.blob.size / 1e6;
-      $("#dl", ed).insertAdjacentHTML("afterbegin", `<div><video src="${href}" controls playsinline></video><a class="btn" href="${href}" download="${h(name)}">Download ${out.ext.toUpperCase()} · 1080×1920 · ${out.fps} fps · ${out.mbps} Mbps (${mb.toFixed(1)} MB)</a><p class="small">Cut from the ${h(out.source)} source.</p>${out.ext === "webm" ? `<p class="small">WebM plays on TikTok and YouTube. For Instagram, Safari or Chrome 126+ export MP4.</p>` : ""}${out.sound ? "" : `<p class="small">No sound came through for this stretch${current.vod.muted && current.vod.muted.some((x) => x.start < out.end && x.end > win.s) ? ": Twitch muted it in the VOD (licensed music)" : ""}.</p>`}</div>`);
+      $("#dl", ed).insertAdjacentHTML("afterbegin", `<div><video src="${href}" controls playsinline></video><a class="btn" href="${href}" download="${h(name)}">Download ${out.ext.toUpperCase()} · 1080×1920 · ${out.fps} fps · ${out.mbps} Mbps (${mb.toFixed(1)} MB)</a><p class="small">Cut from the ${h(out.source)} source.</p>${cl.opts.layout === "split" && cl.opts.camFx !== "none" && out.fps > 33 && out.fps < 55 ? `<p class="small">This one came out at ${out.fps} fps, not 60: the computer was busy while it recorded. Render it again, or turn the funny facecam off for a smooth 60.</p>` : ""}${out.ext === "webm" ? `<p class="small">WebM plays on TikTok and YouTube. For Instagram, Safari or Chrome 126+ export MP4.</p>` : ""}${out.sound ? "" : `<p class="small">No sound came through for this stretch${current.vod.muted && current.vod.muted.some((x) => x.start < out.end && x.end > win.s) ? ": Twitch muted it in the VOD (licensed music)" : ""}.</p>`}</div>`);
       document.dispatchEvent(new CustomEvent("hc:rendered", { detail: { blob: out.blob, ext: out.ext, mount: $("#dl", ed).firstElementChild, caption: cl.opts.hook || "" } }));
       vstat.textContent = "Done. Pick another hook and render again for a second, different post.";
       ph("clip_render_done", { cam_fx: cl.opts.layout === "split" ? cl.opts.camFx : null, fx_loud_beats: cl.opts.layout === "split" && (cl.opts.camFx === "shake" || cl.opts.camFx === "wobble") ? out.fxHits : null, cam_style: cl.opts.layout === "split" ? cl.opts.camStyle : null, cam_out: cl.opts.camOut, punch_at: cl.opts.punch && cl.punchAt != null ? Math.round((cl.punchAt - win.s) * 10) / 10 : null, mb: Math.round(mb * 10) / 10, ext: out.ext, fps: out.fps, mbps: out.mbps, source: out.source, charged: !!c.ok, sound: out.sound, vod_live: current.vod.status === "RECORDING" });
