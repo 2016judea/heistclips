@@ -43,6 +43,23 @@ email when new clips land.
 | `api/autopilot.js` | The cron, and its cap: 25 channels or 85 s a run, 2 Kick channels, 30 mails a day. |
 | `scripts/dev_local.mjs` | Local server whose storage is a local folder. Use it for anything that writes. |
 
+## Whop app
+
+heistclips installs into a Whop (app `app_my7kSid9rb0xHU`, in app-store review since 2026-11-19;
+install link: https://whop.com/apps/app_my7kSid9rb0xHU/install). The campaign owner picks their
+Content Rewards campaign and names the channels it pays for; their clippers open heistclips
+inside the whop and get that campaign's pay, rules and a queue of ready clips, plus the moment
+finder. Whop's `x-whop-user-token` is verified against its JWKS and access is checked with
+Whop on every request; only the business's team can change the campaign.
+
+| Path | What |
+|---|---|
+| `api/whop.js` | `/experiences/<exp_…>` (members) and `/dashboard/<biz_…>` (owner default), and their API. |
+| `lib/whop.js` | Token verification, access check, per-installation config. |
+| `lib/whoppage.js`, `public/js/whop.js` | The view inside Whop's iframe. |
+
+Env: `WHOP_APP_ID`, `WHOP_API_KEY`.
+
 ## Use it from an agent
 
 **MCP server** (no key, no account): `https://heistclips.com/mcp`
