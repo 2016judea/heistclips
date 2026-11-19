@@ -159,3 +159,88 @@ its one derived number has a 100× spread. Post and Clipper are scope, not reali
 once a clipper connects their accounts, which is the v1 step. The true can't-fills are other
 clippers' posts, min_views, structured rules and GTA VI track fingerprints; each ships as a
 named proxy above, never as the real thing.
+
+---
+
+# Autopilot — ideal model (written 2026-11-19, before any of it was checked)
+
+*Same rule, step zero. Written from the need alone; the reality check below it was filled
+afterwards.*
+
+## Need
+
+72 of 107 clip-makers came back for more and 12 made 10+ clips (PostHog, 11/16–11/19). The
+work they repeat is: open the tool, paste the same streamers, wait, pick, decide which
+campaign the clip is for, write a hook. Autopilot does every one of those steps while they
+are away. They open a list of clips that are ready to post, each already tied to the
+campaign that pays most for it.
+
+## Entities
+
+### Clipper identity — who this queue belongs to, with no login wall
+| field | question it answers |
+|---|---|
+| queue_key (secret, in a private link) | is this the same person on their phone and their laptop |
+| device_ids[] | which browsers hold this queue (credits stay per browser, as today) |
+| email (optional, confirmed) | where do we tell them clips are ready; how do they get the link back |
+| push_subscriptions[] | which of their browsers can be pinged |
+| paid_key (optional) | do their bought clips follow them to the next device |
+
+### Watchlist — what they asked us to watch
+| field | question |
+|---|---|
+| channels[] (platform, login) | whose streams do I clip |
+| campaign_ids[] or "auto" | which campaigns am I in (auto = any campaign that pays for a streamer I watch) |
+| platforms_i_post_on[] | which of a campaign's accepted platforms count for me |
+| notify (push / email / off), quiet hours | when may you interrupt me |
+
+### Watched stream — one row per channel, however many people watch it
+| field | question |
+|---|---|
+| platform, login, name, avatar | who |
+| watchers_count | is anyone still asking for this (0 = stop scanning) |
+| is_live, current_vod_id, game, title | what is happening now |
+| scanned_to (per VOD), scanned_at | how far have we read; how stale is the queue |
+| next_scan_at | when is it this channel's turn again |
+
+### Moment — as in the first model, plus what a queue needs
+| field | question |
+|---|---|
+| id, vod_id, t_start, t_end, t_peak, found_at | where exactly, and how fresh |
+| chat_ratio, event_type, clip_requests, phrase | why it will travel |
+| twitch_clips, twitch_clip_views | is it proven; is it taken |
+| music_risk | will it be claimed |
+| game_at_that_moment | does the campaign's game rule hold |
+| length_s | does the campaign's length rule hold |
+| hooks[], caption | what goes on the post |
+
+### Campaign match — moment × campaign: does this clip earn from that campaign
+| field | question |
+|---|---|
+| campaign_id | which campaign |
+| pays_for_streamer (named by handle / by name / not named) | does this campaign pay for clips of this streamer at all |
+| game_ok, length_ok, audio_ok, platform_ok, language_ok, geo_ok | does the clip pass each rule |
+| apply_first, tags_required[], watermark rule | what must I do before/when posting |
+| budget_left, runway_h | will the money still be there when the views land |
+| expected_$ (typical per approved clip × runway) | **the one number: which campaign this clip should go to** |
+| why (plain sentence) | can I trust the pick |
+
+### Queue item — one ready clip for one clipper
+| field | question |
+|---|---|
+| moment_id, best_match, other_matches[] | what, and for whom |
+| hook, caption (with the campaign's required tags) | what do I paste |
+| state (new / exported / posted / skipped), seen_at | what have I already dealt with |
+| file (a finished 9:16 MP4) | can I post it from my phone without rendering |
+| export_cost (1 clip, only on export) | what does it cost me |
+
+### Delivery — telling them
+| field | question |
+|---|---|
+| channel (push / email), sent_at, items[] | what did we tell them and when |
+| opened_at, exported_after | did the ping lead to a clip |
+
+## Joins
+Watchlist.channels ↔ Watched stream (many clippers, one scan). Watched stream → Moment.
+Moment × Campaign (through streamer, game, rules) → Campaign match. Watchlist × Moment ×
+best Campaign match → Queue item. Queue item → Delivery. Queue item → Clip → (Post, later).
