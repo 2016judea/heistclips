@@ -2,12 +2,12 @@
 // Annotations: all three hints set explicitly on every tool (OpenAI rejects a null one),
 // openWorldHint true because every tool reads data that comes from outside services.
 import { latestSnapshot } from "../lib/store.js";
-import { getChannel, getVod, parseInput, findMoments, clock } from "../public/js/twitch.js";
-import { markSpoilers } from "../public/js/spoilers.js";
 import { liveGtaStreams } from "../lib/streamers.js";
-import { getKickChannel, getKickVod, liveKickGta } from "../public/js/kick.js";
+import { liveKickGta } from "../public/js/kick.js";
 import { loadBoard, publicList, vote, submit, notify, hashOf } from "../lib/requests.js";
 import { queueTool } from "../lib/queuetool.js";
+import { findClipMoments } from "../lib/momentstool.js";
+import { JOB, newJobId, jobAgeMs, JOB_DEAD_MS, loadJob } from "../lib/cutjob.js";
 
 const SITE = "https://heistclips.com";
 const BASE = process.env.HC_BASE || SITE; // where this server reaches its own /api/v1 functions
@@ -37,9 +37,9 @@ export const TOOLS = [
   {
     name: "find_clip_moments",
     title: "Find the best moments to clip in a Twitch or Kick stream (live or VOD)",
-    description: "Finds the highlights worth clipping in a Twitch or Kick stream, live or a VOD, by reading chat: where chat exploded against its normal pace, 'clip it' requests, clips viewers already made. Returns timestamps, a clip window, event type, 3-5 hook lines for the first second, music-claim risk, spoiler risk (set skip_spoilers for campaigns that ban story spoilers), and a cut_it link that opens the moment ready to render as a 9:16 clip for TikTok, Shorts or Reels. Use for 'best moments in xQc's stream', 'find highlights in this VOD', 'what should I clip from kick.com/<name>', 'clip this stream'. Pass a Twitch channel (the live stream if live, else the latest), a Kick channel as kick.com/<name>, or a VOD link or id. Chat in any language works (German, Spanish, Portuguese…); answer in the user's language. A 7-hour stream takes 15-40 seconds; Kick about 2 minutes.",
+    description: "Finds the highlights worth clipping in a Twitch or Kick stream, live or a VOD, by reading chat: where chat exploded against its normal pace, 'clip it' requests, clips viewers already made. Returns timestamps, a clip window, event type, 3-5 hook lines for the first second, music-claim risk, spoiler risk (set skip_spoilers for campaigns that ban story spoilers), and a cut_it link that opens the moment ready to render as a 9:16 clip for TikTok, Shorts or Reels. Use for 'best moments in xQc's stream', 'find highlights in this VOD', 'what should I clip from kick.com/<name>', 'clip this stream'. Pass a Twitch channel or just the streamer's name (the live stream if live, else the latest), a Kick channel as kick.com/<name>, a VOD link or id, or a Twitch clip link (its whole stream is read). Chat in any language works (German, Spanish, Portuguese…); answer in the user's language. A long Twitch stream takes 5-20 seconds and a stream that was read before answers at once; Kick takes about 2 minutes the first time. If the source cannot be read the result has found: false with the reason and channels that are live now: tell the user, do not retry the same source.",
     inputSchema: { type: "object", properties: {
-      source: { type: "string", description: "Twitch channel name or URL, a Kick channel URL (kick.com/<name>), or a VOD URL (twitch.tv/videos/… or kick.com/<name>/videos/…)" },
+      source: { type: "string", description: "Twitch channel name or URL, a Kick channel URL (kick.com/<name>), a VOD URL (twitch.tv/videos/… or kick.com/<name>/videos/…), or a Twitch clip URL" },
       limit: { type: "integer", minimum: 1, maximum: 15, description: "How many moments (default 8)" },
       skip_spoilers: { type: "boolean", description: "true = leave out moments that look like story spoilers (chat warns about spoilers, talks about the ending, or reacts to a story scene), for campaigns that ban spoilers. Skipped moments come back in skipped_spoilers with the reason. Default false: every moment is returned with a spoiler_risk field." },
     }, required: ["source"], additionalProperties: false },
@@ -48,7 +48,7 @@ export const TOOLS = [
   {
     name: "cut_clip",
     title: "Cut a moment into a vertical 9:16 MP4 clip for TikTok, Shorts and Reels",
-    description: "Cuts a window of a Twitch or Kick stream (a VOD, or a live stream so far) into a finished 1080x1920 MP4 and returns a download link, without opening the web editor. Use after find_clip_moments: pass the same source and a moment's t_start_s and t_end_s (5 to 60 seconds). Layouts: fit (full frame over a blurred fill, the safe default), split (facecam on top, gameplay below; say which corner the facecam is in), crop (centre crop). Optional hook text is burned in at the top. Each cut uses one clip credit, the same as a render on the site: a new account gets free clips, then packs. The first call returns an account code; pass it back as account on every later cut_clip and post_clip so credits and connected YouTube/TikTok accounts carry over. Takes about twice the clip's length (a 30-second clip: about a minute). The file is kept 72 hours.",
+    description: "Cuts a window of a Twitch or Kick stream (a VOD, or a live stream so far) into a finished 1080x1920 MP4 and returns a download link, without opening the web editor. Use after find_clip_moments: pass the same source and a moment's t_start_s and t_end_s (5 to 60 seconds). Layouts: fit (full frame over a blurred fill, the safe default), split (facecam on top, gameplay below; say which corner the facecam is in), crop (centre crop). Optional hook text is burned in at the top. Each cut uses one clip credit, the same as a render on the site: a new account gets free clips, then packs. The first call returns an account code; pass it back as account on every later cut_clip and post_clip so credits and connected YouTube/TikTok accounts carry over. Usually done in 10 to 40 seconds. It never hangs: if the file is not ready after about 45 seconds the result has status 'cutting' and a job code instead of a download link. Then call cut_clip_status with that job (it waits for the file) and do NOT call cut_clip again for the same window; nothing is charged until the file exists. The file is kept 72 hours.",
     inputSchema: { type: "object", properties: {
       source: { type: "string", description: "The stream: a Twitch VOD link or id, a Kick video link, or a channel (its live or latest stream). Use the stream url from find_clip_moments." },
       start: { type: ["number", "string"], description: "Where the clip starts: seconds into the stream (t_start_s), or h:mm:ss" },
@@ -59,6 +59,13 @@ export const TOOLS = [
       account: { type: "string", description: "The account code (hc_…) from an earlier cut_clip. Leave out on the very first cut." },
     }, required: ["source", "start", "end"], additionalProperties: false },
     annotations: { title: "Cut a 9:16 clip", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
+  },
+  {
+    name: "cut_clip_status",
+    title: "Get a clip that cut_clip was still cutting",
+    description: "Waits for a clip that cut_clip answered 'cutting' for, and returns its download link when the file is ready. Pass the job code from that cut_clip result. It waits up to 40 seconds per call; if the status is still 'cutting', call it again. Never start a second cut_clip for the same window: the first one is still running and is charged once, only when its file exists. A cut that failed says so here, and nothing was charged.",
+    inputSchema: { type: "object", properties: { job: { type: "string", description: "The job code (cj…) from a cut_clip result with status 'cutting'" } }, required: ["job"], additionalProperties: false },
+    annotations: { title: "Clip status", ...ANN },
   },
   {
     name: "post_clip",
@@ -151,20 +158,59 @@ export function tag(url) {
   return base + (base.includes("?") ? "&" : "?") + "src=mcp" + hash;
 }
 
-// One PostHog event per tool call: tool, ok/error, duration. No arguments, no IP. The id is a
-// keyed hash of day + connection + client, so a connector user counts once per day.
-async function logCall(tool, ok, ms, meta) {
+// One PostHog event per tool call: tool, ok/error, duration, a short failure code, and for
+// cuts the clip length, platform, layout and where the time went. No arguments, no chat text,
+// no captions, no IP. The id is a keyed hash of day + connection + client, so a connector user
+// counts once per day.
+const LOG_KEYS = ["err", "status", "platform", "layout", "clip_secs", "source_quality", "megabytes", "cache", "read_ms", "stream_hours", "live", "moments", "polls",
+  "resolve_ms", "account_ms", "playlist_ms", "download_ms", "source_mb", "encode_ms", "upload_ms", "commit_ms", "cut_ms", "kind"];
+async function logCall(tool, ok, ms, meta, extra = {}) {
   if (process.env.HC_NO_ANALYTICS) return;
   try {
     const day = new Date().toISOString().slice(0, 10);
+    const more = {};
+    for (const k of LOG_KEYS) if (extra[k] !== undefined && extra[k] !== null && typeof extra[k] !== "object") more[k] = typeof extra[k] === "string" ? extra[k].slice(0, 40) : extra[k];
     await fetch("https://us.i.posthog.com/capture/", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(1500),
       body: JSON.stringify({ api_key: PH_KEY, event: "mcp_tool_call", distinct_id: "mcp_" + hashOf(day + "|" + meta.ip + "|" + meta.ua),
-        properties: { tool, ok, ms, client: meta.client, client_ua: String(meta.ua).split(/[\/ ;(]/)[0].slice(0, 30), site: "heistclips", $process_person_profile: false, $lib: "heistclips-mcp" } }) });
+        properties: { tool, ok, ms, ...more, client: meta.client, client_ua: String(meta.ua).split(/[\/ ;(]/)[0].slice(0, 30), site: "heistclips", $process_person_profile: false, $lib: "heistclips-mcp" } }) });
   } catch (e) {}
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
 
-export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do.";
+export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back; if it answers status 'cutting', call cut_clip_status with the job code instead of cutting again), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do.";
+
+// A tool result may carry `log`: analytics fields for this call. It never reaches the client.
+const withLog = (result, log) => Object.defineProperty(result, "log", { value: log, enumerable: false });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// How long cut_clip holds the assistant before answering "still cutting", and how long one
+// cut_clip_status call waits. Both sit well inside every client's tool timeout.
+const CUT_WAIT_MS = Number(process.env.HC_CUT_WAIT_MS) || 45000, STATUS_WAIT_MS = 40000;
+
+function cutResult(d, polls = 0) {
+  const log = { err: d.ok ? undefined : d.err || "unknown", platform: d.platform, layout: d.layout, clip_secs: d.seconds, source_quality: d.source_quality, megabytes: d.megabytes, cut_ms: d.cut_in_ms, polls, ...(d.timing || {}) };
+  const { timing, err, total_ms, platform, ...pub } = d;
+  if (!d.ok) return withLog({ ...text(pub), isError: !d.need }, log);
+  return withLog(text({ ...pub, next: "Give the user the download link. To post it, call post_clip with clip_id, account, platform and a caption." }), log);
+}
+const stillCutting = (job, waited, polls) => withLog(text({
+  status: "cutting", job, waited_s: Math.round(waited / 1000),
+  message: "The clip is still being cut. Call cut_clip_status with this job code now: it waits up to 40 seconds for the file and returns the download link. Do not call cut_clip again for this window; nothing is charged until the file exists.",
+  next: { tool: "cut_clip_status", arguments: { job } },
+}), { status: "cutting", polls });
+
+async function cutStatus(id) {
+  if (!JOB.test(String(id || ""))) return withLog({ ...text({ ok: false, error: "That is not a job code. Pass the job value (cj…) from a cut_clip result with status 'cutting'." }), isError: true }, { err: "bad_job" });
+  const t0 = Date.now();
+  let d = null, n = 0;
+  for (;;) {
+    d = await loadJob(id, { sure: n % 4 === 3 || jobAgeMs(id) > JOB_DEAD_MS });
+    if (d || Date.now() - t0 > STATUS_WAIT_MS || jobAgeMs(id) > JOB_DEAD_MS) break;
+    await sleep(2500); n++;
+  }
+  if (d) return cutResult(d, n + 1);
+  if (jobAgeMs(id) > JOB_DEAD_MS) return withLog({ ...text({ ok: false, job: id, error: "That cut did not finish. Nothing was charged. Call cut_clip again with the same window." }), isError: true }, { err: "job_lost", polls: n + 1 });
+  return stillCutting(id, jobAgeMs(id), n + 1);
+}
 
 const text = (obj) => ({ content: [{ type: "text", text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 1) }], structuredContent: typeof obj === "string" ? undefined : obj });
 
@@ -210,42 +256,22 @@ export async function callTool(name, args = {}, caller = "mcp") {
     return text({ generated_at: snap.generated_at, rank: snap.campaigns.indexOf(c) + 1, of: snap.campaigns.length, ...c, page: tag(`${SITE}/campaigns/${c.slug}`) });
   }
   if (name === "find_clip_moments") {
-    const inp = parseInput(args.source);
-    let vod = null, chan = null;
-    if (inp.kind === "vod") vod = await getVod(inp.id);
-    else if (inp.kind === "channel") {
-      chan = await getChannel(inp.login);
-      if (!chan) return { ...text(`No Twitch channel called ${inp.login}.`), isError: true };
-      vod = chan.live_vod || chan.vods[0] || null;
-      if (!vod) return { ...text(`${chan.name} has no saved streams to read${chan.is_live ? " (they are live but do not save VODs)" : ""}.`), isError: true };
-    } else if (inp.kind === "kick") {
-      chan = await getKickChannel(inp.login);
-      if (!chan) return { ...text(`No Kick channel called ${inp.login}.`), isError: true };
-      vod = chan.live_vod || chan.vods[0] || null;
-      if (!vod) return { ...text(`${chan.name} has no saved Kick streams to read.`), isError: true };
-    } else if (inp.kind === "kickvod") vod = await getKickVod(inp.id);
-    else return { ...text("Pass a Twitch or Kick channel (kick.com/<name>), or a twitch.tv/videos/ or Kick video link."), isError: true };
-    if (!vod) return { ...text("That VOD does not exist or is not public."), isError: true };
-    const r = await findMoments(vod, { k: Math.min(15, (args.limit || 8) + 3) });
-    markSpoilers(vod, r.moments);
-    const skipped = args.skip_spoilers ? r.moments.filter((m) => m.spoiler.spoiler) : [];
-    const kept = args.skip_spoilers ? r.moments.filter((m) => !m.spoiler.spoiler) : r.moments;
-    const moments = kept.slice(0, args.limit || 8).map((m, i) => ({
-      rank: i + 1, start: clock(m.t_start), end: clock(m.t_end), t_start_s: m.t_start, t_end_s: m.t_end,
-      chat_speed_vs_normal: m.chat_ratio + "x", event_type: m.event_type, clip_requests_in_chat: m.clip_requests,
-      top_chat_phrase: m.phrase && m.phrase.text, already_clipped_on_twitch: m.twitch_clips, twitch_clip_views: m.twitch_clip_views,
-      music_risk: m.music_risk.level, music_note: m.music_risk.why, spoiler_risk: m.spoiler.level, spoiler_note: m.spoiler.reason, hooks: m.hooks,
-      watch: m.url, cut_it: tag(`${SITE}/clip?q=${encodeURIComponent(vod.platform === "kick" ? vod.url : vod.id)}&t=${m.t_start}`),
-    }));
-    return text({ stream: { platform: vod.platform || "twitch", channel: vod.channel_name, title: vod.title, game: vod.game, length: clock(vod.length), status: vod.status === "RECORDING" ? "live, still recording" : "finished", url: vod.url }, moments, spoiler_filter: args.skip_spoilers ? "on" : "off",
-      skipped_spoilers: skipped.map((m) => ({ start: clock(m.t_start), end: clock(m.t_end), reason: m.spoiler.reason, watch: m.url })), note: moments.length ? "Cut any of these to 9:16 with hooks at the cut_it link." : "Chat was steady the whole stream; no clear spikes." });
+    const { out, log } = await findClipMoments(args, { tag });
+    return withLog(text(out), log);
   }
+  if (name === "cut_clip_status") return cutStatus(args.job);
   if (name === "cut_clip") {
-    // The cut runs in its own function (ffmpeg, longer limit); this one just waits for it.
-    const r = await fetch(BASE + "/api/v1/cut", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...args, via: "mcp" }), signal: AbortSignal.timeout(280000) });
-    const d = await r.json().catch(() => ({ ok: false, error: "The cut did not finish (" + r.status + "). Nothing was charged; try a shorter window." }));
-    if (!d.ok) return { ...text(d), isError: !d.need };
-    return text({ ...d, next: "Give the user the download link. To post it, call post_clip with clip_id, account, platform and a caption." });
+    if (args.job && !args.source) return cutStatus(args.job);
+    // The cut runs in its own function (ffmpeg, longer limit) and goes on to the end whether or
+    // not anyone is still waiting. This call waits a safe while, then hands back the job code.
+    const job = newJobId(), t0 = Date.now();
+    const cut = fetch(BASE + "/api/v1/cut", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...args, via: "mcp", job }) })
+      .then(async (r) => (await r.json().catch(() => null)) || { ok: false, err: "http_" + r.status, error: "The cut did not finish (" + r.status + "). Nothing was charged; try again." }, () => null);
+    const d = await Promise.race([cut, sleep(CUT_WAIT_MS).then(() => undefined)]);
+    if (d) return cutResult(d);
+    // No answer in time, or the connection dropped: the job itself knows how it ended.
+    if (d === null && Date.now() - t0 < 3000) return withLog({ ...text({ ok: false, error: "The cutter could not be reached. Nothing was charged; try again." }), isError: true }, { err: "cut_unreachable" });
+    return stillCutting(job, Date.now() - t0, 0);
   }
   if (name === "post_clip" || name === "posting_account") {
     const r = await fetch(BASE + "/api/v1/post", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(280000),
@@ -291,8 +317,9 @@ async function handleOne(msg) {
     const t0 = Date.now(), tool = ALIASES[params && params.name] || String((params && params.name) || "");
     let out;
     try { out = await callTool(params.name, params.arguments || {}, caller); }
-    catch (e) { out = { content: [{ type: "text", text: "Error: " + e.message }], isError: true }; }
-    await logCall(TOOLS.some((t) => t.name === tool) ? tool : "unknown", !out.isError, Date.now() - t0, meta);
+    catch (e) { out = withLog({ content: [{ type: "text", text: "Error: " + e.message }], isError: true }, { err: /twitch|kick|gql/i.test(e.message) ? "upstream" : "exception" }); }
+    const log = out.log || {};
+    await logCall(TOOLS.some((t) => t.name === tool) ? tool : "unknown", !out.isError && log.ok !== false && !log.err, Date.now() - t0, meta, out.isError && !log.err ? { ...log, err: "error" } : log);
     return ok(out);
   }
   if (method === "resources/list") return ok({ resources: [] });

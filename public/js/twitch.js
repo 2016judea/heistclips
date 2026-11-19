@@ -374,13 +374,16 @@ export function hooks(m, streamer, lang) {
 // `from`/`to` read only part of the stream (the last hours of a marathon come back in seconds).
 // When fewer than `fill` spikes clear the normal bar, the best of the smaller ones are added
 // and marked `quiet`, so a calm stream still returns its best moments instead of nothing.
-export async function findMoments(vod, { k = 10, step, onProgress, refine = true, from = 0, to, fill = 3 } = {}) {
+// `concurrency` is chat pages in flight: 12 in a browser tab, more from the server (the connector).
+export async function findMoments(vod, { k = 10, step, onProgress, refine = true, from = 0, to, fill = 3, concurrency = 12 } = {}) {
+  // Twitch's own clips of this stream are fetched alongside the chat read, not after it.
+  const clipsP = vod.channel && vod.platform !== "kick" ? twitchClips(vod.channel, vod.id).catch(() => []) : Promise.resolve([]);
   const end = to == null ? vod.length : Math.min(to, vod.length);
   const start = Math.max(0, Math.min(from, end));
   const span = end - start;
   // Kick throttles (see kick.js), so it samples coarser: at most ~150 windows a stream.
   const st = step || (vod.platform === "kick" ? Math.max(30, Math.ceil(span / 150)) : span > 12 * 3600 ? 60 : span > 6 * 3600 ? 30 : span > 2 * 3600 ? 20 : 10);
-  const { samples, messages } = await chatCurve(vod, { step: st, from: start, to: end, onProgress });
+  const { samples, messages } = await chatCurve(vod, { step: st, from: start, to: end, onProgress, concurrency });
   const kk = vod.platform === "kick" ? Math.min(k, 6) : k;
   const gap = vod.platform === "kick" ? Math.max(90, st * 1.5) : 90;
   let peaks = findPeaks(samples, { k: kk, gap });
@@ -390,7 +393,7 @@ export async function findMoments(vod, { k = 10, step, onProgress, refine = true
   }
   const moments = [];
   if (refine) {
-    const refined = await pool(peaks, vod.platform === "kick" ? 1 : 3, (p) => refinePeak(vod, p, vod.platform === "kick" ? { before: 50, after: 20 } : {}));
+    const refined = await pool(peaks, vod.platform === "kick" ? 1 : concurrency > 12 ? 5 : 3, (p) => refinePeak(vod, p, vod.platform === "kick" ? { before: 50, after: 20 } : {}));
     refined.forEach((m, i) => { if (m) { if (peaks[i].soft) m.quiet = true; moments.push(m); } });
   } else {
     for (const p of peaks) { const m = momentFromMessages(vod, messages, p); if (p.soft) m.quiet = true; moments.push(m); }
@@ -401,7 +404,7 @@ export async function findMoments(vod, { k = 10, step, onProgress, refine = true
     const a = moments[i];
     if (moments.some((b, j) => j < i && b.t_start < a.t_end - 10 && b.t_end > a.t_start + 10)) moments.splice(i, 1);
   }
-  const clips = vod.channel && vod.platform !== "kick" ? await twitchClips(vod.channel, vod.id) : [];
+  const clips = await clipsP;
   for (const m of moments) {
     const overlapping = clips.filter((c) => c.t_start < m.t_end && c.t_end > m.t_start);
     m.twitch_clips = overlapping.length;
