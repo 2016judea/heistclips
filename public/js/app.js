@@ -1,6 +1,7 @@
 // The clip tool: paste -> moments (with why) -> cut -> download.
 import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitchTime, searchChannels, getClip, refinePeak, hooks } from "./twitch.js";
-import { Clipper, pickMime, camPreset, clampBox, CAM_DEFAULT } from "./render.js?v=9";
+import { Clipper, pickMime, camPreset, clampBox, CAM_DEFAULT } from "./render.js?v=10";
+import { FX } from "./fx.js?v=1";
 import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";
 import { paywallHTML } from "./paywall.js";
@@ -362,7 +363,8 @@ async function openEditor(i) {
 <div class="seg camquick" data-k="campreset"><button data-v="tl" title="top left">↖</button><button data-v="ml" title="middle left">←</button><button data-v="bl" title="bottom left">↙</button><button data-v="tr" title="top right">↗</button><button data-v="mr" title="middle right">→</button><button data-v="br" title="bottom right">↘</button></div>
 <label style="margin-top:10px">Put the facecam</label><div class="seg" data-k="camOut"><button data-v="top">On top</button><button data-v="bottom">At the bottom</button></div>
 <label style="margin-top:10px">Facecam style</label><div class="seg" data-k="camStyle"><button data-v="split">Panel</button><button data-v="rounded">Rounded box</button><button data-v="circle">Circle</button></div>
-<div class="seg" data-k="punch" style="margin-top:6px"><button data-v="0">No zoom</button><button data-v="1">Punch-in on the loudest second</button></div></div>
+<div class="seg" data-k="punch" style="margin-top:6px"><button data-v="0">No zoom</button><button data-v="1">Punch-in on the loudest second</button></div>
+<label style="margin-top:10px">Funny facecam</label><div class="seg" data-k="camFx"><button data-v="none">Off</button><button data-v="bighead">Big head</button><button data-v="fisheye">Fisheye</button><button data-v="shake">Shake when loud</button><button data-v="fried">Deep fried</button><button data-v="wobble">Jelly</button></div></div>
 <div><label>Pan gameplay</label><input type="range" min="-1" max="1" step="0.05" value="0" data-k="pan"></div>
 <div><label>Hook (first thing they read). Edit any line.</label><div class="hooks">${m.hooks.map((t, k) => `<label><input type="radio" name="hk" value="${k}" ${k === 0 ? "checked" : ""}><input type="text" value="${h(t)}" data-hook="${k}"></label>`).join("")}<label><input type="radio" name="hk" value="none"><span>No hook</span></label></div>
 <div class="seg" data-k="hookMode" style="margin-top:6px"><button data-v="always" class="on">Hook whole clip</button><button data-v="first">First 3 s only</button></div></div>
@@ -387,11 +389,11 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
   const vstat = $("#vstat", ed);
   // Facecam choices are remembered per channel: the same streamer keeps the same setup.
   const camKey = `hc_cam:${current.vod.platform || "twitch"}:${current.vod.channel}`;
-  try { const saved = JSON.parse(store.get(camKey) || "null"); if (saved && saved.cam) Object.assign(cl.opts, { cam: clampBox(saved.cam), camOut: saved.camOut || "top", camStyle: saved.camStyle || "split", punch: !!saved.punch }); } catch (e) {}
+  try { const saved = JSON.parse(store.get(camKey) || "null"); if (saved && saved.cam) Object.assign(cl.opts, { cam: clampBox(saved.cam), camOut: saved.camOut || "top", camStyle: saved.camStyle || "split", punch: !!saved.punch, camFx: FX.includes(saved.camFx) ? saved.camFx : "none" }); } catch (e) {}
   cl.opts.punchFallback = m.t_peak;
-  const saveCam = () => store.set(camKey, JSON.stringify({ cam: cl.opts.cam, camOut: cl.opts.camOut, camStyle: cl.opts.camStyle, punch: cl.opts.punch }));
+  const saveCam = () => store.set(camKey, JSON.stringify({ cam: cl.opts.cam, camOut: cl.opts.camOut, camStyle: cl.opts.camStyle, punch: cl.opts.punch, camFx: cl.opts.camFx }));
   const segOn = (k, v) => ed.querySelectorAll(`.seg[data-k="${k}"] button`).forEach((x) => x.classList.toggle("on", x.dataset.v === v));
-  const syncSegs = () => { segOn("camOut", cl.opts.camOut); segOn("camStyle", cl.opts.camStyle); segOn("punch", cl.opts.punch ? "1" : "0"); };
+  const syncSegs = () => { segOn("camOut", cl.opts.camOut); segOn("camStyle", cl.opts.camStyle); segOn("punch", cl.opts.punch ? "1" : "0"); segOn("camFx", cl.opts.camFx); };
   const pick = $(".campick", ed), pcv = $("canvas", pick), pctx = pcv.getContext("2d"), box = $("#cambox", ed);
   const placeBox = () => { const b = cl.opts.cam; Object.assign(box.style, { left: b.x * 100 + "%", top: b.y * 100 + "%", width: b.w * 100 + "%", height: b.h * 100 + "%" }); };
   let lastThumb = 0;
@@ -417,8 +419,8 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
       if (k === "campreset") { cl.opts.cam = camPreset(b.dataset.v, cl.opts.cam || CAM_DEFAULT); placeBox(); saveCam(); cl.draw(); ph("facecam_preset", { p: b.dataset.v }); return; }
       b.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
       cl.opts[k] = k === "chat" || k === "punch" ? b.dataset.v === "1" : b.dataset.v;
-      if (k === "camOut" || k === "camStyle" || k === "punch") { saveCam(); ph("facecam_" + k, { v: b.dataset.v }); }
-      syncCam(); cl.draw();
+      if (k === "camOut" || k === "camStyle" || k === "punch" || k === "camFx") { saveCam(); ph("facecam_" + k, { v: b.dataset.v }); }
+      syncCam(); cl.draw(); cl.fxPreview();
     }
     const n = e.target.closest("[data-nudge]");
     if (n) {
@@ -442,7 +444,7 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
     cl.opts.hook = !sel || sel.value === "none" ? "" : ed.querySelector(`[data-hook="${sel.value}"]`).value;
     cl.draw();
   });
-  syncCam(); syncSegs(); placeBox();
+  syncCam(); syncSegs(); placeBox(); cl.fxPreview();
   const url = playlistPath(current.vod, "chunked");
   try {
     if (current.vod.platform === "kick" && m.live) current.vod.length = (Date.now() - current.vod.start_ms) / 1000;
@@ -475,7 +477,7 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
       else say("Couldn’t reach heistclips to check your clips. Check your connection and try again.");
       return;
     }
-    ph("clip_render_start", { layout: cl.opts.layout, hook: !!cl.opts.hook, chat: cl.opts.chat, len: lenNow, live: !!m.live, vod_live: current.vod.status === "RECORDING" });
+    ph("clip_render_start", { cam_fx: cl.opts.layout === "split" ? cl.opts.camFx : null, layout: cl.opts.layout, hook: !!cl.opts.hook, chat: cl.opts.chat, len: lenNow, live: !!m.live, vod_live: current.vod.status === "RECORDING" });
     const old = $("#dl", ed).querySelector(".rnote"); if (old) old.remove();
     try {
       const out = await cl.record(win.s, win.e, (msg, f) => { vstat.textContent = f == null ? msg : `${msg} ${Math.round(f * 100)}%`; });
@@ -486,7 +488,7 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
       $("#dl", ed).insertAdjacentHTML("afterbegin", `<div><video src="${href}" controls playsinline></video><a class="btn" href="${href}" download="${h(name)}">Download ${out.ext.toUpperCase()} · 1080×1920 · ${out.fps} fps · ${out.mbps} Mbps (${mb.toFixed(1)} MB)</a><p class="small">Cut from the ${h(out.source)} source.</p>${out.ext === "webm" ? `<p class="small">WebM plays on TikTok and YouTube. For Instagram, Safari or Chrome 126+ export MP4.</p>` : ""}${out.sound ? "" : `<p class="small">No sound came through for this stretch${current.vod.muted && current.vod.muted.some((x) => x.start < out.end && x.end > win.s) ? ": Twitch muted it in the VOD (licensed music)" : ""}.</p>`}</div>`);
       document.dispatchEvent(new CustomEvent("hc:rendered", { detail: { blob: out.blob, ext: out.ext, mount: $("#dl", ed).firstElementChild, caption: cl.opts.hook || "" } }));
       vstat.textContent = "Done. Pick another hook and render again for a second, different post.";
-      ph("clip_render_done", { cam_style: cl.opts.layout === "split" ? cl.opts.camStyle : null, cam_out: cl.opts.camOut, punch_at: cl.opts.punch && cl.punchAt != null ? Math.round((cl.punchAt - win.s) * 10) / 10 : null, mb: Math.round(mb * 10) / 10, ext: out.ext, fps: out.fps, mbps: out.mbps, source: out.source, charged: !!c.ok, sound: out.sound, vod_live: current.vod.status === "RECORDING" });
+      ph("clip_render_done", { cam_fx: cl.opts.layout === "split" ? cl.opts.camFx : null, fx_loud_beats: cl.opts.layout === "split" && (cl.opts.camFx === "shake" || cl.opts.camFx === "wobble") ? out.fxHits : null, cam_style: cl.opts.layout === "split" ? cl.opts.camStyle : null, cam_out: cl.opts.camOut, punch_at: cl.opts.punch && cl.punchAt != null ? Math.round((cl.punchAt - win.s) * 10) / 10 : null, mb: Math.round(mb * 10) / 10, ext: out.ext, fps: out.fps, mbps: out.mbps, source: out.source, charged: !!c.ok, sound: out.sound, vod_live: current.vod.status === "RECORDING" });
     } catch (e) {
       vstat.textContent = "Render failed: " + e.message + ". Nothing was charged.";
       say("Render failed: " + h(e.message) + ". <b>Nothing was charged.</b>");

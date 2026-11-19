@@ -2,6 +2,8 @@
 // same-origin /tv/ proxy, a canvas draws the layout, hook and chat, and MediaRecorder encodes
 // in real time on the visitor's own hardware. Nothing is uploaded; nothing costs us compute.
 
+import { CamFx, Loud, shake, fxNeedsLoud, fxMoves, BIGHEAD_PAD } from "./fx.js?v=1";
+
 export const W = 1080, H = 1920;
 
 // ---- facecam (board requests rmwnmbvuw, rmwm7a4ji, rmwm3rms3) --------------------------------
@@ -50,7 +52,8 @@ export class Clipper {
     this.video.playsInline = true; this.video.crossOrigin = "anonymous"; this.video.preload = "auto";
     this.small = document.createElement("canvas"); this.small.width = 54; this.small.height = 96;
     this.sctx = this.small.getContext("2d");
-    this.opts = { layout: "fit", hook: "", hookMode: "always", chat: true, cam: { ...CAM_DEFAULT }, camOut: "top", camStyle: "split", punch: false, pan: 0 };
+    this.opts = { layout: "fit", hook: "", hookMode: "always", chat: true, cam: { ...CAM_DEFAULT }, camOut: "top", camStyle: "split", punch: false, camFx: "none", pan: 0 };
+    this.loud = new Loud(); this.fx = null; this.fxDemo = 0;
     this.punchAt = null; this.onDraw = null;
     this.chat = []; this.audio = null; this.src = null; this.hls = null; this.loop = null;
   }
@@ -170,25 +173,102 @@ export class Clipper {
       if (o.camStyle === "circle") { w = h = Math.round(W * 0.52); }
       else { w = Math.round(W * 0.66); h = Math.round(Math.max(W * 0.3, Math.min(H * 0.32, w / r.aspect))); }
       x = Math.round((W - w) / 2); y = top ? 90 : H - h - 90;
+      const f = this.fxState(t);
+      const shape = (inset) => { ctx.beginPath(); if (o.camStyle === "circle") ctx.arc(x + w / 2, y + h / 2, w / 2 - inset, 0, Math.PI * 2); else roundRect(ctx, x + inset, y + inset, w - 2 * inset, h - 2 * inset, 44 - inset); };
+      ctx.save();
+      // Shake moves the whole floating frame, not only the picture inside it.
+      if (f.shk) { ctx.translate(x + w / 2 + f.shk.dx * 26, y + h / 2 + f.shk.dy * 26); ctx.rotate(f.shk.rot * 0.6); ctx.translate(-(x + w / 2), -(y + h / 2)); }
       ctx.save();
       ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = 36; ctx.fillStyle = "#000";
-      ctx.beginPath();
-      if (o.camStyle === "circle") ctx.arc(x + w / 2, y + h / 2, w / 2, 0, Math.PI * 2); else roundRect(ctx, x, y, w, h, 44);
+      shape(0);
       ctx.fill(); ctx.shadowBlur = 0; ctx.clip();
-      coverDraw(ctx, v, r.x, r.y, r.w, r.h, x, y, w, h);
+      const pop = this.paintCam(v, vw, vh, r, x, y, w, h, f);
       ctx.restore();
-      ctx.save(); ctx.lineWidth = 8; ctx.strokeStyle = "rgba(255,255,255,.92)"; ctx.beginPath();
-      if (o.camStyle === "circle") ctx.arc(x + w / 2, y + h / 2, w / 2 - 4, 0, Math.PI * 2); else roundRect(ctx, x + 4, y + 4, w - 8, h - 8, 40);
+      ctx.save(); ctx.lineWidth = 8; ctx.strokeStyle = "rgba(255,255,255,.92)";
+      shape(4);
       ctx.stroke(); ctx.restore();
+      if (pop) pop(true);
+      ctx.restore();
       return top ? { hook: y + h + 50, chat: H - 560 } : { hook: 170, chat: y - 400 };
     }
     // Panel: the facecam is a full-width band, as tall as its own shape needs (a quarter to half the frame).
     const camH = Math.round(Math.max(H * 0.25, Math.min(H * 0.5, W / r.aspect)));
     const camY = top ? 0 : H - camH;
-    coverDraw(ctx, v, r.x, r.y, r.w, r.h, 0, camY, W, camH);
     this.drawGame(v, vw, vh, top ? camH : 0, H - camH);
+    ctx.save(); ctx.beginPath(); ctx.rect(0, camY, W, camH); ctx.clip();
+    const pop = this.paintCam(v, vw, vh, r, 0, camY, W, camH, this.fxState(t));
+    ctx.restore();
     ctx.fillStyle = "#000"; ctx.fillRect(0, (top ? camH : camY) - 3, W, 6);
+    if (pop) pop(false);
     return top ? { hook: 120, chat: H - 520 } : { hook: 140, chat: camY - 400 };
+  }
+
+  // ---- funny facecam (public/js/fx.js) ----------------------------------------------------
+  // What the effect needs for this frame: its clock, how loud the moment is, and the shake.
+  fxState(t) {
+    const fx = this.opts.camFx || "none", v = this.video;
+    if (fx === "none") return { fx };
+    const still = v.paused || v.playbackRate !== 1;
+    const now = performance.now();
+    let e = 0;
+    if (!still && this.audio && fxNeedsLoud(fx)) {
+      const lv = this.audio.level, buf = this.lbuf || (this.lbuf = new Float32Array(lv.fftSize));
+      lv.getFloatTimeDomainData(buf);
+      let sum = 0; for (let i = 0; i < buf.length; i += 4) sum += buf[i] * buf[i];
+      e = this.loud.push(Math.sqrt(sum / (buf.length / 4)), t);
+      if (e > 0.5 && !this.fxHot) this.fxHits++; // loud beats in this render, for analytics
+      this.fxHot = e > 0.5;
+    } else if (still && now < this.fxDemo) {
+      // A still preview has no sound: act out one loud beat so a click on the effect shows it.
+      const x = 1 - (this.fxDemo - now) / 1600;
+      e = Math.pow(Math.sin(Math.PI * Math.min(1, x * 1.15)), 2);
+    }
+    const clock = still ? now / 1000 : t;
+    return { fx, t: clock, e, shk: fx === "shake" ? shake(clock, e) : null };
+  }
+
+  // Draw the facecam into (x, y, w, h); the caller has set the clip. Returns a function that
+  // draws what sticks out past the frame (big head), or null.
+  paintCam(v, vw, vh, r, x, y, w, h, f) {
+    const { ctx } = this;
+    const s = coverRect(r.x, r.y, r.w, r.h, w, h);
+    let cv = null;
+    if (f.fx !== "none") {
+      if (!this.fx) this.fx = new CamFx();
+      cv = this.fx.render(v, vw, vh, s, w, h, f.fx, f.t, f.e, f.shk && { dx: f.shk.dx * 0.03, dy: f.shk.dy * 0.03, rot: f.shk.rot, zoom: f.shk.zoom });
+    }
+    if (!cv) { ctx.drawImage(v, s.x, s.y, s.w, s.h, x, y, w, h); return null; }
+    if (f.fx !== "bighead") { ctx.drawImage(cv, x, y, w, h); return null; }
+    const px = w * BIGHEAD_PAD, py = h * BIGHEAD_PAD;
+    const all = () => ctx.drawImage(cv, x - px, y - py, w + 2 * px, h + 2 * py);
+    all();
+    // The head bulges out of its frame: the same oval the shader blows up, drawn over the border.
+    const asp = w / h;
+    let ry = 0.56, rx = Math.min(0.46, (ry * 0.8) / asp); ry = Math.min(ry, (rx * asp) / 0.62);
+    const oval = (grow) => { ctx.beginPath(); ctx.ellipse(x + w * 0.5, y + h * 0.47, rx * w + grow, ry * h + grow, 0, 0, Math.PI * 2); };
+    return (ring) => {
+      ctx.save(); oval(0); ctx.clip(); all(); ctx.restore();
+      if (!ring) return;
+      // White edge on the part outside the frame only, so it reads as one sticker with the ring.
+      ctx.save();
+      ctx.beginPath(); ctx.rect(-200, -200, W + 400, H + 400);
+      if (this.opts.camStyle === "circle") { ctx.moveTo(x + w, y + h / 2); ctx.arc(x + w / 2, y + h / 2, w / 2 - 1, 0, Math.PI * 2); } else ctx.rect(x + 1, y + 1, w - 2, h - 2);
+      ctx.clip("evenodd");
+      ctx.lineWidth = 8; ctx.strokeStyle = "rgba(255,255,255,.92)"; oval(-4); ctx.stroke();
+      ctx.restore();
+    };
+  }
+
+  // Keep a still preview moving while a moving effect is on (grain, jelly, the loud beat).
+  fxPreview() {
+    cancelAnimationFrame(this.fxLoop);
+    const tick = () => {
+      if (!fxMoves(this.opts.camFx) || this.opts.layout !== "split" || !this.canvas.isConnected) return;
+      if (this.video.paused && !document.hidden) this.draw();
+      this.fxLoop = requestAnimationFrame(tick);
+    };
+    this.fxDemo = performance.now() + 1600;
+    tick();
   }
 
   drawHook(text, yTop) {
@@ -267,7 +347,7 @@ export class Clipper {
       if (lv) sampleLevel(lv, buf, bins, Math.floor((v.currentTime - start) * 4));
       if (v.currentTime >= end || v.paused) { v.pause(); ok(); } else requestAnimationFrame(chk); }; chk(); });
     await stopAt();
-    if (lv && v.currentTime >= end - 0.5) { this.punchAt = loudestSecond(bins, start); this.punchWin = start + "-" + end; }
+    if (lv && v.currentTime >= end - 0.5) { this.punchAt = loudestSecond(bins, start); this.punchWin = start + "-" + end; this.loud.seed(bins); }
     this.stopPreview(); this.draw();
   }
 
@@ -291,6 +371,7 @@ export class Clipper {
         chk();
       });
     } finally { v.pause(); v.playbackRate = 1; a.monitor.gain.value = 1; }
+    this.loud.seed(bins);
     return loudestSecond(bins, start);
   }
 
@@ -335,7 +416,7 @@ export class Clipper {
       onState && onState("Loading the video…", Math.max(0, Math.min(1, (got - start) / (end - start))) * 0.3);
       await sleep(400);
     }
-    if (this.opts.layout === "split" && this.opts.punch && this.punchWin !== start + "-" + end) {
+    if (this.opts.layout === "split" && (this.opts.punch || fxNeedsLoud(this.opts.camFx)) && this.punchWin !== start + "-" + end) {
       this.punchAt = (await this.findLoudest(start, end, onState)) ?? this.opts.punchFallback ?? null;
       this.punchWin = start + "-" + end;
       await this.seek(start);
@@ -362,6 +443,7 @@ export class Clipper {
     };
     v.addEventListener("waiting", onWait); v.addEventListener("playing", onPlay); document.addEventListener("visibilitychange", onVis);
     const lv = this.audio.level, buf = new Float32Array(lv.fftSize);
+    this.fxHits = 0; this.fxHot = false;
     this.draw();
     rec.start(500);
     const tRec = performance.now();
@@ -393,16 +475,17 @@ export class Clipper {
     if (!blob.size) throw new Error("the recording came out empty");
     const secs = end - start;
     const fps = Math.min(60, Math.round(frames / Math.max(1, secs)));
-    return { blob, ext: type.includes("mp4") ? "mp4" : "webm", secs, end, fps, mbps: Math.round((blob.size * 8) / secs / 1e5) / 10, sound: loudest > 0.001, source: `${v.videoWidth}×${v.videoHeight}` };
+    return { blob, fxHits: this.fxHits, ext: type.includes("mp4") ? "mp4" : "webm", secs, end, fps, mbps: Math.round((blob.size * 8) / secs / 1e5) / 10, sound: loudest > 0.001, source: `${v.videoWidth}×${v.videoHeight}` };
   }
 
-  destroy() { this.stopPreview(); if (this.hls) this.hls.destroy(); this.video.removeAttribute("src"); }
+  destroy() { this.stopPreview(); cancelAnimationFrame(this.fxLoop); if (this.hls) this.hls.destroy(); this.video.removeAttribute("src"); }
 }
 
-function coverDraw(ctx, img, sx, sy, sw, sh, dx, dy, dw, dh) {
+// The part of the source rect that fills a dw x dh frame without stretching (centre crop).
+export function coverRect(sx, sy, sw, sh, dw, dh) {
   const sr = sw / sh, dr = dw / dh;
   if (sr > dr) { const nw = sh * dr; sx += (sw - nw) / 2; sw = nw; } else { const nh = sw / dr; sy += (sh - nh) / 2; sh = nh; }
-  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+  return { x: sx, y: sy, w: sw, h: sh };
 }
 
 function wrap(ctx, text, max) {
