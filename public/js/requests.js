@@ -5,9 +5,9 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const ph = (e, p) => { try { window.posthog && window.posthog.capture(e, p); } catch (x) {} };
 
 // The board in the viewer's language: an explicit ?lang= wins, then the page's own locale
-// (/de, /fr), then the browser's. Each row is set to the stored translation the API returns for
+// (/de, /fr, /pt, /es), then the browser's. Each row is set to the stored translation the API returns for
 // that language (nothing is translated here), whichever template drew the row: the English page
-// (lib/render.js) or a /de or /fr page (lib/pages_l10n.js). A row the localized page translated
+// (lib/render.js) or a localized page (lib/pages_l10n.js). A row the localized page translated
 // by hand (a launch item, no data-notr) is left as it is.
 const list = document.getElementById("reqs");
 const qlang = new URLSearchParams(location.search).get("lang");

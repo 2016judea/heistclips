@@ -1,6 +1,6 @@
 // Backfill translations for every board item that lacks one, in ONE board write.
 //   node scripts/translate_board.mjs [--dry] [--force] [--only=id1,id2]
-// Stores lang + tr{en,de,fr}{title,detail} and response_lang + response_tr on each item
+// Stores lang + tr{en,de,fr,pt,es}{title,detail} and response_lang + response_tr on each item
 // (lib/translate.js). Run it again after adding a language to TR_LANGS. Votes, statuses and
 // shipped_at are never touched. Needs BLOB_READ_WRITE_TOKEN and ANTHROPIC_API_KEY (env or .env).
 import fs from "node:fs";
@@ -36,7 +36,7 @@ for (const it of b.items) {
   }
 }
 if (JSON.stringify(b.items.map((x) => [x.id, x.votes, x.status, x.shipped_at || null])) !== votesBefore) { console.error("votes or statuses changed: refusing to write"); process.exit(1); }
-const missing = b.items.filter((x) => (!only.length || only.includes(x.id)) && (!x.tr || (x.response && !x.response_tr))).map((x) => x.id);
+const missing = b.items.filter((x) => (!only.length || only.includes(x.id)) && (TR_LANGS.some((l) => !x.tr || !x.tr[l]) || (x.response && TR_LANGS.some((l) => !x.response_tr || !x.response_tr[l])))).map((x) => x.id);
 console.log(`${changed} of ${b.items.length} items changed, ${calls} model calls${missing.length ? "; STILL UNTRANSLATED: " + missing.join(", ") : ""}`);
 if (dry) { console.log("--dry: nothing written"); process.exit(0); }
 if (!changed) process.exit(0);
