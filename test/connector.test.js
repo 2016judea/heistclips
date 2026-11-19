@@ -10,7 +10,7 @@ process.env.HC_STORE = "memory"; // never the live store
 process.env.HC_NO_ANALYTICS = "1";
 process.env.TOKEN_ENC_KEY = "ab".repeat(32);
 const { cutJob, saveJob, loadJob, newJobId, JOB, jobAgeMs } = await import("../lib/cutjob.js");
-const { rankKickVariants, playlistUrls, TWITCH_QUALITIES, fetchTo } = await import("../lib/cut.js");
+const { rankKickVariants, playlistUrls, TWITCH_QUALITIES, fetchTo, inTurn } = await import("../lib/cut.js");
 const { resolveSource } = await import("../lib/momentsource.js");
 const { findClipMoments } = await import("../lib/momentstool.js");
 const { TOOLS, callTool } = await import("../api/mcp.js");
@@ -90,6 +90,19 @@ test("a segment read that fails is retried, and a refused -muted name tries the 
   assert.deepEqual(seen, ["https://x/7-muted.ts", "https://x/7.ts"]);
   await assert.rejects(fetchTo("https://x/9.ts", path.join(dir, "c.ts"), { fetcher: async () => ({ ok: false, status: 403 }) }));
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("encodes on one instance run one at a time, in order, and a stuck one cannot hold the line", async () => {
+  const log = [];
+  const job = (name, ms, fail) => inTurn(async () => { log.push("start " + name); await new Promise((r) => setTimeout(r, ms)); log.push("end " + name); if (fail) throw new Error("boom"); return name; });
+  const r = await Promise.allSettled([job("a", 30), job("b", 5, true), job("c", 1)]);
+  assert.deepEqual(log, ["start a", "end a", "start b", "end b", "start c", "end c"]);
+  assert.deepEqual(r.map((x) => x.status), ["fulfilled", "rejected", "fulfilled"]);
+  const t = Date.now();
+  const stuck = inTurn(() => new Promise((r) => setTimeout(r, 300)));
+  await inTurn(async () => {}, 40);
+  assert.ok(Date.now() - t < 200, "went ahead after its maximum wait");
+  await stuck;
 });
 
 test("names with spaces, typos and clip links resolve; what cannot be read says why", async () => {

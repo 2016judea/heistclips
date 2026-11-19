@@ -197,7 +197,7 @@ export function tag(url) {
 // no captions, no IP. The id is a keyed hash of day + connection + client, so a connector user
 // counts once per day.
 const LOG_KEYS = ["err", "status", "platform", "layout", "clip_secs", "source_quality", "megabytes", "cache", "read_ms", "stream_hours", "live", "moments", "polls",
-  "resolve_ms", "account_ms", "playlist_ms", "download_ms", "source_mb", "encode_ms", "upload_ms", "commit_ms", "cut_ms", "kind"];
+  "resolve_ms", "account_ms", "playlist_ms", "download_ms", "source_mb", "queue_ms", "encode_ms", "upload_ms", "commit_ms", "cut_ms", "kind"];
 async function logCall(tool, ok, ms, meta, extra = {}) {
   if (process.env.HC_NO_ANALYTICS) return;
   try {
