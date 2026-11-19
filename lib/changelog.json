@@ -1,5 +1,167 @@
 [
   {
+    "id": "renders-no-longer-hang-on-loading-the",
+    "date": "2026-11-19",
+    "type": "fixed",
+    "title": "Renders no longer hang on Loading the video",
+    "body": "A clip that touched a stretch Twitch had muted for music stopped loading part way and sat there. Those clips load now. Every wait says what it is waiting for, and Cancel stops a render without costing a clip.",
+    "link": "/clip",
+    "at": "2026-11-19T20:13:42.729Z",
+    "langs": {
+      "de": {
+        "title": "Renders bleiben nicht mehr bei Video wird geladen hängen",
+        "body": "Ein Clip, der eine von Twitch wegen Musik stummgeschaltete Stelle berührte, lud nur zum Teil und blieb dann stehen. Diese Clips laden jetzt. Jede Wartezeit sagt, worauf gewartet wird, und Abbrechen stoppt einen Render, ohne dass er einen Clip kostet."
+      },
+      "fr": {
+        "title": "Les rendus ne restent plus bloqués sur Chargement de la vidéo",
+        "body": "Un clip qui touchait un passage coupé par Twitch pour cause de musique s’arrêtait de charger en route et restait là. Ces clips se chargent maintenant. Chaque attente dit ce qu’elle attend, et Annuler arrête un rendu sans te coûter un clip."
+      },
+      "pt": {
+        "title": "A renderização não trava mais em Carregando o vídeo",
+        "body": "Um clipe que pegava um trecho silenciado pela Twitch por causa de música parava de carregar no meio e ficava lá. Esses clipes carregam agora. Cada espera diz o que está esperando, e Cancelar para a renderização sem gastar um clipe."
+      },
+      "es": {
+        "title": "Los renders ya no se quedan colgados en Cargando el video",
+        "body": "Un clip que tocaba un tramo silenciado por Twitch por música dejaba de cargar a medias y se quedaba ahí. Esos clips ahora cargan. Cada espera dice qué está esperando, y Cancelar detiene un render sin gastar un clip."
+      }
+    }
+  },
+  {
+    "id": "clips-on-your-phone-with-sound",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Clips on your phone, with sound",
+    "body": "On a phone, heistclips now cuts the clip on our server: about a minute, 1080x1920 with the stream's sound. Then Save or share puts it in your photos. On iPhone the old way made silent clips.",
+    "link": "/clip",
+    "at": "2026-11-19T20:13:42.668Z",
+    "langs": {
+      "de": {
+        "title": "Clips auf dem Handy, mit Ton",
+        "body": "Auf dem Handy schneidet heistclips den Clip jetzt auf unserem Server: rund eine Minute, 1080x1920 mit dem Ton des Streams. Über Sichern oder teilen landet er in deinen Fotos. Auf dem iPhone kamen vorher stumme Clips heraus."
+      },
+      "fr": {
+        "title": "Des clips sur ton téléphone, avec le son",
+        "body": "Sur téléphone, heistclips découpe maintenant le clip sur notre serveur : environ une minute, en 1080x1920 avec le son du stream. Enregistrer ou partager l’envoie dans tes photos. Sur iPhone, l’ancienne méthode donnait des clips muets."
+      },
+      "pt": {
+        "title": "Clipes no celular, com som",
+        "body": "No celular, o heistclips agora corta o clipe no nosso servidor: cerca de um minuto, em 1080x1920 com o som da live. Depois, Salvar ou compartilhar manda para suas fotos. No iPhone, o jeito antigo gerava clipes mudos."
+      },
+      "es": {
+        "title": "Clips en tu móvil, con sonido",
+        "body": "En el móvil, heistclips ahora corta el clip en nuestro servidor: alrededor de un minuto, en 1080x1920 con el sonido del directo. Luego Guardar o compartir lo manda a tus fotos. En iPhone, la forma anterior sacaba clips mudos."
+      }
+    }
+  },
+  {
+    "id": "drag-the-clip-window-instead-of-tapping",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "Drag the clip window instead of tapping plus 5",
+    "body": "Set the start and end by dragging on a strip that shows where chat went off, type an exact time, or step 1, 5 or 15 seconds. Hold a button to keep moving. The new length and file size show at once.",
+    "link": "/clip",
+    "at": "2026-11-19T20:13:42.612Z",
+    "langs": {
+      "de": {
+        "title": "Clip-Ausschnitt ziehen statt immer wieder plus 5 tippen",
+        "body": "Start und Ende setzt du jetzt per Ziehen auf einer Leiste, die zeigt, wo der Chat abging. Oder du tippst die genaue Zeit ein oder gehst in Schritten von 1, 5 oder 15 Sekunden. Knopf halten bewegt weiter. Neue Länge und Dateigröße stehen sofort da."
+      },
+      "fr": {
+        "title": "Fais glisser la fenêtre du clip au lieu de taper sur plus 5",
+        "body": "Règle le début et la fin en les faisant glisser sur une bande qui montre où le chat s’est emballé, tape une heure exacte, ou avance par pas de 1, 5 ou 15 secondes. Maintiens un bouton pour continuer. La durée et la taille s’affichent tout de suite."
+      },
+      "pt": {
+        "title": "Arraste o trecho do clipe em vez de tocar em mais 5",
+        "body": "Defina o início e o fim arrastando numa faixa que mostra onde o chat explodiu, digite o tempo exato ou ande em passos de 1, 5 ou 15 segundos. Segure um botão para continuar andando. A nova duração e o tamanho aparecem na hora."
+      },
+      "es": {
+        "title": "Arrastra el tramo del clip en vez de pulsar más 5",
+        "body": "Marca el inicio y el final arrastrando sobre una tira que muestra dónde explotó el chat, escribe la hora exacta o avanza en pasos de 1, 5 o 15 segundos. Mantén pulsado un botón para seguir moviendo. La nueva duración y el tamaño salen al momento."
+      }
+    }
+  },
+  {
+    "id": "render-in-one-tap-with-your-settings",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "Render in one tap, with your settings remembered",
+    "body": "The Render button now sits at the top of the editor. Your layout, hook style, chat overlay and quality are remembered from clip to clip, and the facecam setup is remembered for each streamer.",
+    "link": "/clip",
+    "at": "2026-11-19T20:13:42.554Z",
+    "langs": {
+      "de": {
+        "title": "Rendern mit einem Tipp, deine Einstellungen bleiben",
+        "body": "Der Render-Knopf steht jetzt ganz oben im Editor. Layout, Hook-Stil, Chat-Overlay und Qualität merkt sich heistclips von Clip zu Clip, die Facecam-Einstellung für jeden Streamer."
+      },
+      "fr": {
+        "title": "Le rendu en un geste, avec tes réglages gardés",
+        "body": "Le bouton de rendu est maintenant tout en haut de l’éditeur. Ta mise en page, ton style de hook, le chat et la qualité sont gardés d’un clip à l’autre, et le réglage de la facecam pour chaque streamer."
+      },
+      "pt": {
+        "title": "Renderize com um toque, com seus ajustes guardados",
+        "body": "O botão de renderizar agora fica no topo do editor. Seu layout, estilo de gancho, chat e qualidade ficam guardados de um clipe para o outro, e o ajuste da facecam fica guardado para cada streamer."
+      },
+      "es": {
+        "title": "Renderiza con un toque y con tus ajustes guardados",
+        "body": "El botón de renderizar ahora está arriba del todo en el editor. Tu formato, estilo de gancho, chat y calidad se guardan de un clip a otro, y el ajuste de la facecam se guarda para cada streamer."
+      }
+    }
+  },
+  {
+    "id": "smaller-files-same-picture",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "Smaller files, same picture",
+    "body": "Clips now export at about 12 Mbps at 60 fps, so a 38 second clip is about 57 MB, down from 96. Want the old size? Pick Max under More in the editor. You see the size before you render.",
+    "link": "/clip",
+    "at": "2026-11-19T20:13:42.495Z",
+    "langs": {
+      "de": {
+        "title": "Kleinere Dateien, gleiches Bild",
+        "body": "Clips werden jetzt mit rund 12 Mbit/s bei 60 fps exportiert: Ein 38-Sekunden-Clip hat rund 57 MB statt 96. Du willst die alte Größe? Wähl im Editor unter Mehr die Stufe Maximal. Die Größe siehst du schon vor dem Rendern."
+      },
+      "fr": {
+        "title": "Des fichiers plus légers, la même image",
+        "body": "Les clips sortent maintenant à environ 12 Mbit/s en 60 i/s : un clip de 38 secondes pèse environ 57 Mo au lieu de 96. Tu veux l’ancienne taille ? Choisis Max dans Plus, dans l’éditeur. La taille s’affiche avant le rendu."
+      },
+      "pt": {
+        "title": "Arquivos menores, mesma imagem",
+        "body": "Os clipes agora saem a cerca de 12 Mbps em 60 fps: um clipe de 38 segundos fica com uns 57 MB, em vez de 96. Quer o tamanho antigo? Escolha Máxima em Mais, no editor. Você vê o tamanho antes de renderizar."
+      },
+      "es": {
+        "title": "Archivos más pequeños, la misma imagen",
+        "body": "Los clips ahora salen a unos 12 Mbps a 60 fps: un clip de 38 segundos pesa unos 57 MB en vez de 96. ¿Quieres el tamaño de antes? Elige Máxima en Más, dentro del editor. Ves el tamaño antes de renderizar."
+      }
+    }
+  },
+  {
+    "id": "editing-a-hook-line-now-selects-it",
+    "date": "2026-11-19",
+    "type": "fixed",
+    "title": "Editing a hook line now selects it",
+    "body": "Click into any hook line and type: that line is picked and the preview shows it right away. Before, the old line stayed selected and nothing seemed to change.",
+    "link": "/clip",
+    "at": "2026-11-19T20:13:42.430Z",
+    "langs": {
+      "de": {
+        "title": "Wer eine Hook-Zeile bearbeitet, wählt sie damit aus",
+        "body": "Klick in eine Hook-Zeile und tipp los: Die Zeile ist ausgewählt und die Vorschau zeigt sie sofort. Vorher blieb die alte Zeile ausgewählt und es sah aus, als würde nichts passieren."
+      },
+      "fr": {
+        "title": "Modifier une ligne de hook la sélectionne",
+        "body": "Clique dans une ligne de hook et écris : elle est choisie et l’aperçu l’affiche tout de suite. Avant, l’ancienne ligne restait sélectionnée et rien ne semblait changer."
+      },
+      "pt": {
+        "title": "Editar uma linha de gancho já seleciona ela",
+        "body": "Clique em qualquer linha de gancho e digite: ela fica escolhida e a prévia mostra na hora. Antes, a linha antiga continuava selecionada e parecia que nada mudava."
+      },
+      "es": {
+        "title": "Editar una línea de gancho ahora la selecciona",
+        "body": "Haz clic en cualquier línea de gancho y escribe: queda elegida y la vista previa la muestra al momento. Antes seguía seleccionada la línea anterior y parecía que nada cambiaba."
+      }
+    }
+  },
+  {
     "id": "cutting-a-clip-in-your-ai-chat",
     "date": "2026-11-19",
     "type": "fixed",

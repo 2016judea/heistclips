@@ -4,6 +4,7 @@
 import crypto from "node:crypto";
 import { getJSON, putJSON, secretPath } from "../lib/store.js";
 import { PACKS } from "../lib/render.js";
+import { serverEvent } from "../lib/track.js";
 
 export const config = { api: { bodyParser: false } };
 
@@ -26,6 +27,12 @@ export async function grant(session, via) {
   const existing = await getJSON(path, { fresh: true }).catch(() => null);
   if (existing) return { granted: false, why: "already granted", via: existing.via };
   await putJSON(path, { granted: pack.clips, used: 0, pack: pack.id, livemode: !!session.livemode, via, at: new Date().toISOString() }, { maxAge: 0 });
+  // One purchase event per paid session, from here so it fires once whichever of the webhook and
+  // the buyer's return arrives first. Pack, amount, currency and country only (ANALYTICS.md).
+  await serverEvent("purchase", {
+    pack: pack.id, clips: pack.clips, amount: session.amount_total != null ? session.amount_total / 100 : undefined, currency: session.currency,
+    country: session.customer_details && session.customer_details.address && session.customer_details.address.country, livemode: !!session.livemode, via, $host: "heistclips.com",
+  });
   return { granted: true, clips: pack.clips };
 }
 

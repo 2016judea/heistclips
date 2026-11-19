@@ -11,6 +11,7 @@ import { getJSON, putJSON, secretPath, listPaths } from "../lib/store.js";
 import { FREE_CLIPS } from "../lib/render.js";
 import { grant } from "./stripe-webhook.js";
 import { recordClip } from "../lib/trend.js";
+import { clipMade } from "../lib/track.js";
 
 const TICKET_TTL_MS = 6 * 3600 * 1000;
 const salt = () => process.env.CREDIT_SALT || process.env.BLOB_READ_WRITE_TOKEN || "dev";
@@ -57,16 +58,23 @@ async function spend(d, k, id, meta) {
   const { paid, freeUses, paidUses, state } = await read(d, k);
   const name = id + ".json";
   if (freeUses.some((p) => p.endsWith("/" + name)) || paidUses.some((p) => p.endsWith("/" + name))) return { ok: true, already: true, ...state };
-  const row = { at: new Date().toISOString(), ...meta };
+  // The spend row keeps what was cut, never who: the analytics id and the test flag stay out of it.
+  const { ph, qa, ...kept } = meta || {};
+  const row = { at: new Date().toISOString(), ...kept };
+  // One finished clip = one trend record (lib/trend.js) and one clip_made event (lib/track.js),
+  // whichever path made it. A test clip (meta.qa) is charged like any other and counted nowhere.
+  const count = async (charged, left) => { if (qa) return; await Promise.all([recordClip(kept), clipMade(meta, { charged, ...left, d })]); };
   if (state.free_left > 0) {
     await putJSON(usesDir("free", d) + name, row, { maxAge: 60 });
-    await recordClip(meta); // stream + moment only, for /most-clipped-streams (lib/trend.js)
-    return { ok: true, free_left: state.free_left - 1, paid_left: state.paid_left };
+    const left = { free_left: state.free_left - 1, paid_left: state.paid_left };
+    await count("free", left);
+    return { ok: true, ...left };
   }
   if (paid && state.paid_left > 0) {
     await putJSON(usesDir("paid", k) + name, row, { maxAge: 60 });
-    await recordClip(meta);
-    return { ok: true, free_left: 0, paid_left: state.paid_left - 1 };
+    const left = { free_left: 0, paid_left: state.paid_left - 1 };
+    await count("paid", left);
+    return { ok: true, ...left };
   }
   return { ok: false, need: "buy", ...state };
 }
@@ -79,7 +87,15 @@ async function body(req) {
 
 const metaOf = (m) => {
   const x = m && typeof m === "object" ? m : {};
-  return { vod: String(x.vod || "").slice(0, 40), t: Number(x.t) || 0, layout: String(x.layout || "").slice(0, 20), bytes: Number(x.bytes) || 0 };
+  const out = { vod: String(x.vod || "").slice(0, 40), t: Number(x.t) || 0, layout: String(x.layout || "").slice(0, 20), bytes: Number(x.bytes) || 0 };
+  // Optional, for the clip_made event (lib/track.js): the stream, the clip's length, the path.
+  if (x.channel) out.channel = String(x.channel).toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40);
+  if (x.platform === "kick" || x.platform === "twitch") out.platform = x.platform;
+  if (Number(x.secs) > 0) out.secs = Math.round(Number(x.secs));
+  if (x.via === "web") out.via = "web";
+  if (typeof x.ph === "string" && /^[A-Za-z0-9_-]{8,80}$/.test(x.ph)) out.ph = x.ph;
+  if (x.qa === true) out.qa = true;
+  return out;
 };
 
 export default async function handler(req, res) {

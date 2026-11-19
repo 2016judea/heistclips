@@ -1,0 +1,73 @@
+# Analytics: what heistclips records
+
+PostHog project (key in `lib/posthog.html`), every event tagged `site: heistclips`. Vercel Web
+Analytics counts page views. No chat text, no hook text, no stream title, no email, no IP is put
+in an event. Property names are snake_case and stay stable: add a property, never rename one.
+
+Read them with `~/.claude/skills/site-analytics` or a HogQL query; filter `properties.$host like
+'%heistclips%'`.
+
+## On every browser event from the clip tool (`public/js/app.js`)
+
+| Property | Values |
+|---|---|
+| `lang` | page language: `en`, `de`, `fr`, `pt`, `es` |
+| `entry` | the `src` URL parameter the visit arrived with (`mcp`, `queue`, `for`, …), kept for the tab; `direct` when there was none |
+| `platform`, `channel`, `vod_id`, `is_live` | the stream that is open (from the moment a stream is open) |
+| `first_src`, `first_utm_source`, `first_referrer_host` | first touch, registered once per browser and set once on the person when the visit carried `src` or `utm_source` |
+
+Events about one moment also carry `t_start` (the clip's first second in the stream) and
+`clip_secs`.
+
+## The clip funnel
+
+| Event | When | Properties beyond the common ones |
+|---|---|---|
+| `clip_lookup` | a name, link or id was submitted | `kind` |
+| `clip_first_moments` | first moments on screen for a long live stream | `n`, `secs` |
+| `clip_moments` | moments found | `n`, `secs`, `live`, `len`, `quiet`, `msgs`, `spoilers`, `spoiler_filter` |
+| `clip_dead` | no moments could be shown | `why` |
+| `clip_corrected` / `clip_live_unsaved` / `clip_top_live` | a typed name was matched, a live stream is not saved, the top live stream was opened | |
+| `moment_cut_open` | "Cut this" | `rank`, `live`, `t_start`, `clip_secs`, `server_mode` |
+| `moment_skip`, `spoiler_filter`, `live_moment` | list actions | |
+| `editor_option` | a layout, hook mode, chat, quality or hook choice | `k`, `v` |
+| `facecam_box`, `facecam_preset`, `facecam_camOut`, `facecam_camStyle`, `facecam_punch`, `facecam_camFx` | facecam choices | |
+| `clip_window` | the clip window was changed | `how` (`drag_s`, `drag_e`, `drag_move`, `typed_s`, `typed_e`, `step`), `d`, `edge`, `presses` |
+| `render_mode` | a phone switched between the server cut and rendering on the phone | `server` |
+| `clip_preview` | Preview | `layout` |
+| `clip_render_start` | Render pressed and a clip is available | `path` (`browser` or `browser_server`), `layout`, `hook` (bool), `chat` (bool), `quality` (`std`, `max`, `server`), `free_left`, `paid_left`, `len`, `cam_fx` |
+| `clip_render_done` | a file exists | everything on start, plus `render_ms`, `load_ms`, `record_ms`, `fps`, `mbps`, `mbps_asked`, `mb`, `ext`, `source`, `source_height`, `cam_style`, `cam_out`, `effect`, `punch_at`, `sound`, `charged`, `free_left` after the charge |
+| `clip_render_fail` | a render ended with an error | `phase` (`load`, `loudest`, `record`, `commit`, `server`, `fetch`), `code` (`cdn_refused`, `no_data`, `record_stall`, `audio_blocked`, `empty`, `encoder`, `play_aborted`, `not_in_video`, `no_recorder`, `no_credit`, `server_cut`, `network`, `other`), `err` (first 80 characters of our own message), `secs` |
+| `clip_render_cancel` | Cancel during a render | `phase` |
+| `clip_render_stall` | a phase showed the same percentage for 20 s (once per phase) | `phase`, `percent` |
+| `clip_render_abandon` | the page was hidden or left while a render ran (sent with sendBeacon, once) | `phase`, `percent`, `secs`, `how` (`pagehide`, `visibilitychange`) |
+| `clip_download` | the Download button was pressed | `ext`, `mb`, `path` |
+| `clip_share` | "Save or share" was pressed (phones) | `path` |
+| `paywall_shown` | the buy buttons were shown in the editor (`paywall_hit` is the same moment, kept for history) | `free_left` (0), `paid_left`, `where` |
+| `checkout_start`, `purchase_claimed` | `public/js/buy.js`, and the return from Stripe | `pack`, `from`, `ok` |
+
+`started = done + fail + cancel + abandon` should now hold. Before 2026-11-19, 21% of renders
+ended with no event (610 started, 478 done, 5 failed).
+
+## Server events (`lib/track.js`; cannot be blocked in a browser)
+
+| Event | Fired from | Properties |
+|---|---|---|
+| `clip_made` | `spend()` in `api/credits.js`: the one place every path spends a clip. **The one true count of clips.** | `path` (`browser`, `browser_server`, `connector`, `queue`), `platform`, `channel`, `vod_id`, `t_start`, `clip_secs`, `layout`, `mb`, `charged` (`free` or `paid`), `free_left`, `paid_left` |
+| `purchase` | `grant()` in `api/stripe-webhook.js`, once per paid Checkout session | `pack`, `clips`, `amount`, `currency`, `country`, `livemode`, `via` (`webhook` or `claim`) |
+| `server_cut` | `lib/cutjob.js`, `lib/queuecut.js` (the cutter's own timings and failure codes) | see those files |
+| `mcp_tool_call` | `api/mcp.js` | `tool`, `ok`, `ms`, `client` |
+
+`clip_made.path` is read from what the spender sends: `layout: "queue-server"` is the queue,
+`layout: "server-…"` is the connector, `via: "web"` is the clip page's phone cut, anything else
+a browser render. `channel` and `clip_secs` are there when the spender sends them in the commit's
+`meta` (the browser does; `lib/cutjob.js` sends `vod`, `t` and `layout` today). The distinct id is
+the browser's PostHog id when the page sent one, else a keyed hash of the device id; no person
+profile is created. A commit with `meta.qa === true` is charged and counted nowhere (test runs).
+
+## Checking that an event arrives
+
+PostHog's snippet does not load when `navigator.webdriver` is true, so a plain headless run sends
+nothing. To see real events: a headless Chrome started with
+`--disable-blink-features=AutomationControlled`, then `posthog.register({ qa_test: true })` in the
+page so the test's events can be filtered out, or the iOS simulator's Safari.

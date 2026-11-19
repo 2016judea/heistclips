@@ -114,6 +114,37 @@ export class Clipper {
     } else throw new Error("This browser cannot play the stream video.");
     await this.seek(start);
     if (this.net && this.net.fatal && !v.videoWidth) throw new Error("video: " + this.net.fatal);
+    if (v.videoWidth && this.blank()) await this.prime(start);
+  }
+
+  // Safari rejects play() with "The operation was aborted." and Chrome with "interrupted by a new
+  // load request" when the loader touches the element as playback starts (4 of 41 Safari renders
+  // and one Android render failed on exactly these, 11/16-11/19). The next try goes through.
+  async playSafe() {
+    for (let i = 0; ; i++) {
+      try { await this.video.play(); return; }
+      catch (e) { if (i >= 3 || !/abort|interrupt/i.test(String(e && e.name) + " " + String(e && e.message))) throw e; await sleep(400); }
+    }
+  }
+
+  // iOS Safari shows no picture until the video has played: the editor's canvas stayed black.
+  // If the first draw is blank, play a few muted frames and come back.
+  blank() {
+    const v = this.video;
+    if (!v.videoWidth) return true;
+    try {
+      this.sctx.drawImage(v, 0, 0, 54, 96);
+      const d = this.sctx.getImageData(0, 0, 54, 96).data;
+      let sum = 0; for (let i = 0; i < d.length; i += 16) sum += d[i] + d[i + 1] + d[i + 2];
+      return sum < 200;
+    } catch (e) { return false; }
+  }
+  async prime(start) {
+    const v = this.video, was = v.muted;
+    v.muted = true;
+    try { await Promise.race([v.play(), sleep(2500)]); await sleep(250); } catch (e) {}
+    v.pause(); v.muted = was;
+    await this.seek(start);
   }
 
   ranges() { const b = this.video.buffered, out = []; for (let i = 0; i < b.length; i++) out.push([b.start(i), b.end(i)]); return out; }
@@ -372,7 +403,7 @@ export class Clipper {
     this.ensureAudio(); await this.resumeAudio().catch(() => {});
     if (Math.abs(v.currentTime - start) > 0.3) await this.seek(start);
     this.startPreview();
-    await v.play();
+    await this.playSafe();
     const bins = new Map(), lv = this.audio && this.audio.level, buf = lv && new Float32Array(lv.fftSize);
     const stopAt = () => new Promise((ok) => { const chk = () => {
       if (lv) sampleLevel(lv, buf, bins, Math.floor((v.currentTime - start) * 4));
@@ -390,7 +421,7 @@ export class Clipper {
     try {
       await this.seek(start);
       v.playbackRate = 4;
-      await v.play();
+      await this.playSafe();
       const t0 = performance.now();
       await new Promise((ok) => {
         const chk = () => {
@@ -413,6 +444,8 @@ export class Clipper {
   async record(start, end, onState) {
     const v = this.video;
     this.cancelled = false;
+    // phase and the two timings are for analytics (ANALYTICS.md): where a render is, how long each part took
+    this.phase = "load"; const tLoad = performance.now();
     if (!(end - start >= 2)) throw new Error("the clip window is empty (its end is before its start). Reset it with the buttons and render again");
     this.clipStart = start;
     const mime = pickMime();
@@ -455,6 +488,11 @@ export class Clipper {
       // The browser's own buffer is full (a long window of a very high bitrate source): start
       // with what is in; the recorder holds whenever playback has to wait for more.
       if (this.net && this.net.full && got - v.currentTime >= Math.min(15, end - start)) break;
+      // Safari (iPhone, iPad and Mac from 17.1) buffers through ManagedMediaSource and stops asking
+      // for more once it holds about 30 s, however long the window is: real Mobile Safari sat on
+      // "Loading the video… 24%" (measured in the iOS 27 simulator, 2026-11-19). With 8 s or more
+      // in hand and nothing arriving for 2.5 s, start; playback pulls the rest as it goes.
+      if (idle > 2500 && !(this.net && this.net.fatal) && got - v.currentTime >= Math.min(8, end - start)) break;
       if (got > seen + 0.05 || bytes > seenBytes) { seen = Math.max(seen, got); seenBytes = bytes; moved = Date.now(); }
       else if ((this.net && this.net.fatal) || idle > 20000) {
         if (restarts >= 3) throw new Error(this.net && this.net.fatal ? `${site} refused part of this video (${this.net.fatal}). Try a different clip window` : `the video stopped arriving from ${site}. Check your connection and render again`);
@@ -468,6 +506,7 @@ export class Clipper {
       await sleep(400);
     }
     if (this.opts.layout === "split" && (this.opts.punch || fxNeedsLoud(this.opts.camFx)) && this.punchWin !== start + "-" + end) {
+      this.phase = "loudest";
       this.punchAt = (await this.findLoudest(start, end, onState)) ?? this.opts.punchFallback ?? null;
       this.punchWin = start + "-" + end;
       await this.seek(start);
@@ -500,9 +539,10 @@ export class Clipper {
     this.draw();
     rec.start(500);
     const tRec = performance.now();
+    this.phase = "record";
     if (rvfc) v.requestVideoFrameCallback(onFrame);
     try {
-      await v.play();
+      await this.playSafe();
       await new Promise((ok) => {
         const tick = () => {
           if (failed) return ok();
@@ -535,7 +575,7 @@ export class Clipper {
     if (!blob.size) throw new Error("the recording came out empty");
     const secs = end - start;
     const fps = Math.min(60, Math.round(frames / Math.max(1, secs)));
-    return { blob, fxHits: this.fxHits, ext: type.includes("mp4") ? "mp4" : "webm", secs, end, fps, mbps: Math.round((blob.size * 8) / secs / 1e5) / 10, sound: loudest > 0.001, source: `${v.videoWidth}×${v.videoHeight}` };
+    return { blob, load_ms: Math.round(tRec - tLoad), record_ms: Math.round(performance.now() - tRec), fxHits: this.fxHits, ext: type.includes("mp4") ? "mp4" : "webm", secs, end, fps, mbps: Math.round((blob.size * 8) / secs / 1e5) / 10, sound: loudest > 0.001, source: `${v.videoWidth}×${v.videoHeight}` };
   }
 
   destroy() { this.stopPreview(); cancelAnimationFrame(this.fxLoop); if (this.hls) this.hls.destroy(); this.video.removeAttribute("src"); }
