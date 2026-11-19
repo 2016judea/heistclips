@@ -54,6 +54,10 @@ const errCode = (msg) => { const x = String(msg || "");
 // So a phone gets the clip cut on our server (the connector's cutter, /api/v1/cut): about a
 // minute, with sound. Android can still choose to render on the phone.
 const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+// Safari on a Mac has the same deaf Web Audio, and it draws few frames: its renders on 11/19 came
+// out at 5 to 14 fps (18 of them, 3 people) and both that reported sound were silent. It gets the
+// server cut too.
+const SAFARI = !IOS && /Safari\//.test(navigator.userAgent) && /Version\//.test(navigator.userAgent) && !/Chrome|Chromium|CriOS|Edg|OPR|Android/.test(navigator.userAgent);
 const PHONE = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches) && Math.min(innerWidth, (window.screen && screen.width) || innerWidth) < 700;
 const LOCAL_MAX_S = 180, MIN_S = 5;
 // Bitrate: the default lands near 12 Mbps (YouTube's own figure for a 1080p60 upload; TikTok and
@@ -433,8 +437,8 @@ async function openEditor(i) {
   const camKey = `hc_cam:${current.vod.platform || "twitch"}:${current.vod.channel}`;
   let camSaved = null; try { camSaved = JSON.parse(store.get(camKey) || "null"); } catch (e) {}
   let pref = {}; try { pref = JSON.parse(store.get("hc_ed") || "{}") || {}; } catch (e) {}
-  const canLocal = mime !== null && !IOS;
-  let serverMode = mime === null || IOS || (PHONE && pref.phoneLocal !== true);
+  const canLocal = mime !== null && !IOS && !SAFARI;
+  let serverMode = mime === null || IOS || SAFARI || (PHONE && pref.phoneLocal !== true);
   const win = { s: m.t_start, e: m.t_end };
   const mprops = () => ({ t_start: Math.round(win.s), clip_secs: Math.round(win.e - win.s) });
   ph("moment_cut_open", { rank: i + 1, live: !!m.live, ...mprops(), server_mode: serverMode });
@@ -628,7 +632,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
       const c = cl.opts.cam || CAM_DEFAULT, corner = (c.y + c.h / 2 < 0.5 ? "t" : "b") + (c.x + c.w / 2 < 0.5 ? "l" : "r");
       cl.opts.cam = camPreset(corner, { w: 0.28, h: 0.35 }); cl.srvCorner = corner;
       note.hidden = false;
-      note.innerHTML = `On a phone your clip is cut on our server: about a minute, with sound.` + (canLocal ? ` <button type="button" class="linkbtn" id="uselocal">Render on this phone instead</button>` : "");
+      note.innerHTML = (SAFARI ? `Safari records clips without sound, so yours is cut on our server: about a minute. Chrome, Edge and Firefox render it here with every option.` : PHONE || IOS ? `On a phone your clip is cut on our server: about a minute, with sound.` : `This browser can’t record video, so your clip is cut on our server: about a minute, with sound.`) + (canLocal ? ` <button type="button" class="linkbtn" id="uselocal">Render on this phone instead</button>` : "");
       if (win.e - win.s > SERVER_MAX_S) setWin(win.s, win.s + SERVER_MAX_S, "e");
     } else if (PHONE && canLocal) { note.hidden = false; note.innerHTML = `Rendering on this phone: keep this tab open and the screen on. <button type="button" class="linkbtn" id="useserver">Cut it on our server instead</button>`; }
     else note.hidden = true;

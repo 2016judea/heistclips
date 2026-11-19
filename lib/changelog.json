@@ -1,5 +1,32 @@
 [
   {
+    "id": "safari-clips-now-have-sound-and-a",
+    "date": "2026-11-19",
+    "type": "fixed",
+    "title": "Safari clips now have sound and a smooth picture",
+    "body": "Safari on a Mac recorded clips with no sound and a choppy picture. In Safari the clip is now cut on our server instead: about a minute, 1080x1920, with the stream's sound.",
+    "link": "/clip",
+    "at": "2026-11-19T20:42:42.391Z",
+    "langs": {
+      "de": {
+        "title": "Safari-Clips haben jetzt Ton und ein flüssiges Bild",
+        "body": "Safari auf dem Mac nahm Clips ohne Ton und mit ruckelndem Bild auf. In Safari wird der Clip jetzt auf unserem Server geschnitten: rund eine Minute, 1080x1920, mit dem Ton des Streams."
+      },
+      "fr": {
+        "title": "Sur Safari, les clips ont maintenant le son et une image fluide",
+        "body": "Safari sur Mac enregistrait les clips sans le son et avec une image saccadée. Sur Safari, le clip est maintenant découpé sur notre serveur : environ une minute, en 1080x1920, avec le son du stream."
+      },
+      "pt": {
+        "title": "No Safari, os clipes agora têm som e imagem fluida",
+        "body": "O Safari no Mac gravava clipes sem som e com a imagem travando. No Safari, o clipe agora é cortado no nosso servidor: cerca de um minuto, em 1080x1920, com o som da live."
+      },
+      "es": {
+        "title": "En Safari, los clips ahora tienen sonido e imagen fluida",
+        "body": "Safari en Mac grababa los clips sin sonido y con la imagen a saltos. En Safari, el clip ahora se corta en nuestro servidor: alrededor de un minuto, en 1080x1920, con el sonido del directo."
+      }
+    }
+  },
+  {
     "id": "funny-facecam-effects",
     "date": "2026-11-19",
     "type": "new",
