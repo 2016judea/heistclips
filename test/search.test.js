@@ -63,6 +63,8 @@ test("every search page: one h1, canonical, tracked, valid JSON-LD, no em dash, 
   assert.equal(titles.size, 7); assert.equal(descs.size, 7);
   assert.match(pages["/streamers/kaicenat"], /name="q" value="kaicenat"/); // the clipper is pre-filled
   assert.match(pages["/streamers/kick/adinross"], /name="q" value="kick\.com\/adinross"/);
+  assert.match(pages["/kick-clip-maker"], /onsubmit="[^"]*kick\.com\//); // a bare name typed on the Kick page is a Kick channel
+  assert.doesNotMatch(pages["/twitch-clip-maker"], /onsubmit=/);
   assert.match(pages["/streamers/kaicenat"], /1 campaign pays for KaiCenat clips right now/);
   assert.match(pages["/streamers/kick/adinross"], /No campaign names AdinRoss right now/);
   assert.match(pages["/most-clipped-streams"], /"@type":"Dataset"/); assert.match(pages["/most-clipped-streams"], /"@type":"ItemList"/);
