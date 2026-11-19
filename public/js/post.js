@@ -47,7 +47,8 @@ async function managePage(root) {
     for (const p of ["youtube", "tiktok"]) {
       const row = $(`[data-provider="${p}"]`, root); if (!row) continue;
       const on = s[p] && s[p].connected;
-      $("[data-state]", row).textContent = on ? "Connected" : "Not connected";
+      { const st = $("[data-state]", row); st.textContent = on ? (s[p].name ? `Connected as ${s[p].name}` : "Connected") : "Not connected";
+        if (on && s[p].avatar) { const im = document.createElement("img"); im.src = s[p].avatar; im.alt = ""; im.width = 22; im.height = 22; im.referrerPolicy = "no-referrer"; im.style.cssText = "border-radius:50%;vertical-align:middle;margin-right:6px"; st.prepend(im); } }
       $("[data-state]", row).classList.toggle("paid", !!on);
       const c = $("[data-connect]", row), d = $("[data-disconnect]", row);
       if (c) c.textContent = on ? `Reconnect ${LABEL[p]}` : `Connect ${LABEL[p]}`;

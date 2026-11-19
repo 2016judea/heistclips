@@ -6,7 +6,7 @@
 //   PUT  /api/v1/post?op=part&acct=&id=&n=&ext=  one <=3.5 MB slice of a browser render
 import * as R from "../../lib/render.js";
 import { getAccount, createAccount, keep, signState, readState, ACCT } from "../../lib/accounts.js";
-import { PROVIDERS, available, availability, storeTokens } from "../../lib/social.js";
+import { PROVIDERS, available, availability, storeTokens, tiktokProfile } from "../../lib/social.js";
 import { postJob, accountStatus } from "../../lib/postjob.js";
 import { putFile, randomName, CLIP_ID } from "../../lib/blobfiles.js";
 
@@ -75,6 +75,7 @@ export default async function handler(req, res) {
       catch (e) { return go(res, `${back}&err=${encodeURIComponent(e.message)}`); }
       // Google lists what was actually ticked; without the upload scope nothing can be posted.
       if (p === "youtube" && tok.scope && !tok.scope.includes("youtube.upload")) return go(res, `${back}&err=${encodeURIComponent("YouTube was connected without the upload permission. Press Connect again and leave the box ticked.")}`);
+      if (p === "tiktok") Object.assign(tok, await tiktokProfile(tok.access_token));
       storeTokens(rec, p, tok);
       await keep(rec);
       return go(res, `${back}&connected=${p}`);
