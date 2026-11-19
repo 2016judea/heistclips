@@ -343,3 +343,11 @@ clippers cutting this hour, and opens the tool on that exact moment.
 Build. The one number the page depends on, clips per stream, has a 67x spread across 21
 streams, so the ranking has an answer. The honest limits: it counts clips made on heistclips
 only (not all clipping everywhere), and it cannot say how many people made them.
+
+### Expected numbers, written before any result (read them on 2026-11-26)
+Base rates on record, 11-15 to 11-19: of 61 people who arrived from ChatGPT on guide and
+campaign pages, 4 made a clip (6.5%); of the 39 who landed on the ranker, 0 did; of people who
+landed on a `/clip` link, 57% did. The new pages carry `src=` on every link into the tool
+(`trend`, `streamer`, `streamer-vod`, `maker-twitch`, `maker-kick`), so the read is: `/clip`
+pageviews by `src`, and `clip_render_done` after them, in PostHog. Expected if these pages do
+nothing new: the 6.5% of the old landing pages.
