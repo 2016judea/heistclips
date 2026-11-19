@@ -4,6 +4,37 @@
 
 export const W = 1080, H = 1920;
 
+// ---- facecam (board requests rmwnmbvuw, rmwm7a4ji, rmwm3rms3) --------------------------------
+// The facecam is a box in the SOURCE frame, as fractions of its width and height, placed by
+// dragging or by a preset; the output puts it on top or at the bottom, as a full-width panel,
+// a rounded box or a circle, with an optional punch-in zoom on the loudest second.
+export const CAM_DEFAULT = { x: 0.74, y: 0, w: 0.26, h: 0.29 };
+export function camPreset(p, box = CAM_DEFAULT) {
+  const w = Math.min(1, box.w), h = Math.min(1, box.h);
+  const x = p[1] === "l" ? 0 : 1 - w;
+  const y = p[0] === "t" ? 0 : p[0] === "b" ? 1 - h : (1 - h) / 2;
+  return { x, y, w, h };
+}
+export function clampBox(b) {
+  const w = Math.max(0.06, Math.min(1, b.w)), h = Math.max(0.06, Math.min(1, b.h));
+  return { x: Math.max(0, Math.min(1 - w, b.x)), y: Math.max(0, Math.min(1 - h, b.y)), w, h };
+}
+// Zoom over time around the loudest moment: in over 0.25 s, hold 0.9 s, out over 0.5 s.
+export function punchZoom(dt, amount = 0.32) {
+  const ease = (x) => 1 - Math.pow(1 - Math.max(0, Math.min(1, x)), 3);
+  if (dt < -0.25 || dt > 1.4) return 1;
+  if (dt < 0) return 1 + amount * ease((dt + 0.25) / 0.25);
+  if (dt <= 0.9) return 1 + amount;
+  return 1 + amount * (1 - ease((dt - 0.9) / 0.5));
+}
+// Quarter-second loudness bins -> centre of the loudest one-second stretch, or null if silent.
+export function loudestSecond(bins, start) {
+  let best = null, bestV = 0;
+  const avg = (k) => { const e = bins.get(k); return e && e[1] ? e[0] / e[1] : 0; };
+  for (const k of bins.keys()) { const v = avg(k) + avg(k + 1) + avg(k + 2) + avg(k + 3); if (v > bestV) { bestV = v; best = k; } }
+  return bestV > 0.004 ? start + (best + 2) * 0.25 : null;
+}
+
 export function pickMime() {
   const opts = ["video/mp4;codecs=avc1.640028,mp4a.40.2", "video/mp4;codecs=avc1.4d002a,mp4a.40.2", "video/mp4;codecs=avc1,mp4a", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
   if (typeof MediaRecorder === "undefined") return null;
@@ -19,7 +50,8 @@ export class Clipper {
     this.video.playsInline = true; this.video.crossOrigin = "anonymous"; this.video.preload = "auto";
     this.small = document.createElement("canvas"); this.small.width = 54; this.small.height = 96;
     this.sctx = this.small.getContext("2d");
-    this.opts = { layout: "fit", hook: "", hookMode: "always", chat: true, cam: "tr", camSize: 0.28, pan: 0 };
+    this.opts = { layout: "fit", hook: "", hookMode: "always", chat: true, cam: { ...CAM_DEFAULT }, camOut: "top", camStyle: "split", punch: false, pan: 0 };
+    this.punchAt = null; this.onDraw = null;
     this.chat = []; this.audio = null; this.src = null; this.hls = null; this.loop = null;
   }
 
@@ -94,14 +126,7 @@ export class Clipper {
       const sw = vh * 9 / 16, sx = Math.max(0, Math.min(vw - sw, (vw - sw) / 2 + o.pan * (vw - sw) / 2));
       ctx.drawImage(v, sx, 0, sw, vh, 0, 0, W, H);
     } else if (o.layout === "split") {
-      const camH = Math.round(H * 0.38);
-      const cw = vw * o.camSize, ch = cw * 9 / 16 * 1.25;
-      const cx = o.cam[1] === "l" ? 0 : vw - cw, cy = o.cam[0] === "t" ? 0 : vh - ch;
-      coverDraw(ctx, v, cx, cy, cw, ch, 0, 0, W, camH);
-      const gh = H - camH, gsw = vh * W / gh;
-      const gsx = Math.max(0, Math.min(vw - gsw, (vw - gsw) / 2 + o.pan * (vw - gsw) / 2));
-      ctx.drawImage(v, gsx, 0, gsw, vh, 0, camH, W, gh);
-      ctx.fillStyle = "#000"; ctx.fillRect(0, camH - 3, W, 6);
+      this.slots = this.drawCam(v, vw, vh, tOverride != null ? tOverride : v.currentTime);
     } else {
       this.sctx.drawImage(v, (vw - vh * 9 / 16) / 2, 0, vh * 9 / 16, vh, 0, 0, 54, 96);
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "low";
@@ -112,8 +137,58 @@ export class Clipper {
     }
     const t = tOverride != null ? tOverride : v.currentTime;
     const showHook = o.hook && (o.hookMode === "always" || t - this.clipStart < 3.2);
-    if (showHook) this.drawHook(o.hook, o.layout === "fit" ? 300 : o.layout === "split" ? 120 : 210);
-    if (o.chat && this.chat.length) this.drawChat(t, o.layout === "split" ? H - 520 : H - 560);
+    const sl = o.layout === "split" && this.slots ? this.slots : null;
+    if (showHook) this.drawHook(o.hook, sl ? sl.hook : o.layout === "fit" ? 300 : 210);
+    if (o.chat && this.chat.length) this.drawChat(t, sl ? sl.chat : H - 560);
+    if (this.onDraw) this.onDraw();
+  }
+
+  // Source rect of the facecam at time t, punch-in applied.
+  camRect(vw, vh, t) {
+    const b = clampBox(this.opts.cam || CAM_DEFAULT);
+    let x = b.x * vw, y = b.y * vh, w = b.w * vw, h = b.h * vh;
+    const z = this.opts.punch && this.punchAt != null ? punchZoom(t - this.punchAt) : 1;
+    if (z > 1) { const nw = w / z, nh = h / z; x += (w - nw) / 2; y += (h - nh) / 2; w = nw; h = nh; }
+    return { x, y, w, h, aspect: (b.w * vw) / (b.h * vh) };
+  }
+
+  // Gameplay fills [y, y+gh) of the output: a centre crop of the source, moved by Pan.
+  drawGame(v, vw, vh, y, gh) {
+    const gsw = Math.min(vw, vh * W / gh), gsh = gsw * gh / W;
+    const gsx = Math.max(0, Math.min(vw - gsw, (vw - gsw) / 2 + this.opts.pan * (vw - gsw) / 2));
+    this.ctx.drawImage(v, gsx, (vh - gsh) / 2, gsw, gsh, 0, y, W, gh);
+  }
+
+  // Facecam + gameplay. Returns where the hook and chat go so they never sit on the face.
+  drawCam(v, vw, vh, t) {
+    const { ctx } = this, o = this.opts;
+    const r = this.camRect(vw, vh, t);
+    const top = o.camOut !== "bottom";
+    if (o.camStyle === "rounded" || o.camStyle === "circle") {
+      this.drawGame(v, vw, vh, 0, H);
+      let x, y, w, h;
+      if (o.camStyle === "circle") { w = h = Math.round(W * 0.52); }
+      else { w = Math.round(W * 0.66); h = Math.round(Math.max(W * 0.3, Math.min(H * 0.32, w / r.aspect))); }
+      x = Math.round((W - w) / 2); y = top ? 90 : H - h - 90;
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = 36; ctx.fillStyle = "#000";
+      ctx.beginPath();
+      if (o.camStyle === "circle") ctx.arc(x + w / 2, y + h / 2, w / 2, 0, Math.PI * 2); else roundRect(ctx, x, y, w, h, 44);
+      ctx.fill(); ctx.shadowBlur = 0; ctx.clip();
+      coverDraw(ctx, v, r.x, r.y, r.w, r.h, x, y, w, h);
+      ctx.restore();
+      ctx.save(); ctx.lineWidth = 8; ctx.strokeStyle = "rgba(255,255,255,.92)"; ctx.beginPath();
+      if (o.camStyle === "circle") ctx.arc(x + w / 2, y + h / 2, w / 2 - 4, 0, Math.PI * 2); else roundRect(ctx, x + 4, y + 4, w - 8, h - 8, 40);
+      ctx.stroke(); ctx.restore();
+      return top ? { hook: y + h + 50, chat: H - 560 } : { hook: 170, chat: y - 400 };
+    }
+    // Panel: the facecam is a full-width band, as tall as its own shape needs (a quarter to half the frame).
+    const camH = Math.round(Math.max(H * 0.25, Math.min(H * 0.5, W / r.aspect)));
+    const camY = top ? 0 : H - camH;
+    coverDraw(ctx, v, r.x, r.y, r.w, r.h, 0, camY, W, camH);
+    this.drawGame(v, vw, vh, top ? camH : 0, H - camH);
+    ctx.fillStyle = "#000"; ctx.fillRect(0, (top ? camH : camY) - 3, W, 6);
+    return top ? { hook: 120, chat: H - 520 } : { hook: 140, chat: camY - 400 };
   }
 
   drawHook(text, yTop) {
@@ -187,9 +262,36 @@ export class Clipper {
     if (Math.abs(v.currentTime - start) > 0.3) await this.seek(start);
     this.startPreview();
     await v.play();
-    const stopAt = () => new Promise((ok) => { const chk = () => { if (v.currentTime >= end || v.paused) { v.pause(); ok(); } else requestAnimationFrame(chk); }; chk(); });
+    const bins = new Map(), lv = this.audio && this.audio.level, buf = lv && new Float32Array(lv.fftSize);
+    const stopAt = () => new Promise((ok) => { const chk = () => {
+      if (lv) sampleLevel(lv, buf, bins, Math.floor((v.currentTime - start) * 4));
+      if (v.currentTime >= end || v.paused) { v.pause(); ok(); } else requestAnimationFrame(chk); }; chk(); });
     await stopAt();
+    if (lv && v.currentTime >= end - 0.5) { this.punchAt = loudestSecond(bins, start); this.punchWin = start + "-" + end; }
     this.stopPreview(); this.draw();
+  }
+
+  // Punch-in needs the loudest second before recording: play the window muted at 4x and listen.
+  async findLoudest(start, end, onState) {
+    const v = this.video, a = this.ensureAudio();
+    const bins = new Map(), buf = new Float32Array(a.level.fftSize);
+    a.monitor.gain.value = 0;
+    try {
+      await this.seek(start);
+      v.playbackRate = 4;
+      await v.play();
+      const t0 = performance.now();
+      await new Promise((ok) => {
+        const chk = () => {
+          sampleLevel(a.level, buf, bins, Math.floor((v.currentTime - start) * 4));
+          onState && onState("Finding the loudest second…", 0.3 * Math.min(1, (v.currentTime - start) / (end - start)));
+          if (v.currentTime >= end || v.ended || performance.now() - t0 > ((end - start) / 4) * 1000 + 20000) return ok();
+          requestAnimationFrame(chk);
+        };
+        chk();
+      });
+    } finally { v.pause(); v.playbackRate = 1; a.monitor.gain.value = 1; }
+    return loudestSecond(bins, start);
   }
 
   // Record [start, end] in real time. onState(msg, frac) reports progress. Throws, before
@@ -229,6 +331,11 @@ export class Clipper {
       else if (this.hls && Date.now() - moved > 20000) { this.hls.startLoad(Math.max(0, v.currentTime)); moved = Date.now(); }
       onState && onState("Loading the video…", Math.max(0, Math.min(1, (got - start) / (end - start))) * 0.3);
       await sleep(400);
+    }
+    if (this.opts.layout === "split" && this.opts.punch && this.punchWin !== start + "-" + end) {
+      this.punchAt = (await this.findLoudest(start, end, onState)) ?? this.opts.punchFallback ?? null;
+      this.punchWin = start + "-" + end;
+      await this.seek(start);
     }
     // Quality (board request "Bessere Qualität"): one canvas frame per new SOURCE frame, so a 60 fps
     // stream exports at 60 and a 30 fps one at 30, at 10 Mbps requested (was a fixed 30 fps at 8).
@@ -308,6 +415,12 @@ function wrap(ctx, text, max) {
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+function sampleLevel(an, buf, bins, k) {
+  an.getFloatTimeDomainData(buf);
+  let sum = 0; for (let i = 0; i < buf.length; i += 4) sum += buf[i] * buf[i];
+  const e = bins.get(k) || [0, 0]; e[0] += Math.sqrt(sum / (buf.length / 4)); e[1]++; bins.set(k, e);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
