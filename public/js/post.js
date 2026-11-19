@@ -54,6 +54,8 @@ async function managePage(root) {
       if (c) c.textContent = on ? `Reconnect ${LABEL[p]}` : `Connect ${LABEL[p]}`;
       if (c) c.classList.toggle("ghost", !!on);
       if (d) d.hidden = !on;
+      const shut = $("[data-closed]", row), isOpen = s.open ? !!s.open[p] : null;
+      if (isOpen !== null) { if (c) c.hidden = !isOpen && !on; if (shut) shut.hidden = isOpen || on; }
     }
   };
   const s = await account();
@@ -89,7 +91,7 @@ async function postBox(detail) {
   const { blob, ext, mount, caption } = detail;
   if (!mount || !blob) return;
   // Only offer a platform that is actually open; with none open the clip page stays as it was.
-  if (!openMemo) openMemo = api({ op: "open" }).catch(() => ({}));
+  if (!openMemo) openMemo = api({ op: "open", account: store.get("hc_acct") || undefined }).catch(() => ({}));
   const open = (await openMemo).open || {};
   const on = ["youtube", "tiktok"].filter((p) => open[p]);
   if (!on.length) return;

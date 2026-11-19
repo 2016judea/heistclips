@@ -26,7 +26,7 @@ async function body(req) {
 function page() {
   const av = availability();
   const row = (p, how) => `<div class="pack postrow" data-provider="${p}"><b>${PROVIDERS[p].label}</b><span class="small" data-state>…</span>
-${av[p] ? `<button class="btn" data-connect="${p}">Connect ${PROVIDERS[p].label}</button><button class="linkbtn" data-disconnect="${p}" hidden>Disconnect</button>` : `<span class="small">Not open yet: waiting on ${PROVIDERS[p].label}’s developer approval.</span>`}
+<button class="btn" data-connect="${p}"${av[p] ? "" : " hidden"}>Connect ${PROVIDERS[p].label}</button><button class="linkbtn" data-disconnect="${p}" hidden>Disconnect</button><span class="small" data-closed${av[p] ? " hidden" : ""}>Not open yet: waiting on ${PROVIDERS[p].label}’s developer approval.</span>
 <span class="small">${how}</span></div>`;
   const b = `<h1>Post clips to YouTube and TikTok</h1>
 <p class="lede">Connect once. Then post a clip with its caption from the clip tool, or just ask in Claude: “cut that moment and post it to YouTube”.</p>
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
 
     if (req.method === "GET" && op === "start") {
       const p = u.searchParams.get("provider"), acct = u.searchParams.get("acct");
-      if (!PROVIDERS[p] || !available(p)) return go(res, `/post?err=${encodeURIComponent("That platform is not open yet.")}`);
+      if (!PROVIDERS[p] || !available(p, acct)) return go(res, `/post?err=${encodeURIComponent("That platform is not open yet.")}`);
       const rec = await getAccount(acct);
       if (!rec) return go(res, `/post?err=${encodeURIComponent("Unknown account. Reload the page.")}`);
       return go(res, PROVIDERS[p].authUrl(signState({ a: rec.code, p })));
@@ -93,23 +93,23 @@ export default async function handler(req, res) {
 
     if (req.method !== "POST") return json(res, { ok: false, error: "unknown request" }, 400);
     const b = await body(req);
-    if (b.op === "open") return json(res, { ok: true, open: availability() });
+    if (b.op === "open") return json(res, { ok: true, open: availability(b.account) });
     if (b.op === "new") { const rec = await createAccount("web"); return json(res, { ok: true, account: rec.code }); }
-    if (b.op === "status") return json(res, { ...(await accountStatus(b.account)), open: availability() });
+    if (b.op === "status") return json(res, { ...(await accountStatus(b.account)), open: availability(b.account) });
     if (b.op === "link") {
       // Opening /post in a browser ties the account to that browser's clip balance.
       const rec = await getAccount(b.account);
       if (!rec) return json(res, { ok: false, error: "unknown account" });
       const d = String(b.d || "").slice(0, 80), k = String(b.k || "").slice(0, 200);
       if (d && (rec.d !== d || (k && rec.k !== k))) { rec.d = d; if (k) rec.k = k; await keep(rec); }
-      return json(res, { ...(await accountStatus(rec.code)), open: availability() });
+      return json(res, { ...(await accountStatus(rec.code)), open: availability(rec.code) });
     }
     if (b.op === "disconnect") {
       const rec = await getAccount(b.account);
       if (!rec || !PROVIDERS[b.provider]) return json(res, { ok: false, error: "unknown account" });
       if (rec[b.provider] && rec[b.provider].sealed) { try { await PROVIDERS[b.provider].revoke((await import("../../lib/accounts.js")).unseal(rec[b.provider].sealed)); } catch (e) {} }
       rec[b.provider] = null; await keep(rec);
-      return json(res, { ...(await accountStatus(rec.code)), open: availability() });
+      return json(res, { ...(await accountStatus(rec.code)), open: availability(rec.code) });
     }
     if (b.op === "upload-start") return json(res, (await getAccount(b.account)) ? { ok: true, id: randomName(), part_bytes: 3500000 } : { ok: false, error: "unknown account" });
     if (b.op === "post") return json(res, await postJob(b, b.via === "mcp" ? "mcp" : undefined));
