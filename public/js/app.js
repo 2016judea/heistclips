@@ -5,6 +5,7 @@ import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";
 import { paywallHTML } from "./paywall.js";
 import { markSpoilers, spoilerCheck } from "./spoilers.js";
+import "./post.js?v=1"; // Post to YouTube / TikTok buttons; listens for hc:rendered
 import { fillHot, topLive } from "./hot.js";
 import { queueHandoff } from "./queuehand.js";
 
@@ -440,6 +441,7 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
       const name = `${current.vod.channel}-${twitchTime(win.s)}-${cl.opts.layout}.${out.ext}`;
       const mb = out.blob.size / 1e6;
       $("#dl", ed).insertAdjacentHTML("afterbegin", `<div><video src="${href}" controls playsinline></video><a class="btn" href="${href}" download="${h(name)}">Download ${out.ext.toUpperCase()} · 1080×1920 · ${out.fps} fps · ${out.mbps} Mbps (${mb.toFixed(1)} MB)</a><p class="small">Cut from the ${h(out.source)} source.</p>${out.ext === "webm" ? `<p class="small">WebM plays on TikTok and YouTube. For Instagram, Safari or Chrome 126+ export MP4.</p>` : ""}${out.sound ? "" : `<p class="small">No sound came through for this stretch${current.vod.muted && current.vod.muted.some((x) => x.start < out.end && x.end > win.s) ? ": Twitch muted it in the VOD (licensed music)" : ""}.</p>`}</div>`);
+      document.dispatchEvent(new CustomEvent("hc:rendered", { detail: { blob: out.blob, ext: out.ext, mount: $("#dl", ed).firstElementChild, caption: cl.opts.hook || "" } }));
       vstat.textContent = "Done. Pick another hook and render again for a second, different post.";
       ph("clip_render_done", { mb: Math.round(mb * 10) / 10, ext: out.ext, fps: out.fps, mbps: out.mbps, source: out.source, charged: !!c.ok, sound: out.sound, vod_live: current.vod.status === "RECORDING" });
     } catch (e) {

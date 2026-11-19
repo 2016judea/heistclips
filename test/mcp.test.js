@@ -9,7 +9,7 @@ test("every tool sets readOnly, destructive and openWorld hints explicitly", () 
 
 test("only the board tools and cut_clip write, and none is destructive", () => {
   const writers = TOOLS.filter((t) => !t.annotations.readOnlyHint).map((t) => t.name).sort();
-  assert.deepEqual(writers, ["cut_clip", "request_a_feature", "upvote_feature_request"]);
+  assert.deepEqual(writers, ["cut_clip", "post_clip", "posting_account", "request_a_feature", "upvote_feature_request"]);
   assert.ok(TOOLS.every((t) => t.annotations.destructiveHint === false));
 });
 

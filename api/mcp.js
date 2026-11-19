@@ -60,6 +60,28 @@ export const TOOLS = [
     annotations: { title: "Cut a 9:16 clip", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
   },
   {
+    name: "post_clip",
+    title: "Post a clip to YouTube Shorts or TikTok with a caption",
+    description: "Posts a clip made by cut_clip to the user's YouTube channel (as a Short) or TikTok, with their caption, so find moment -> cut -> post happens without leaving the chat. Needs the account code from cut_clip. The user connects YouTube or TikTok once: if it is not connected yet this returns needs_connect and a connect link; give them the link, wait until they say it is done, then call again. Always confirm the caption and platform with the user before posting. Until YouTube and TikTok finish reviewing heistclips, a post may arrive private (the result says so and how to publish it).",
+    inputSchema: { type: "object", properties: {
+      account: { type: "string", description: "The account code (hc_…) from cut_clip" },
+      clip_id: { type: "string", description: "clip_id from cut_clip" },
+      platform: { type: "string", enum: ["youtube", "tiktok"], description: "Where to post" },
+      caption: { type: "string", description: "The caption, in the user's words. YouTube: it becomes the description, and its first line the title unless title is given." },
+      title: { type: "string", description: "YouTube only: the Short's title, up to 100 characters" },
+      privacy: { type: "string", enum: ["public", "unlisted", "private"], description: "Who can see it (default public; the platform may force private, see the result)" },
+      tiktok_mode: { type: "string", enum: ["direct", "draft"], description: "TikTok only: direct = post it (default); draft = send to the user's TikTok inbox to finish in the app" },
+    }, required: ["account", "clip_id", "platform"], additionalProperties: false },
+    annotations: { title: "Post a clip", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
+  },
+  {
+    name: "posting_account",
+    title: "Connect YouTube or TikTok for posting, and check clip credits",
+    description: "Shows whether YouTube and TikTok are connected for a heistclips account code, how many clips it has left, and the one-time link where the user connects or disconnects them. Call with no account to get a new code and link.",
+    inputSchema: { type: "object", properties: { account: { type: "string", description: "The account code (hc_…) from cut_clip; leave out to start a new one" } }, additionalProperties: false },
+    annotations: { title: "Posting account", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: true },
+  },
+  {
     name: "live_gta_streams",
     title: "Who is live streaming GTA right now on Twitch and Kick",
     description: "Twitch and Kick channels live streaming GTA (GTA VI and GTA V) right now, by viewers, with language, each with a link to find its clip moments. Use for 'who is streaming GTA 6 right now', 'which live stream should I clip'.",
@@ -118,7 +140,7 @@ async function logCall(tool, ok, ms, meta) {
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
 
-export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back). Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do.";
+export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do.";
 
 const text = (obj) => ({ content: [{ type: "text", text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 1) }], structuredContent: typeof obj === "string" ? undefined : obj });
 
@@ -200,6 +222,15 @@ export async function callTool(name, args = {}, caller = "mcp") {
     const d = await r.json().catch(() => ({ ok: false, error: "The cut did not finish (" + r.status + "). Nothing was charged; try a shorter window." }));
     if (!d.ok) return { ...text(d), isError: !d.need };
     return text({ ...d, next: "Give the user the download link. To post it, call post_clip with clip_id, account, platform and a caption." });
+  }
+  if (name === "post_clip" || name === "posting_account") {
+    const r = await fetch(BASE + "/api/v1/post", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(280000),
+      body: JSON.stringify(name === "post_clip" ? { ...args, op: "post", via: "mcp" } : { op: args.account ? "status" : "new", account: args.account, via: "mcp" }) });
+    let d = await r.json().catch(() => ({ ok: false, error: "heistclips did not answer (" + r.status + ")." }));
+    if (name === "posting_account" && d.ok && !args.account) d = await (await fetch(BASE + "/api/v1/post", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "status", account: d.account }) })).json();
+    if (d.manage) d.manage = tag(d.manage); if (d.connect) d.connect = tag(d.connect);
+    delete d.open;
+    return d.ok ? text(d) : { ...text(d), isError: !(d.needs_connect || d.not_open_yet) };
   }
   if (name === "live_gta_streams") {
     const [tw, kk] = await Promise.all([liveGtaStreams(40), liveKickGta(20).catch(() => [])]);
