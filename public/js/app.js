@@ -1,6 +1,6 @@
 // The clip tool: paste -> moments (with why) -> cut -> download.
 import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitchTime, searchChannels, getClip, refinePeak, hooks } from "./twitch.js";
-import { Clipper, pickMime } from "./render.js?v=7";
+import { Clipper, pickMime } from "./render.js?v=8";
 import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";
 import { paywallHTML } from "./paywall.js";
@@ -406,7 +406,14 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
     if (current.vod.status === "RECORDING") current.vod.length = Math.max(current.vod.length || 0, cl.availableEnd());
     vstat.textContent = `${cl.video.videoWidth}×${cl.video.videoHeight} source · renders at 1080×1920`;
   } catch (e) {
-    try { if (current.vod.platform === "kick") throw e; await cl.load(playlistPath(current.vod, "720p60"), win.s); vstat.textContent = "720p source"; }
+    // "chunked" is Twitch's source rendition; fall back to the next sharpest one that loads.
+    try {
+      if (current.vod.platform === "kick") throw e;
+      let ok = false;
+      for (const q of ["1080p60", "720p60"]) { try { await cl.load(playlistPath(current.vod, q), win.s); ok = true; break; } catch (e3) {} }
+      if (!ok) throw e;
+      vstat.textContent = `${cl.video.videoWidth}×${cl.video.videoHeight} source · renders at 1080×1920`;
+    }
     catch (e2) { vstat.textContent = "Couldn’t load the video: " + e.message + (m.live ? " (live moments need ~30 s before the video catches up; try again shortly)" : ""); return; }
   }
   $("#pv", ed).onclick = async () => { ph("clip_preview", { layout: cl.opts.layout }); $("#pv", ed).disabled = true; try { await cl.playWindow(win.s, win.e); } finally { $("#pv", ed).disabled = false; } };
@@ -432,9 +439,9 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
       const href = URL.createObjectURL(out.blob);
       const name = `${current.vod.channel}-${twitchTime(win.s)}-${cl.opts.layout}.${out.ext}`;
       const mb = out.blob.size / 1e6;
-      $("#dl", ed).insertAdjacentHTML("afterbegin", `<div><video src="${href}" controls playsinline></video><a class="btn" href="${href}" download="${h(name)}">Download ${out.ext.toUpperCase()} (${mb.toFixed(1)} MB)</a>${out.ext === "webm" ? `<p class="small">WebM plays on TikTok and YouTube. For Instagram, Safari or Chrome 126+ export MP4.</p>` : ""}${out.sound ? "" : `<p class="small">No sound came through for this stretch${current.vod.muted && current.vod.muted.some((x) => x.start < out.end && x.end > win.s) ? ": Twitch muted it in the VOD (licensed music)" : ""}.</p>`}</div>`);
+      $("#dl", ed).insertAdjacentHTML("afterbegin", `<div><video src="${href}" controls playsinline></video><a class="btn" href="${href}" download="${h(name)}">Download ${out.ext.toUpperCase()} · 1080×1920 · ${out.fps} fps · ${out.mbps} Mbps (${mb.toFixed(1)} MB)</a><p class="small">Cut from the ${h(out.source)} source.</p>${out.ext === "webm" ? `<p class="small">WebM plays on TikTok and YouTube. For Instagram, Safari or Chrome 126+ export MP4.</p>` : ""}${out.sound ? "" : `<p class="small">No sound came through for this stretch${current.vod.muted && current.vod.muted.some((x) => x.start < out.end && x.end > win.s) ? ": Twitch muted it in the VOD (licensed music)" : ""}.</p>`}</div>`);
       vstat.textContent = "Done. Pick another hook and render again for a second, different post.";
-      ph("clip_render_done", { mb: Math.round(mb * 10) / 10, ext: out.ext, charged: !!c.ok, sound: out.sound, vod_live: current.vod.status === "RECORDING" });
+      ph("clip_render_done", { mb: Math.round(mb * 10) / 10, ext: out.ext, fps: out.fps, mbps: out.mbps, source: out.source, charged: !!c.ok, sound: out.sound, vod_live: current.vod.status === "RECORDING" });
     } catch (e) {
       vstat.textContent = "Render failed: " + e.message + ". Nothing was charged.";
       say("Render failed: " + h(e.message) + ". <b>Nothing was charged.</b>");

@@ -32,9 +32,9 @@ export class Clipper {
       this.hls = hls;
       await new Promise((ok, bad) => {
         hls.on(window.Hls.Events.MANIFEST_PARSED, (e, d) => {
-          // A master playlist (Kick) has several renditions: take the sharpest up to 1080p.
+          // A master playlist (Kick) has several renditions: take the sharpest up to 1440p.
           const lv = (d && d.levels) || [];
-          if (lv.length > 1) { let best = 0; lv.forEach((l, i) => { if ((l.height || 0) <= 1080 && (l.height || 0) >= (lv[best].height || 0)) best = i; }); hls.currentLevel = best; }
+          if (lv.length > 1) { let best = 0; lv.forEach((l, i) => { if ((l.height || 0) <= 1440 && (l.height || 0) >= (lv[best].height || 0)) best = i; }); hls.currentLevel = best; }
           ok();
         });
         hls.on(window.Hls.Events.ERROR, (e, d) => { if (d.fatal) bad(new Error("video: " + d.details)); });
@@ -89,6 +89,7 @@ export class Clipper {
     const vw = v.videoWidth || 1920, vh = v.videoHeight || 1080;
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     if (!v.videoWidth) return;
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
     if (o.layout === "crop") {
       const sw = vh * 9 / 16, sx = Math.max(0, Math.min(vw - sw, (vw - sw) / 2 + o.pan * (vw - sw) / 2));
       ctx.drawImage(v, sx, 0, sw, vh, 0, 0, W, H);
@@ -105,6 +106,7 @@ export class Clipper {
       this.sctx.drawImage(v, (vw - vh * 9 / 16) / 2, 0, vh * 9 / 16, vh, 0, 0, 54, 96);
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "low";
       ctx.globalAlpha = 0.55; ctx.drawImage(this.small, 0, 0, W, H); ctx.globalAlpha = 1;
+      ctx.imageSmoothingQuality = "high";
       const fh = W * vh / vw, fy = (H - fh) / 2;
       ctx.drawImage(v, 0, 0, vw, vh, 0, fy, W, fh);
     }
@@ -228,10 +230,14 @@ export class Clipper {
       onState && onState("Loading the video…", Math.max(0, Math.min(1, (got - start) / (end - start))) * 0.3);
       await sleep(400);
     }
-    const fps = this.fps || 30;
-    const stream = new MediaStream([...this.canvas.captureStream(fps).getVideoTracks(), ...this.audio.dest.stream.getAudioTracks()]);
-    const vbps = this.videoBitrate || 8_000_000;
-    const rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: vbps, audioBitsPerSecond: 192_000 });
+    // Quality (board request "Bessere Qualität"): one canvas frame per new SOURCE frame, so a 60 fps
+    // stream exports at 60 and a 30 fps one at 30, at 10 Mbps requested (was a fixed 30 fps at 8).
+    const stream = new MediaStream([...this.canvas.captureStream(60).getVideoTracks(), ...this.audio.dest.stream.getAudioTracks()]);
+    const vbps = this.videoBitrate || 10_000_000; // Chrome on a Mac lands near 2x this at 60 fps (measured), Windows near 1x
+    const rvfc = typeof v.requestVideoFrameCallback === "function";
+    let frames = 0, recording = true;
+    const onFrame = () => { if (!recording) return; this.draw(); frames++; v.requestVideoFrameCallback(onFrame); };
+    const rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: vbps, audioBitsPerSecond: 192_000, ...(this.bitrateMode ? { videoBitrateMode: this.bitrateMode } : {}) });
     const chunks = [];
     let failed = null, loudest = 0;
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
@@ -248,12 +254,14 @@ export class Clipper {
     const lv = this.audio.level, buf = new Float32Array(lv.fftSize);
     this.draw();
     rec.start(500);
+    const tRec = performance.now();
+    if (rvfc) v.requestVideoFrameCallback(onFrame);
     try {
       await v.play();
       await new Promise((ok) => {
         const tick = () => {
           if (failed) return ok();
-          this.draw();
+          if (!rvfc) { this.draw(); frames++; }
           lv.getFloatTimeDomainData(buf);
           for (let i = 0; i < buf.length; i += 8) loudest = Math.max(loudest, Math.abs(buf[i]));
           if (!document.hidden) onState && onState("Recording…", 0.3 + 0.7 * Math.min(1, (v.currentTime - start) / (end - start)));
@@ -263,6 +271,7 @@ export class Clipper {
         tick();
       });
     } finally {
+      recording = false;
       v.pause();
       v.removeEventListener("waiting", onWait); v.removeEventListener("playing", onPlay); document.removeEventListener("visibilitychange", onVis);
       if (rec.state !== "inactive") rec.stop();
@@ -272,7 +281,9 @@ export class Clipper {
     const blob = new Blob(chunks, { type });
     if (failed) throw new Error(failed.message || String(failed));
     if (!blob.size) throw new Error("the recording came out empty");
-    return { blob, ext: type.includes("mp4") ? "mp4" : "webm", secs: end - start, end, fps, vbps, sound: loudest > 0.001 };
+    const secs = end - start;
+    const fps = Math.min(60, Math.round(frames / Math.max(1, secs)));
+    return { blob, ext: type.includes("mp4") ? "mp4" : "webm", secs, end, fps, mbps: Math.round((blob.size * 8) / secs / 1e5) / 10, sound: loudest > 0.001, source: `${v.videoWidth}×${v.videoHeight}` };
   }
 
   destroy() { this.stopPreview(); if (this.hls) this.hls.destroy(); this.video.removeAttribute("src"); }
