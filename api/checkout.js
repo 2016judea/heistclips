@@ -6,6 +6,10 @@ import { PACKS } from "../lib/render.js";
 // A payment-method configuration that belongs to heistclips alone, so turning a method on here
 // never changes checkout for the account's other products. It adds Google Pay (off in the
 // account default until 2026-11-19) and carries every local method the account is approved for.
+// SEPA debit and Multibanco are switched OFF in it on purpose: they settle days later, the
+// session completes "unpaid", and credits are only granted on a paid session, so a buyer would
+// pay and get nothing that day. Turn them on only after the grant handles
+// checkout.session.async_payment_succeeded.
 // If Stripe refuses it (a test-mode key on a preview, a deleted config) we retry without it:
 // a checkout on the account default beats no checkout.
 const PMC = process.env.STRIPE_PMC || "pmc_1UdYSABzD4mN8eODaB1CkgfW";

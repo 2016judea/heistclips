@@ -54,6 +54,9 @@ Negative: "Clip this YouTube Live stream" → find_moments says it takes Twitch 
 - Which GTA streamers are live right now?
 
 ## What needs Aidan (gates)
+- **ChatGPT, checked 2026-11-19 ~17:45 UTC:** still in review. Mail holds only "Submission
+  Received" for heistclips (11-17 00:49 UTC, case C-Hzxr4MNBfB7l). The "Submission Rejected" mail
+  of 11-17 19:42 UTC is for a different app (Appeal the Denial, asdk_app_6aea704f…), not this one.
 - **ChatGPT:** filed 2026-11-17 00:48 UTC, 0.1.0 in review. **When the approval email comes, he
   clicks Publish** at platform.openai.com/plugins/manage/plugin_asdk_app_6afba27819348191bfed030276cf83be.
   Approval does not publish it. Leave Vercel env `OPENAI_APPS_CHALLENGE` set: OpenAI re-checks it.
