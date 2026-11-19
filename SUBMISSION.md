@@ -15,6 +15,13 @@ Copy from here. Pattern and rejection history: `small-business-intelligence-mcp/
 | MCP Registry | `com.heistclips/heistclips` 0.1.0 — LISTED 2026-11-16 (DNS auth; key in `~/.config/heistclips/`) |
 | OpenAI domain challenge | set Vercel env `OPENAI_APPS_CHALLENGE` → served at `/.well-known/openai-apps-challenge` (404 until set) |
 
+> **2026-11-19: tools renamed (server 0.2.0).** `find_moments` → `find_clip_moments`, `rank_campaigns` →
+> `rank_clipping_campaigns`, `campaign_details` → `clipping_campaign_details`. The old names are not listed
+> but still answer (`ALIASES` in `api/mcp.js`), so the ChatGPT package reviewed on 0.1.0 keeps working.
+> Every heistclips link a tool returns carries `src=mcp`, and each call logs a PostHog `mcp_tool_call`
+> event (tool, ok, ms, client; no arguments). The tables below still use the 0.1.0 names where they
+> describe what was filed.
+
 ## One-liner (≤100)
 Find clip-worthy moments in Twitch streams from chat spikes; rank clipping campaigns by pay per clip
 

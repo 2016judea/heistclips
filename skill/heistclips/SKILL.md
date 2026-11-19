@@ -36,6 +36,6 @@ the budget runs out within 3 days. Quote numbers exactly; link the campaign page
 
 ## Without the CLI
 
-MCP server: `https://heistclips.com/mcp` (tools: find_moments, rank_campaigns,
-campaign_details, live_gta_streams, list/upvote/request feature). Web app:
+MCP server: `https://heistclips.com/mcp` (tools: find_clip_moments, rank_clipping_campaigns,
+clipping_campaign_details, live_gta_streams, list/upvote/request feature). Web app:
 https://heistclips.com/clip renders in the browser.

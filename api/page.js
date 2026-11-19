@@ -4,6 +4,7 @@ import * as R from "../lib/render.js";
 import { guidePage, guidesIndex, ratesPage, GUIDES } from "../lib/guides.js";
 import { getChannel } from "../public/js/twitch.js";
 import { loadBoard, publicList } from "../lib/requests.js";
+import { TOOLS as MCP_TOOLS } from "./mcp.js";
 
 const INDEXNOW_KEY = "066cce158f4bc73e04afdcb48bb189f7";
 
@@ -41,7 +42,7 @@ export default async function handler(req, res) {
     if (p === "/llms.txt") {
       const s = snap.summary;
       const top = snap.campaigns.filter((c) => c.is_gaming).slice(0, 10).map((c) => `- [${c.title}](${R.SITE}/campaigns/${c.slug}): ${c.expected_per_clip != null ? "$" + c.expected_per_clip + " typical per clip" : "new"}, $${c.rate_per_1k ?? c.per_post}/${c.per_post != null ? "post" : "1k views"}, cap $${c.cap_per_clip ?? "none"}, $${Math.round(c.budget_left)} left`).join("\n");
-      return send(res, 200, `# heistclips\n\n> GTA 6 clipping tool. Finds the moments Twitch chat exploded in a stream (live or VOD), cuts them to 9:16 with hook text in the browser, flags licensed-music risk, and ranks clipping campaigns by what a typical approved clip actually earns. ${R.FREE_CLIPS} clips free, then pay per exported clip, never per stream minute.\n\nData updated ${snap.generated_at}: ${s.campaigns} live campaigns, ${s.gta} GTA; median $${s.rate_per_1k_median}/1k views; typical approved clip earns $${s.earned_per_clip_median}.\n\n## Pages\n- [Clip tool](${R.SITE}/clip)\n- [Campaigns ranked by pay per clip](${R.SITE}/gta-6-clipping-campaigns)\n- [GTA 6 clipping rates today](${R.SITE}/gta-6-clipping-rates-today)\n- [Pricing](${R.SITE}/pricing)\n${GUIDES.map((g) => `- [${g.title}](${R.SITE}/guides/${g.slug})`).join("\n")}\n\n## Top gaming campaigns right now\n${top}\n\n## API and MCP\n- JSON: ${R.SITE}/api/campaigns?filter=gta|gaming|all\n- MCP server (streamable HTTP): ${R.SITE}/mcp  (tools: rank_campaigns, campaign_details, find_moments, live_gta_streams)\n- Source: https://github.com/2016judea/heistclips\n`, "text/plain; charset=utf-8", 600);
+      return send(res, 200, `# heistclips\n\n> GTA 6 clipping tool. Finds the moments Twitch chat exploded in a stream (live or VOD), cuts them to 9:16 with hook text in the browser, flags licensed-music risk, and ranks clipping campaigns by what a typical approved clip actually earns. ${R.FREE_CLIPS} clips free, then pay per exported clip, never per stream minute.\n\nData updated ${snap.generated_at}: ${s.campaigns} live campaigns, ${s.gta} GTA; median $${s.rate_per_1k_median}/1k views; typical approved clip earns $${s.earned_per_clip_median}.\n\n## Pages\n- [Clip tool](${R.SITE}/clip)\n- [Campaigns ranked by pay per clip](${R.SITE}/gta-6-clipping-campaigns)\n- [GTA 6 clipping rates today](${R.SITE}/gta-6-clipping-rates-today)\n- [Pricing](${R.SITE}/pricing)\n${GUIDES.map((g) => `- [${g.title}](${R.SITE}/guides/${g.slug})`).join("\n")}\n\n## Top gaming campaigns right now\n${top}\n\n## API and MCP\n- JSON: ${R.SITE}/api/campaigns?filter=gta|gaming|all\n- MCP server (streamable HTTP): ${R.SITE}/mcp  (tools: ${MCP_TOOLS.map((t) => t.name).join(", ")})\n- Source: https://github.com/2016judea/heistclips\n`, "text/plain; charset=utf-8", 600);
     }
 
     if (p === "/") return send(res, 200, R.homePage(snap));
@@ -60,7 +61,7 @@ export default async function handler(req, res) {
       return send(res, 200, ratesPage(snap, hist));
     }
     if (p === "/pricing") return send(res, 200, R.pricingPage(), undefined, 3600);
-    if (p === "/connect") return send(res, 200, R.connectPage(), undefined, 3600);
+    if (p === "/connect") return send(res, 200, R.connectPage(MCP_TOOLS), undefined, 3600);
     if (p === "/about") return send(res, 200, R.aboutPage(), undefined, 3600);
     if (p === "/privacy") return send(res, 200, R.privacyPage(), undefined, 3600);
     if (p === "/terms") return send(res, 200, R.termsPage(), undefined, 3600);

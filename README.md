@@ -28,7 +28,7 @@ clip.
 claude mcp add --transport http heistclips https://heistclips.com/mcp
 ```
 
-Tools: `find_moments`, `rank_campaigns`, `campaign_details`, `live_gta_streams`,
+Tools: `find_clip_moments`, `rank_clipping_campaigns`, `clipping_campaign_details`, `live_gta_streams`,
 `list_feature_requests`, `upvote_feature_request`, `request_a_feature`. Works as a ChatGPT
 connector (developer mode), a Claude custom connector, and a Grok connector
 (grok.com/connectors).

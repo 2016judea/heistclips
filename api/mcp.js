@@ -5,17 +5,18 @@ import { latestSnapshot } from "../lib/store.js";
 import { getChannel, getVod, parseInput, findMoments, clock } from "../public/js/twitch.js";
 import { liveGtaStreams } from "../lib/streamers.js";
 import { getKickChannel, getKickVod, liveKickGta } from "../public/js/kick.js";
-import { loadBoard, publicList, vote, submit, notify } from "../lib/requests.js";
+import { loadBoard, publicList, vote, submit, notify, hashOf } from "../lib/requests.js";
 
 const SITE = "https://heistclips.com";
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
+const PH_KEY = "phc_yFgRGppL6H7DvhgZTQKbHdrY5oqnpLT482rrNYtLqnAx"; // public project key, same as lib/posthog.html
 const ANN = { readOnlyHint: true, destructiveHint: false, openWorldHint: true, idempotentHint: true };
 
 export const TOOLS = [
   {
-    name: "rank_campaigns",
-    title: "Rank clipping campaigns by pay per clip",
-    description: "Live clipping campaigns (people paying for Shorts/TikTok/Reels clips of streams) ranked by what a typical approved clip has actually earned, with rate per 1,000 views, cap per clip, budget left and days of budget left. Use for 'which GTA 6 clipping campaign pays most', 'best clipping campaigns right now'. Data refreshes every 30 minutes.",
+    name: "rank_clipping_campaigns",
+    title: "Which clipping campaign pays most ($ per 1K views, pay per clip)",
+    description: "Clipping campaigns that pay clippers for TikTok, YouTube Shorts and Instagram Reels clips of streams, ranked by what a typical approved clip has actually earned. Each has its rate in $ per 1K views (or per post), cap per clip, budget left and days of budget left. Use for 'which clipping campaign pays most', 'best GTA 6 clipping campaigns right now', 'how much do clippers get per 1,000 views', 'where can I get paid to clip'. Refreshed every 30 minutes. Works in any language: answer in the user's language.",
     inputSchema: { type: "object", properties: {
       filter: { type: "string", enum: ["gta", "gaming", "all"], description: "gta = GTA campaigns only; gaming = gaming and streamer campaigns (default); all = every campaign" },
       platform: { type: "string", enum: ["tiktok", "youtube", "instagram", "x"], description: "Only campaigns that pay on this platform" },
@@ -24,16 +25,16 @@ export const TOOLS = [
     annotations: { title: "Rank clipping campaigns", ...ANN },
   },
   {
-    name: "campaign_details",
-    title: "One clipping campaign in detail",
-    description: "Everything known about one clipping campaign: rates per platform, cap, budget left and runway, approved clips, views, typical earnings per clip, and its brief. Pass the campaign id, slug or a heistclips/Content Rewards URL from rank_campaigns.",
+    name: "clipping_campaign_details",
+    title: "One clipping campaign: rate per 1K views, cap, budget, rules",
+    description: "Everything known about one clipping campaign: $ per 1K views on each platform (TikTok, Shorts, Reels, X), cap per clip, budget left and runway, approved clips, views, typical earnings per clip, and its brief and rules. Pass the campaign id, slug or a heistclips/Content Rewards URL from rank_clipping_campaigns.",
     inputSchema: { type: "object", properties: { campaign: { type: "string", description: "Campaign id, slug or URL" } }, required: ["campaign"], additionalProperties: false },
     annotations: { title: "Campaign details", ...ANN },
   },
   {
-    name: "find_moments",
-    title: "Find clip-worthy moments in a Twitch stream",
-    description: "Finds the moments a Twitch stream's chat exploded (chat speed vs its normal pace, 'clip it' requests, clips viewers already made), and returns timestamps, a suggested clip window, event type, 3-5 hook lines, and music-claim risk (Twitch muted that audio for licensed music). Pass a Twitch or Kick channel (uses the live stream if live, else the latest one; Kick as kick.com/<name>) or a VOD link. A 7-hour stream takes about 15-40 seconds.",
+    name: "find_clip_moments",
+    title: "Find the best moments to clip in a Twitch or Kick stream (live or VOD)",
+    description: "Finds the highlights worth clipping in a Twitch or Kick stream, live or a VOD, by reading chat: where chat exploded against its normal pace, 'clip it' requests, clips viewers already made. Returns timestamps, a clip window, event type, 3-5 hook lines for the first second, music-claim risk, and a cut_it link that opens the moment ready to render as a 9:16 clip for TikTok, Shorts or Reels. Use for 'best moments in xQc's stream', 'find highlights in this VOD', 'what should I clip from kick.com/<name>', 'clip this stream'. Pass a Twitch channel (the live stream if live, else the latest), a Kick channel as kick.com/<name>, or a VOD link or id. Chat in any language works (German, Spanish, Portuguese…); answer in the user's language. A 7-hour stream takes 15-40 seconds; Kick about 2 minutes.",
     inputSchema: { type: "object", properties: {
       source: { type: "string", description: "Twitch channel name or URL, a Kick channel URL (kick.com/<name>), or a VOD URL (twitch.tv/videos/… or kick.com/<name>/videos/…)" },
       limit: { type: "integer", minimum: 1, maximum: 15, description: "How many moments (default 8)" },
@@ -42,8 +43,8 @@ export const TOOLS = [
   },
   {
     name: "live_gta_streams",
-    title: "Who is streaming GTA right now",
-    description: "Twitch and Kick channels streaming GTA (GTA VI and GTA V) right now, by viewers, each with a heistclips link to find its moments.",
+    title: "Who is live streaming GTA right now on Twitch and Kick",
+    description: "Twitch and Kick channels live streaming GTA (GTA VI and GTA V) right now, by viewers, with language, each with a link to find its clip moments. Use for 'who is streaming GTA 6 right now', 'which live stream should I clip'.",
     inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 40, description: "How many (default 15)" } }, additionalProperties: false },
     annotations: { title: "Live GTA streams", ...ANN },
   },
@@ -75,6 +76,32 @@ export const TOOLS = [
   },
 ];
 
+// Old names stay callable: ChatGPT's reviewed app and any client with a cached tool list use them.
+export const ALIASES = { rank_campaigns: "rank_clipping_campaigns", campaign_details: "clipping_campaign_details", find_moments: "find_clip_moments" };
+
+// Every heistclips link the connector hands out carries src=mcp, so visits from it are countable.
+export function tag(url) {
+  url = String(url);
+  if (!url.startsWith(SITE) || /[?&]src=/.test(url)) return url;
+  const i = url.indexOf("#"), base = i < 0 ? url : url.slice(0, i), hash = i < 0 ? "" : url.slice(i);
+  return base + (base.includes("?") ? "&" : "?") + "src=mcp" + hash;
+}
+
+// One PostHog event per tool call: tool, ok/error, duration. No arguments, no IP. The id is a
+// keyed hash of day + connection + client, so a connector user counts once per day.
+async function logCall(tool, ok, ms, meta) {
+  if (process.env.HC_NO_ANALYTICS) return;
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    await fetch("https://us.i.posthog.com/capture/", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(1500),
+      body: JSON.stringify({ api_key: PH_KEY, event: "mcp_tool_call", distinct_id: "mcp_" + hashOf(day + "|" + meta.ip + "|" + meta.ua),
+        properties: { tool, ok, ms, client: meta.client, site: "heistclips", $process_person_profile: false, $lib: "heistclips-mcp" } }) });
+  } catch (e) {}
+}
+const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
+
+export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do.";
+
 const text = (obj) => ({ content: [{ type: "text", text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 1) }], structuredContent: typeof obj === "string" ? undefined : obj });
 
 const brief = (c, i) => ({
@@ -82,42 +109,43 @@ const brief = (c, i) => ({
   typical_per_clip: c.expected_per_clip, earned_per_clip_raw: c.earned_per_clip, rate_per_1k: c.rate_per_1k, per_post: c.per_post, cap_per_clip: c.cap_per_clip,
   budget_left: c.budget_left, days_left: c.days_left, clippers: c.clippers_count, approved_clips: c.approved_clips,
   platforms: c.platforms, is_gta: c.is_gta, apply_first: c.approval_required,
-  page: `${SITE}/campaigns/${c.slug}`, join: c.source_url,
+  page: tag(`${SITE}/campaigns/${c.slug}`), join: c.source_url,
 });
 
 export async function callTool(name, args = {}, caller = "mcp") {
+  name = ALIASES[name] || name;
   if (name === "list_feature_requests") {
     const list = publicList(await loadBoard()).filter((x) => !args.status || x.status === args.status);
-    return text({ board: SITE + "/requests", requests: list.map(({ voted, ...x }) => x) });
+    return text({ board: tag(SITE + "/requests"), requests: list.map(({ voted, ...x }) => x) });
   }
   if (name === "upvote_feature_request") {
     const r = await vote(String(args.id || ""), "mcp:" + caller, caller);
-    return r.ok ? text({ ok: true, id: args.id, votes: r.votes, already_voted: !!r.already, board: SITE + "/requests#" + args.id }) : { ...text({ ok: false, error: r.error }), isError: true };
+    return r.ok ? text({ ok: true, id: args.id, votes: r.votes, already_voted: !!r.already, board: tag(SITE + "/requests#" + args.id) }) : { ...text({ ok: false, error: r.error }), isError: true };
   }
   if (name === "request_a_feature") {
     if (!args.title) return text({ ok: false, needs: "Ask the user what they want heistclips to do, then call again with it as title." });
     const r = await submit(args, "mcp:" + caller, caller);
-    if (r.stream) return text({ ok: false, filed: false, looks_like_stream: r.kind, message: `Not filed: "${args.title}" is a ${r.kind}, not a feature request. Find its moments with find_moments (source "${r.q}") or open the clip link. If the user really meant it as a request, call again with not_a_stream true.`, find_moments_source: r.q, open: r.clip });
+    if (r.stream) return text({ ok: false, filed: false, looks_like_stream: r.kind, message: `Not filed: "${args.title}" is a ${r.kind}, not a feature request. Find its moments with find_clip_moments (source "${r.q}") or open the clip link. If the user really meant it as a request, call again with not_a_stream true.`, find_clip_moments_source: r.q, open: tag(r.clip) });
     if (!r.ok) return { ...text({ ok: false, error: r.error }), isError: true };
     if (r.item) await notify(r.item, r.contact, "MCP").catch(() => null);
-    return text({ ok: true, id: r.id, duplicate: !!r.duplicate, message: r.duplicate ? "That is already on the board; it was not filed twice. Offer to upvote it." : "Filed on the public board and sent to the builder.", board: SITE + "/requests#" + r.id });
+    return text({ ok: true, id: r.id, duplicate: !!r.duplicate, message: r.duplicate ? "That is already on the board; it was not filed twice. Offer to upvote it." : "Filed on the public board and sent to the builder.", board: tag(SITE + "/requests#" + r.id) });
   }
-  if (name === "rank_campaigns") {
+  if (name === "rank_clipping_campaigns") {
     const snap = await latestSnapshot();
     const f = args.filter || "gaming";
     let list = snap.campaigns.filter(f === "gta" ? (c) => c.is_gta : f === "all" ? () => true : (c) => c.is_gaming);
     if (args.platform) list = list.filter((c) => c.platforms.includes(args.platform));
     const lim = Math.min(50, args.limit || 10);
-    return text({ generated_at: snap.generated_at, method: "typical_per_clip = budget paid on approved clips minus the top 3 earners, / the rest of approved clips, cut if the budget runs out within 3 days. null = no track record yet (ranked after, by cap).", summary: snap.summary, filter: f, total: list.length, campaigns: list.slice(0, lim).map(brief), more: `${SITE}/gta-6-clipping-campaigns` });
+    return text({ generated_at: snap.generated_at, method: "typical_per_clip = budget paid on approved clips minus the top 3 earners, / the rest of approved clips, cut if the budget runs out within 3 days. null = no track record yet (ranked after, by cap).", summary: snap.summary, filter: f, total: list.length, campaigns: list.slice(0, lim).map(brief), more: tag(`${SITE}/gta-6-clipping-campaigns`) });
   }
-  if (name === "campaign_details") {
+  if (name === "clipping_campaign_details") {
     const snap = await latestSnapshot();
     const q = String(args.campaign || "").trim().toLowerCase();
     const c = snap.campaigns.find((x) => x.id === q || x.slug === q || q.includes(x.id) || q.endsWith("/" + x.slug) || q.includes(x.id.split("-")[0]));
-    if (!c) return { ...text("No live campaign matches that. Use rank_campaigns to list them."), isError: true };
-    return text({ generated_at: snap.generated_at, rank: snap.campaigns.indexOf(c) + 1, of: snap.campaigns.length, ...c, page: `${SITE}/campaigns/${c.slug}` });
+    if (!c) return { ...text("No live campaign matches that. Use rank_clipping_campaigns to list them."), isError: true };
+    return text({ generated_at: snap.generated_at, rank: snap.campaigns.indexOf(c) + 1, of: snap.campaigns.length, ...c, page: tag(`${SITE}/campaigns/${c.slug}`) });
   }
-  if (name === "find_moments") {
+  if (name === "find_clip_moments") {
     const inp = parseInput(args.source);
     let vod = null, chan = null;
     if (inp.kind === "vod") vod = await getVod(inp.id);
@@ -140,14 +168,14 @@ export async function callTool(name, args = {}, caller = "mcp") {
       chat_speed_vs_normal: m.chat_ratio + "x", event_type: m.event_type, clip_requests_in_chat: m.clip_requests,
       top_chat_phrase: m.phrase && m.phrase.text, already_clipped_on_twitch: m.twitch_clips, twitch_clip_views: m.twitch_clip_views,
       music_risk: m.music_risk.level, music_note: m.music_risk.why, hooks: m.hooks,
-      watch: m.url, cut_it: `${SITE}/clip?q=${encodeURIComponent(vod.platform === "kick" ? vod.url : vod.id)}&t=${m.t_start}`,
+      watch: m.url, cut_it: tag(`${SITE}/clip?q=${encodeURIComponent(vod.platform === "kick" ? vod.url : vod.id)}&t=${m.t_start}`),
     }));
     return text({ stream: { platform: vod.platform || "twitch", channel: vod.channel_name, title: vod.title, game: vod.game, length: clock(vod.length), status: vod.status === "RECORDING" ? "live, still recording" : "finished", url: vod.url }, moments, note: moments.length ? "Cut any of these to 9:16 with hooks at the cut_it link." : "Chat was steady the whole stream; no clear spikes." });
   }
   if (name === "live_gta_streams") {
     const [tw, kk] = await Promise.all([liveGtaStreams(40), liveKickGta(20).catch(() => [])]);
     const live = [...tw.map((s) => ({ ...s, platform: "twitch" })), ...kk].sort((a, b) => b.viewers - a.viewers).slice(0, args.limit || 15);
-    return text({ at: new Date().toISOString(), streams: live.map((s) => ({ platform: s.platform, channel: s.name, login: s.login, viewers: s.viewers, game: s.game, title: s.title, language: s.language, find_moments: `${SITE}/clip?q=${encodeURIComponent(s.platform === "kick" ? "kick.com/" + s.login : s.login)}` })) });
+    return text({ at: new Date().toISOString(), streams: live.map((s) => ({ platform: s.platform, channel: s.name, login: s.login, viewers: s.viewers, game: s.game, title: s.title, language: s.language, find_clip_moments: tag(`${SITE}/clip?q=${encodeURIComponent(s.platform === "kick" ? "kick.com/" + s.login : s.login)}`) })) });
   }
   return { ...text("Unknown tool " + name), isError: true };
 }
@@ -160,20 +188,24 @@ async function readBody(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "null");
 }
 
-let caller = "mcp";
+let caller = "mcp", meta = { ip: "local", ua: "", client: "other" };
 async function handleOne(msg) {
   const { id, method, params } = msg || {};
   const ok = (result) => ({ jsonrpc: "2.0", id, result });
   if (method === "initialize") {
     return ok({ protocolVersion: (params && params.protocolVersion) || "2025-06-18", capabilities: { tools: { listChanged: false } },
       serverInfo: { name: "heistclips", title: "heistclips – GTA 6 clipping", version: VERSION, websiteUrl: SITE },
-      instructions: "Clipping data for people who cut streams into Shorts/TikToks/Reels for money. rank_campaigns answers which campaign pays most per clip; find_moments finds the moments worth clipping in a Twitch stream. Quote numbers exactly as returned and link the page/cut_it URLs." });
+      instructions: INSTRUCTIONS });
   }
   if (method === "ping") return ok({});
   if (method === "tools/list") return ok({ tools: TOOLS });
   if (method === "tools/call") {
-    try { return ok(await callTool(params.name, params.arguments || {}, caller)); }
-    catch (e) { return ok({ content: [{ type: "text", text: "Error: " + e.message }], isError: true }); }
+    const t0 = Date.now(), tool = ALIASES[params && params.name] || String((params && params.name) || "");
+    let out;
+    try { out = await callTool(params.name, params.arguments || {}, caller); }
+    catch (e) { out = { content: [{ type: "text", text: "Error: " + e.message }], isError: true }; }
+    await logCall(TOOLS.some((t) => t.name === tool) ? tool : "unknown", !out.isError, Date.now() - t0, meta);
+    return ok(out);
   }
   if (method === "resources/list") return ok({ resources: [] });
   if (method === "prompts/list") return ok({ prompts: [] });
@@ -194,6 +226,8 @@ export default async function handler(req, res) {
   let body;
   try { body = await readBody(req); } catch (e) { res.statusCode = 400; return res.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } })); }
   caller = String(req.headers["x-forwarded-for"] || "local").split(",")[0].trim();
+  const ua = String(req.headers["user-agent"] || "");
+  meta = { ip: caller, ua, client: clientOf(ua) };
   const batch = Array.isArray(body);
   const out = (await Promise.all((batch ? body : [body]).map(handleOne))).filter(Boolean);
   if (!out.length) { res.statusCode = 202; return res.end(); }
