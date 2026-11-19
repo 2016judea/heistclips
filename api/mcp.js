@@ -103,7 +103,7 @@ export const TOOLS = [
   {
     name: "list_feature_requests",
     title: "heistclips feature requests",
-    description: "The public heistclips feature-request board: every request with its upvotes, status (requested, building, shipped), and for closed items the builder's response and shipped_at date, most upvoted first. Use before request_a_feature to find an existing request to upvote instead.",
+    description: "The public heistclips feature-request board: every request with its upvotes, status (requested, building, shipped), and for closed items the builder's response and shipped_at date, most upvoted first. Titles and details are in English; a request written in another language also carries its original text and language code under original. Use before request_a_feature to find an existing request to upvote instead.",
     inputSchema: { type: "object", properties: { status: { type: "string", enum: ["requested", "building", "shipped"], description: "Only this status" } }, additionalProperties: false },
     annotations: { title: "List feature requests", ...ANN },
   },

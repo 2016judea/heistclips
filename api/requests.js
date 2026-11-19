@@ -1,5 +1,6 @@
 // Feature-request board API. GET ?d=<browser id> lists; POST {action:"vote"|"submit"}.
 import { loadBoard, publicList, vote, submit, notify } from "../lib/requests.js";
+import { pickViewerLang, fromLabel } from "../lib/translate.js";
 
 const ipOf = (req) => String(req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || "local").split(",")[0].trim();
 
@@ -8,8 +9,12 @@ export default async function handler(req, res) {
   res.setHeader("cache-control", "no-store");
   const u = new URL(req.url, "https://heistclips.com");
   if (req.method === "GET") {
+    // The viewer's language: ?lang= (the page passes its own locale), else the browser's.
+    const lang = pickViewerLang(u.searchParams.get("lang"), req.headers["accept-language"]);
     const b = await loadBoard();
-    return res.end(JSON.stringify({ requests: publicList(b, u.searchParams.get("d")) }));
+    const list = publicList(b, u.searchParams.get("d"), lang);
+    for (const x of list) if (x.original) x.tr_label = fromLabel(lang, x.original.lang);
+    return res.end(JSON.stringify({ lang, requests: list }));
   }
   const chunks = []; for await (const c of req) chunks.push(c);
   let body = {}; try { body = req.body && typeof req.body === "object" ? req.body : JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); } catch (e) {}

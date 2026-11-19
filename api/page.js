@@ -6,6 +6,7 @@ import { getChannel } from "../public/js/twitch.js";
 import { loadBoard, publicList } from "../lib/requests.js";
 import { splitLang, href, isLocal } from "../lib/i18n.js";
 import { localPage } from "../lib/pages_l10n.js";
+import { TR_LANGS } from "../lib/translate.js";
 import { TOOLS as MCP_TOOLS } from "./mcp.js";
 import { queuePage } from "../lib/queuepage.js";
 import { loadPitch, pitchPage } from "../lib/pitch.js";
@@ -71,7 +72,13 @@ export default async function handler(req, res) {
       if (pitch) return send(res, 200, pitchPage(snap, pitch), undefined, 300);
       return send(res, 200, R.homePage(snap, "/for/" + fm[1]), undefined, 300);
     }
-    if (p === "/requests") return send(res, 200, R.requestsPage(publicList(await loadBoard())), undefined, 30);
+    if (p === "/requests") {
+      // Rendered in ?lang= when given (a /de or /fr path passes its own); otherwise English, and
+      // the page's script re-reads the list in the browser's language. Never by Accept-Language
+      // here: this HTML is cached by URL.
+      const rl = TR_LANGS.includes(u.searchParams.get("lang")) ? u.searchParams.get("lang") : "en";
+      return send(res, 200, R.requestsPage(publicList(await loadBoard(), null, rl), rl), undefined, 30);
+    }
     if (p === "/.well-known/openai-apps-challenge") {
       if (!process.env.OPENAI_APPS_CHALLENGE) return send(res, 404, "not set", "text/plain", 10);
       return send(res, 200, process.env.OPENAI_APPS_CHALLENGE, "text/plain; charset=utf-8", 60);
