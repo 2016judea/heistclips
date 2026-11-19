@@ -55,7 +55,7 @@ export function checkTicket(d, k, ticket) {
 }
 
 // Record one spend: free first, then paid. Idempotent per spend id.
-async function spend(d, k, id, meta) {
+async function spend(d, k, id, meta, houseAccount = false) {
   const { paid, freeUses, paidUses, state } = await read(d, k);
   const name = id + ".json";
   if (freeUses.some((p) => p.endsWith("/" + name)) || paidUses.some((p) => p.endsWith("/" + name))) return { ok: true, already: true, ...state };
@@ -66,7 +66,7 @@ async function spend(d, k, id, meta) {
   // whichever path made it. Two exceptions (lib/marks.js): a test clip (header x-hc-test, here
   // as meta.qa) is charged like any other and counted nowhere; a house clip (HOUSE_ACCOUNTS)
   // sends clip_made with house: true and leaves no trend record.
-  const house = isHouse(d);
+  const house = houseAccount || isHouse(d);
   const count = async (charged, left) => { if (qa) return; await Promise.all([house ? null : recordClip(kept), clipMade(meta, { charged, ...left, d, house })]); };
   if (state.free_left > 0) {
     await putJSON(usesDir("free", d) + name, row, { maxAge: 60 });
@@ -141,7 +141,7 @@ export default async function handler(req, res) {
     if (!id) { res.statusCode = 400; return res.end(JSON.stringify({ ok: false, error: "bad ticket" })); }
     const bytes = Number(b.bytes) || 0;
     if (bytes <= 0) { const { state } = await read(d, k); return res.end(JSON.stringify({ ok: false, error: "empty file, not charged", ...state })); }
-    return res.end(JSON.stringify(await spend(d, k, id, { ...metaOf(b.meta), bytes, ...(isTest(req) ? { qa: true } : {}) })));
+    return res.end(JSON.stringify(await spend(d, k, id, { ...metaOf(b.meta), bytes, ...(isTest(req) ? { qa: true } : {}) }, req.house === true)));
   }
 
   // Pages loaded before 2026-11-19 charge up front; kept so an open tab still works.

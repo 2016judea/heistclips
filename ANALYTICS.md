@@ -97,7 +97,10 @@ list in `lib/trend_exclude.json` (records the trend build skips; nothing was del
 **A house clip is one cut by our own account** (the clip desk that posts to our own channel).
 `HOUSE_ACCOUNTS` in the environment is a comma-separated list of account codes (`hc_…`) or
 browser device ids. A house clip is charged, sends `clip_made` and `server_cut` with
-`house: true`, and leaves no trend record. Count customers' clips with
+`house: true`, and leaves no trend record. An account code covers every server cut made with it
+(the connector, the phone and Safari cut), whether or not the account has since been linked to a
+browser. A render done in a browser carries no account: list that browser's device id if a house
+browser ever renders. Count customers' clips with
 `event = 'clip_made' and properties.house is null`. An account code is a secret: it is in the
 environment only, never in this repo and never in an event.
 

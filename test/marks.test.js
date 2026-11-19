@@ -76,6 +76,27 @@ test("a house account's clip says house: true on clip_made and leaves no trend r
   assert.equal(JSON.stringify(made().at(-1)).includes(HOUSE), false, "the account code is never in an event");
 });
 
+test("a house account that was linked to a browser is still house: the account layer tells the charge", async () => {
+  const { creditCall } = await import("../lib/accounts.js");
+  const before = [trendFiles().length, made().length];
+  const rec = { code: HOUSE, d: "some-browser-device", k: "" }; // linked: the spend is keyed by the browser, not the code
+  const s = await creditCall("start", rec);
+  const c = await creditCall("commit", rec, { ticket: s.ticket, bytes: 5_000_000, meta: { ...meta, layout: "server-split", via: "web" } });
+  assert.equal(c.ok, true);
+  assert.equal(trendFiles().length, before[0], "no trend record");
+  assert.equal(made().at(-1).properties.house, true);
+  assert.equal(made().at(-1).properties.path, "browser_server");
+  // The same browser without the account is a customer's browser like any other.
+  const plain = await clip("some-browser-device");
+  assert.equal(plain.ok, true);
+  assert.equal(trendFiles().length, before[0] + 1);
+  assert.equal("house" in made().at(-1).properties, false);
+  // and nothing in a request body can claim it
+  const s2 = await call({ action: "start", d: "dev-liar", house: true });
+  await call({ action: "commit", d: "dev-liar", house: true, ticket: s2.ticket, bytes: 5_000_000, meta: { ...meta, house: true } });
+  assert.equal("house" in made().at(-1).properties, false);
+});
+
 test("with no HOUSE_ACCOUNTS nothing is house", () => {
   const keep = process.env.HOUSE_ACCOUNTS;
   delete process.env.HOUSE_ACCOUNTS;
