@@ -205,3 +205,6 @@ pre{padding:12px;overflow-x:auto;white-space:pre}
   input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),textarea,select{font-size:16px !important}
   .top nav a,.foot a{display:inline-block;padding-block:8px}
 }
+/* Four cards read as a 2x2 block, not three and an orphan. */
+.three.four{grid-template-columns:repeat(2,1fr)}
+@media (max-width:560px){.three.four{grid-template-columns:1fr}}
