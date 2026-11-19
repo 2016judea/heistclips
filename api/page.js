@@ -4,6 +4,8 @@ import * as R from "../lib/render.js";
 import { guidePage, guidesIndex, ratesPage, GUIDES } from "../lib/guides.js";
 import { getChannel } from "../public/js/twitch.js";
 import { loadBoard, publicList } from "../lib/requests.js";
+import { splitLang, href, isLocal } from "../lib/i18n.js";
+import { localPage } from "../lib/pages_l10n.js";
 import { TOOLS as MCP_TOOLS } from "./mcp.js";
 import { queuePage } from "../lib/queuepage.js";
 
@@ -21,6 +23,8 @@ export function sitemapUrls(snap) {
     ...GUIDES.map((g) => "/guides/" + g.slug),
     ...snap.campaigns.map((c) => "/campaigns/" + c.slug),
     ...(snap.streamers || []).filter((s) => s.platform === "twitch").map((s) => "/streamers/" + s.login)];
+  // Each translated page, in each language.
+  for (const l of ["de", "fr"]) for (const x of urls.slice()) if (!x.includes("?") && isLocal(x) && !x.startsWith("/" + l)) urls.push(href(l, x));
   return urls;
 }
 
@@ -46,6 +50,17 @@ export default async function handler(req, res) {
       return send(res, 200, `# heistclips\n\n> GTA 6 clipping tool. Finds the moments Twitch chat exploded in a stream (live or VOD), cuts them to 9:16 with hook text in the browser, flags licensed-music risk, and ranks clipping campaigns by what a typical approved clip actually earns. ${R.FREE_CLIPS} clips free, then pay per exported clip, never per stream minute.\n\nData updated ${snap.generated_at}: ${s.campaigns} live campaigns, ${s.gta} GTA; median $${s.rate_per_1k_median}/1k views; typical approved clip earns $${s.earned_per_clip_median}.\n\n## Pages\n- [Clip tool](${R.SITE}/clip)\n- [Campaigns ranked by pay per clip](${R.SITE}/gta-6-clipping-campaigns)\n- [GTA 6 clipping rates today](${R.SITE}/gta-6-clipping-rates-today)\n- [Pricing](${R.SITE}/pricing)\n${GUIDES.map((g) => `- [${g.title}](${R.SITE}/guides/${g.slug})`).join("\n")}\n\n## Top gaming campaigns right now\n${top}\n\n## API and MCP\n- JSON: ${R.SITE}/api/campaigns?filter=gta|gaming|all\n- MCP server (streamable HTTP): ${R.SITE}/mcp  (tools: ${MCP_TOOLS.map((t) => t.name).join(", ")})\n- Source: https://github.com/2016judea/heistclips\n`, "text/plain; charset=utf-8", 600);
     }
 
+    // /de/… and /fr/…: the same page in German or French where one exists, else the English page.
+    const loc = splitLang(p);
+    if (loc.lang !== "en") {
+      let board, history;
+      if (loc.path === "/requests") board = publicList(await loadBoard());
+      if (loc.path === "/gta-6-clipping-rates-today") { try { history = (await getJSON("snapshot/history.json")) || []; } catch (e) {} }
+      const html = localPage(loc.lang, loc.path, { snap, query: u.searchParams, board, history });
+      if (html) return send(res, 200, html, undefined, loc.path === "/requests" ? 30 : loc.path === "/clip" || loc.path === "/pricing" ? 3600 : 300);
+      const q = new URLSearchParams(u.searchParams); q.delete("p");
+      res.statusCode = 302; res.setHeader("location", loc.path + (q.toString() ? "?" + q : "")); return res.end();
+    }
     if (p === "/") return send(res, 200, R.homePage(snap));
     let fm;
     if ((fm = p.match(/^\/for\/([A-Za-z0-9_-]{2,64})$/i))) return send(res, 200, R.homePage(snap, "/for/" + fm[1]), undefined, 300);

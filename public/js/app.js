@@ -87,7 +87,7 @@ async function start(q) {
   if (inp.kind === "gta") return dead("no_name", `Whose stream? Type a streamer’s name or paste their link, or pick one below.`);
   if (inp.kind === "unknown") return dead("bad_input_" + (inp.site || "text"), inp.site === "youtube"
     ? `YouTube streams can’t be read yet: heistclips reads Twitch and Kick. <a href="/requests">Vote for YouTube Live</a>, or clip one of these.`
-    : `That isn’t a Twitch or Kick channel or video. Paste something like <b>twitch.tv/kaicenat</b>, <b>kick.com/adinross</b> or <b>twitch.tv/videos/…</b>`);
+    : `That isn’t a Twitch or Kick channel or video. Paste a link like these: <b>twitch.tv/kaicenat</b> · <b>kick.com/adinross</b> · <b>twitch.tv/videos/…</b>`);
   say(`<div class="status">Looking up ${h(inp.text || inp.login || inp.id || "that clip")}…</div>`);
   ph("clip_lookup", { kind: inp.kind });
   try {

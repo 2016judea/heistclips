@@ -324,19 +324,37 @@ export async function twitchClips(login, vodId) {
   } catch (e) { return []; }
 }
 
-export function hooks(m, streamer) {
-  const who = streamer || "he";
+// Hook lines are burned into the clip, so they are written in the language the clipper posts
+// in: the page's language (/de, /fr), or `lang` when a caller passes one.
+const HOOKS = {
+  en: { who: "he", quote: (p) => `“${p}” – chat, instantly`, ratio: (n) => `Chat went ${n}× faster here`, by: (w) => ({
+    funny: [`${w} was NOT ready for this 😂`, "Chat could not breathe after this", `This is why everyone watches ${w}`],
+    hype: [`${w} just pulled THIS off`, "The cleanest play you'll see today", "Chat went insane at this"],
+    shock: ["Wait for it…", "Nobody saw this coming", `${w}'s reaction 💀`],
+    fail: ["This went so wrong 💀", `${w} will never live this down`, "It all fell apart in 3 seconds"],
+    reaction: ["Wait for it…", "Chat lost it at this moment", `${w} did not expect this`] }) },
+  de: { who: "Er", quote: (p) => `„${p}“ – der Chat, sofort`, ratio: (n) => `Der Chat war hier ${n}× schneller`, by: (w) => ({
+    funny: [`${w} war darauf NICHT vorbereitet 😂`, "Der Chat hat keine Luft mehr bekommen", `Genau deshalb schaut jeder ${w}`],
+    hype: [`${w} hat DAS wirklich geschafft`, "Sauberer wird’s heute nicht mehr", "Der Chat ist komplett eskaliert"],
+    shock: ["Warte ab…", "Damit hat keiner gerechnet", `Die Reaktion von ${w} 💀`],
+    fail: ["Das ging so richtig schief 💀", `Das wird ${w} nie wieder los`, "In 3 Sekunden war alles vorbei"],
+    reaction: ["Warte ab…", "In dem Moment ist der Chat ausgerastet", `Damit hat ${w} nicht gerechnet`] }) },
+  fr: { who: "Il", quote: (p) => `« ${p} » – le chat, direct`, ratio: (n) => `Le chat allait ${n}× plus vite ici`, by: (w) => ({
+    funny: [`${w} n’était PAS prêt pour ça 😂`, "Le chat n’arrivait plus à respirer", `Voilà pourquoi tout le monde regarde ${w}`],
+    hype: [`${w} vient de réussir ÇA`, "Le move le plus propre de la journée", "Le chat a complètement pété un câble"],
+    shock: ["Attends la fin…", "Personne ne l’a vu venir", `La réaction de ${w} 💀`],
+    fail: ["Ça a tellement mal tourné 💀", `${w} ne s’en remettra jamais`, "Tout s’est effondré en 3 secondes"],
+    reaction: ["Attends la fin…", "Le chat a explosé à ce moment-là", `${w} ne s’y attendait pas`] }) },
+};
+
+export function hooks(m, streamer, lang) {
+  const l = lang || (typeof document !== "undefined" && document.documentElement ? (document.documentElement.lang || "en").slice(0, 2) : "en");
+  const H = HOOKS[l] || HOOKS.en;
+  const who = streamer || H.who;
   const ph = m.phrase && m.phrase.words && m.phrase.text.length <= 28 ? m.phrase.text : null;
-  const by = {
-    funny: [`${who} was NOT ready for this 😂`, "Chat could not breathe after this", `This is why everyone watches ${who}`],
-    hype: [`${who} just pulled THIS off`, "The cleanest play you'll see today", "Chat went insane at this"],
-    shock: ["Wait for it…", "Nobody saw this coming", `${who}'s reaction 💀`],
-    fail: ["This went so wrong 💀", `${who} will never live this down`, "It all fell apart in 3 seconds"],
-    reaction: ["Wait for it…", "Chat lost it at this moment", `${who} did not expect this`],
-  }[m.event_type] || [];
-  const out = [...by];
-  if (ph) out.unshift(`“${ph}” – chat, instantly`);
-  if (m.chat_ratio >= 3) out.push(`Chat went ${Math.round(m.chat_ratio)}× faster here`);
+  const out = [...(H.by(who)[m.event_type] || [])];
+  if (ph) out.unshift(H.quote(ph));
+  if (m.chat_ratio >= 3) out.push(H.ratio(Math.round(m.chat_ratio)));
   return [...new Set(out)].slice(0, 5);
 }
 
