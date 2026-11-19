@@ -73,6 +73,8 @@ test("connector: report_a_bug files a bug, the board tool filters by kind, and a
   assert.match(h.hint, /Never file it without asking/);
   assert.deepEqual(h.prefill, { title: "", tool: "cut_clip", error_text: "ffmpeg exit 1. Nothing was charged.", failure: "error_returned", source: "2932866051", moment_start: 100, moment_end: 130, account: "hc_abc" });
   assert.equal(withBugHint(failed, "report_a_bug", {}), failed);
+  const refused = Object.defineProperty({ ...failed }, "log", { value: { err: "too_long" }, enumerable: false });
+  assert.equal(withBugHint(refused, "cut_clip", {}).structuredContent.report_a_bug, undefined, "a window we refused is not a bug");
   assert.equal(withBugHint({ content: [], structuredContent: { found: false } }, "find_clip_moments", {}).structuredContent.report_a_bug, undefined);
   const news = (await callTool("whats_new", { limit: 3 })).structuredContent;
   assert.ok(news.entries.length >= 1 && news.entries.length <= 3 && news.entries[0].title && /src=mcp/.test(news.entries[0].url));

@@ -1,5 +1,59 @@
 [
   {
+    "id": "find-moments-takes-names-typos-and-clip",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "Find moments takes names, typos and clip links, and is twice as fast",
+    "body": "Ask your AI chat for the best moments with just a streamer's name, a misspelled one, or a Twitch clip link. A long stream is read in about 5 seconds, down from 11, and asking again is instant.",
+    "link": "/connect",
+    "at": "2026-11-19T20:18:04.806Z",
+    "langs": {
+      "de": {
+        "title": "Momente finden versteht Namen, Tippfehler und Clip-Links und ist doppelt so schnell",
+        "body": "Frag deinen KI-Chat nach den besten Momenten, einfach mit dem Namen eines Streamers, auch falsch geschrieben, oder mit einem Twitch-Clip-Link. Ein langer Stream ist in etwa 5 Sekunden gelesen statt in 11, und nochmal fragen geht sofort."
+      },
+      "fr": {
+        "title": "Trouver les moments comprend les noms, les fautes et les liens de clip, et va deux fois plus vite",
+        "body": "Demande les meilleurs moments à ton chat IA avec juste le nom d’un streamer, même mal écrit, ou un lien de clip Twitch. Un long stream est lu en 5 secondes environ au lieu de 11, et redemander est instantané."
+      },
+      "pt": {
+        "title": "Achar momentos entende nomes, erros de digitação e links de clip, e ficou duas vezes mais rápido",
+        "body": "Peça os melhores momentos ao seu chat de IA só com o nome do streamer, mesmo escrito errado, ou com um link de clip da Twitch. Uma live longa é lida em cerca de 5 segundos, em vez de 11, e pedir de novo é na hora."
+      },
+      "es": {
+        "title": "Buscar momentos entiende nombres, erratas y enlaces de clip, y va el doble de rápido",
+        "body": "Pide los mejores momentos a tu chat de IA solo con el nombre de un streamer, aunque esté mal escrito, o con un enlace de clip de Twitch. Un directo largo se lee en unos 5 segundos en vez de 11, y volver a pedirlo es al instante."
+      }
+    }
+  },
+  {
+    "id": "report-a-bug-from-the-site-or",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Report a bug, from the site or from your AI chat",
+    "body": "Something broke? Pick Report a bug on the requests page and say what happened. Claude and ChatGPT can file it for you too, with the stream and the error already filled in. Bugs get their own tag on the board.",
+    "link": "/requests#bug",
+    "at": "2026-11-19T20:18:03.394Z",
+    "langs": {
+      "de": {
+        "title": "Bug melden, auf der Seite oder aus deinem KI-Chat",
+        "body": "Etwas ist kaputt? Wähl auf der Wunsch-Seite „Bug melden“ und sag, was passiert ist. Claude und ChatGPT können das auch für dich melden, Stream und Fehlermeldung sind dann schon ausgefüllt. Bugs haben auf dem Board ein eigenes Schild."
+      },
+      "fr": {
+        "title": "Signale un bug, depuis le site ou depuis ton chat IA",
+        "body": "Un truc a planté ? Choisis « Signaler un bug » sur la page des demandes et dis ce qui s’est passé. Claude et ChatGPT peuvent aussi le signaler pour toi, avec le stream et l’erreur déjà remplis. Les bugs ont leur propre étiquette sur le tableau."
+      },
+      "pt": {
+        "title": "Reporte um bug, pelo site ou pelo seu chat de IA",
+        "body": "Algo quebrou? Escolha “Reportar um bug” na página de pedidos e diga o que aconteceu. O Claude e o ChatGPT também podem reportar por você, com a live e o erro já preenchidos. Os bugs têm uma etiqueta própria no mural."
+      },
+      "es": {
+        "title": "Reporta un bug, desde la web o desde tu chat de IA",
+        "body": "¿Algo falló? Elige «Reportar un bug» en la página de peticiones y cuenta qué pasó. Claude y ChatGPT también pueden reportarlo por ti, con el directo y el error ya rellenados. Los bugs tienen su propia etiqueta en el tablero."
+      }
+    }
+  },
+  {
     "id": "renders-no-longer-hang-on-loading-the",
     "date": "2026-11-19",
     "type": "fixed",

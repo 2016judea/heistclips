@@ -355,8 +355,10 @@ async function readBody(req) {
 // When one of our tools fails, the result says report_a_bug exists and hands back what is
 // already known, so the assistant can OFFER to file it. It is never filed without the user.
 const NO_HINT = new Set(["report_a_bug", "request_a_feature", "list_feature_requests", "upvote_feature_request", "whats_new"]);
+// A call we refused because of what was passed (a 5-minute window, a wrong code) is not a bug.
+const CALLER_ERRS = new Set(["too_long", "too_short", "bad_time", "bad_window", "bad_account", "bad_job", "past_end", "account_cap", "no_credits", "bad_input", "youtube", "no_name"]);
 export function withBugHint(out, tool, args = {}) {
-  if (!out || !out.isError || out.noBugHint || NO_HINT.has(tool)) return out;
+  if (!out || !out.isError || out.noBugHint || NO_HINT.has(tool) || CALLER_ERRS.has(out.log && out.log.err)) return out;
   const sc = out.structuredContent || {};
   const errorText = String(sc.error || (out.content && out.content[0] && out.content[0].text) || "").slice(0, 300);
   const num = (v) => (isFinite(Number(v)) && v !== "" && v != null ? Number(v) : undefined);
