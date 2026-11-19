@@ -320,7 +320,7 @@ ${spoilToggle()}
     $("#st").innerHTML = `<span>${quick.length + rest.length} moments from ${clock(vod.length)} of stream, in ${secs()} s. Watching live chat for new ones.</span>`;
   } else {
     $("#st").innerHTML = res.moments.length
-      ? `<span>${nQuiet === res.moments.length ? `Chat stayed calm all stream, so these are its ${res.moments.length} best moments, not big spikes.` : `${res.moments.length} moments from ${clock(vod.length)} of stream, in ${secs()} s`}${live ? ". Watching live chat for new ones." : nQuiet === res.moments.length ? "" : "."}</span>`
+      ? `<span>${nQuiet === res.moments.length ? `Chat stayed calm all stream, so these are its ${res.moments.length} best moments, not big spikes.` : `${res.moments.length} moments from ${clock(vod.length)} of stream, in ${secs()} s`}${live ? (nQuiet === res.moments.length ? " Watching live chat for new ones." : ". Watching live chat for new ones.") : nQuiet === res.moments.length ? "" : "."}</span>`
       : `<span>${res.messages ? "Chat barely moved in this stream, so there is no moment worth cutting." : "Nobody typed in chat during this stream, so there is nothing to find moments from."}${live ? " Watching live chat for new ones." : ""}</span>`;
     const liveOnes = current.moments.filter((m) => m.live);
     current.moments = [...res.moments, ...liveOnes];
@@ -542,7 +542,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   }
   const showEst = () => {
     const secs = Math.round(win.e - win.s), el = $("#est", ed);
-    if (el) el.textContent = serverMode ? `${secs} s clip · 1080×1920 · 30 fps · about ${Math.max(1, Math.round(secs * 0.75))} MB` : `${secs} s clip · 1080×1920 · about ${Math.round((secs * (TARGET_BPS[cl.opts.quality] + 192000)) / 8e6)} MB`;
+    if (el) el.textContent = serverMode ? `${secs} s clip · 1080×1920 · 30 fps · about ${Math.max(1, Math.round(secs))} MB` : `${secs} s clip · 1080×1920 · about ${Math.round((secs * (TARGET_BPS[cl.opts.quality] + 192000)) / 8e6)} MB`;
   };
   function setWin(ns, ne, moved) {
     ns = Math.round(ns); ne = Math.round(ne);
@@ -714,7 +714,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
     // with no event at all (610 started, 478 finished, 5 failed, 11/16-11/19).
     let phase = serverMode ? "server" : "load", pct = -1, pctAt = performance.now(), gone = false, running = true;
     const stalled = {};
-    const onGone = (e) => { if (!running || gone || (e.type === "visibilitychange" && !document.hidden)) return; gone = true; ph("clip_render_abandon", { ...common(), phase, percent: pct, secs: Math.round((performance.now() - t0) / 1000), how: e.type }, { transport: "sendBeacon" }); };
+    const onGone = (e) => { if (!running || gone || (e.type === "visibilitychange" && !document.hidden)) return; gone = true; ph("clip_render_abandon", { ...common(), phase, percent: pct, secs: Math.round((performance.now() - t0) / 1000), how: e.type }, { send_instantly: true, transport: "sendBeacon" }); }; // PostHog's own unload flush runs before this listener, so the event must not wait in its queue
     const progress = (now, percent) => {
       phase = now;
       if (percent !== pct) { pct = percent; pctAt = performance.now(); }
