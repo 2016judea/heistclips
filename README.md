@@ -26,7 +26,8 @@ clip.
 once (however many people watch it), keeps the moments where chat ran at least 2× its normal
 speed, and matches each to the best-paying live campaign that names that streamer and whose
 readable rules it passes. Where no campaign names the streamer, a GTA clip is offered the
-open "use our sound" campaigns, labelled as a general fit. No login: a secret link carries the
+open "use our sound" campaigns, labelled as a general fit. The page opens on "Paying right now": every streamer a live campaign names, best pay first,
+with the clipper count beside it. No login: a secret link carries the
 queue between devices. A queued clip costs one clip only when exported. Optional web push or
 email when new clips land.
 

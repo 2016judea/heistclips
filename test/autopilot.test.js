@@ -137,6 +137,30 @@ test("/queue ships with Vercel analytics and PostHog, and the cron is scheduled"
   for (const ev of ["watchlist_add", "queue_open", "queue_export"]) assert.ok(js.includes(`ph("${ev}"`), ev);
 });
 
+test("Paying right now: proven pay first, then budget; zero and new campaigns never lead; clippers shown", async () => {
+  const { payingStreamers, nameCandidates } = await import("../lib/autopilot.js");
+  const streamers = [
+    { platform: "twitch", login: "lacy", name: "Lacy" }, { platform: "twitch", login: "laurenhamdenn", name: "laurenhamdenn" },
+    { platform: "twitch", login: "kaicenat", name: "KaiCenat" }, { platform: "twitch", login: "nobody_here", name: "Nobody" }, { platform: "twitch", login: "kreekcraft", name: "KreekCraft" },
+  ];
+  const cs = [
+    camp({ title: "$12,500 LACY GTA VI Marathon Pool Campaign", expected_per_clip: 0.81, budget_left: 6991, clippers_count: 696, rate_per_1k: null, cap_per_clip: null }),
+    camp({ title: "$5,000 Lauren Hamden GTA 6 Clipping Campaign", description: "https://www.twitch.tv/laurenhamdenn", expected_per_clip: 6.69, budget_left: 4491, clippers_count: 10 }),
+    camp({ title: "Kai Cenat - $10,000 GTA 6 Pool Campaign", expected_per_clip: 0, budget_left: 10000, clippers_count: 66, rate_per_1k: null, cap_per_clip: null }),
+    camp({ title: "KreekCraft GTA 6 Clipping", expected_per_clip: null, budget_left: 6824, clippers_count: 0, cap_per_clip: 300 }),
+  ];
+  const rows = payingStreamers(streamers, cs);
+  assert.deepEqual(rows.map((r) => r.key), ["twitch:laurenhamdenn", "twitch:lacy", "twitch:kaicenat", "twitch:kreekcraft"]);
+  assert.equal(rows[0].best.clippers, 10);
+  assert.equal(rows[1].best.clippers, 696);
+  assert.equal(rows[2].best.pool, true);
+  // The names worth trying on Twitch when a streamer campaign links no channel.
+  assert.deepEqual(nameCandidates(camp({ title: "BrettLiftsXP GTA VI Clipping Campaign- $2 CPM", is_gta: true })), ["brettliftsxp"]);
+  assert.ok(nameCandidates(camp({ title: "SypherPK $7,500 Clipping Campaign", categories: ["Streamer"] })).includes("sypherpk"));
+  assert.deepEqual(nameCandidates(camp({ title: "Boeshi GTA 6 Clipping", is_gta: true, description: "twitch.tv/darealboeshi" })), [], "a linked channel needs no guess");
+  assert.deepEqual(nameCandidates(camp({ title: "Jamieson (ARTIST) Promo", categories: ["Music"] })), [], "not a streamer campaign");
+});
+
 test("the local Blob stand-in never writes to the live store", async () => {
   const real = globalThis.fetch;
   const env = { ...process.env };

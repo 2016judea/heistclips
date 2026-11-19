@@ -68,6 +68,28 @@ ${payLine(i)}
 </li>`;
 }
 
+let showAllPaying = false;
+function payText(b) {
+  const amt = b.expected_per_clip > 0 ? `<span class="amt">${money(b.expected_per_clip)} typical per clip</span>` : b.pool ? `<span class="amt">prize pool</span>` : `<span class="amt">new${b.cap_per_clip != null ? ", up to " + money(b.cap_per_clip) + " a clip" : ""}</span>`;
+  return `${amt} · ${money(b.budget_left)} left · ${b.clippers.toLocaleString("en-US")} clipper${b.clippers === 1 ? "" : "s"}`;
+}
+function renderPaying() {
+  const rows = sug.filter((s) => !wanted.includes(s.key));
+  const n = showAllPaying ? rows.length : wanted.length ? 4 : 6;
+  $("#q-payh").hidden = !rows.length;
+  $("#q-pays").innerHTML = rows.slice(0, n).map((s) => `<li>${s.avatar ? `<img src="${h(s.avatar)}" alt="" loading="lazy">` : `<span class="ph">${h(s.name.slice(0, 1))}</span>`}<span class="who"><b>${h(s.name)}${s.live ? '<span class="q-live">LIVE</span>' : ""}</b><span>${payText(s.best)}</span></span><button class="btn sm" type="button" data-watch="${h(s.key)}" aria-label="Watch ${h(s.name)}">Watch</button></li>`).join("");
+  $("#q-paymore").innerHTML = rows.length > n ? `<button class="btn sm ghost" type="button" id="q-payall">Show all ${rows.length}</button>` : "";
+}
+
+// A watched streamer no campaign pays for: say so once, and point at the ones that pay.
+function noCampaignNote() {
+  const none = ((data && data.watch.channels) || []).filter((c) => !c.missing && !(c.campaigns || []).length);
+  if (!none.length) return "";
+  const alts = sug.filter((s) => !wanted.includes(s.key) && s.best.expected_per_clip > 0).slice(0, 3);
+  const names = none.map((c) => h(c.name)).join(none.length > 2 ? ", " : " or ");
+  return `<li class="note">No campaign pays for ${names} clips right now.${alts.length ? ` Closest that pay: ${alts.map((s) => `<button class="btn sm ghost" type="button" data-watch="${h(s.key)}">${h(s.name)} ${money(s.best.expected_per_clip)}</button>`).join(" ")}` : ""}</li>`;
+}
+
 function render() {
   const has = wanted.length > 0;
   $("#q-start").hidden = has;
@@ -78,11 +100,11 @@ function render() {
     const c = by.get(key) || { key, name: key.split(":")[1] };
     return `<li data-key="${h(key)}">${c.avatar ? `<img src="${h(c.avatar)}" alt="">` : ""}${c.is_live ? '<span class="dot" title="live now"></span>' : ""}<span><b>${h(c.name)}</b>${c.missing ? " · not found" : c.campaigns && c.campaigns.length ? ` · ${c.campaigns.length} campaign${c.campaigns.length === 1 ? "" : "s"}` : ""}</span><button data-act="unwatch" aria-label="Stop watching ${h(c.name)}">✕</button></li>`;
   }).join("");
-  $("#q-sug").innerHTML = sug.filter((s) => !wanted.includes(s.key)).slice(0, 14).map((s) => `<button type="button" data-key="${h(s.key)}">${s.avatar ? `<img src="${h(s.avatar)}" alt="" loading="lazy">` : ""}<span>${h(s.name)}${s.best ? ` <small>${s.best.expected_per_clip ? money(s.best.expected_per_clip) + "/clip" : "pays"}</small>` : s.live ? " <small>live</small>" : ""}</span></button>`).join("");
+  renderPaying();
   if (!has) { $("#q-list").innerHTML = ""; $("#q-more").innerHTML = ""; return; }
   const items = (data && data.items) || [];
   const notes = ((data && data.watch.channels) || []).filter((c) => c.note || c.missing).map((c) => `<li class="note"><b>${h(c.name)}</b>: ${h(c.missing ? "no channel with that name" : c.note)}</li>`).join("");
-  $("#q-list").innerHTML = items.map(itemLi).join("") + notes || `<li class="q-empty">Nothing in the queue yet. Chat hasn’t spiked in the streams you watch, or they haven’t streamed lately. New moments land here within about 10 minutes of happening.</li>`;
+  $("#q-list").innerHTML = noCampaignNote() + items.map(itemLi).join("") + notes || `<li class="q-empty">Nothing in the queue yet. Chat hasn’t spiked in the streams you watch, or they haven’t streamed lately. New moments land here within about 10 minutes of happening.</li>`;
   const w = data ? data.watch : {};
   const link = `${location.origin}/queue?k=${K}`;
   $("#q-more").innerHTML = `${data && data.done ? `<p class="small">${data.done} clip${data.done === 1 ? "" : "s"} already exported or skipped.</p>` : ""}
@@ -128,18 +150,22 @@ function parseChan(raw) {
   return m ? "twitch:" + m[1] : null;
 }
 
-async function watch(key, how) {
+async function watch(key, how, best) {
   if (!key) return status("Type a Twitch channel name, or a kick.com/… link.");
   if (wanted.includes(key)) return status("Already watching that one.");
   if (wanted.length >= 12) return status("That’s the limit: 12 streamers. Remove one first.");
   wanted.push(key);
-  ph("watchlist_add", { platform: key.split(":")[0], channel: key.split(":")[1], how, n: wanted.length });
+  ph("watchlist_add", { platform: key.split(":")[0], channel: key.split(":")[1], how, n: wanted.length, pays: best ? best.expected_per_clip : null, clippers: best ? best.clippers : null });
   render();
   await save("add", key);
 }
 
 $("#q-add").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#q-in").value; $("#q-in").value = ""; watch(parseChan(v), "typed"); });
-$("#q-sug").addEventListener("click", (e) => { const b = e.target.closest("button[data-key]"); if (b) watch(b.dataset.key, "suggested"); });
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-watch]");
+  if (b) { const s = sug.find((x) => x.key === b.dataset.watch); return watch(b.dataset.watch, b.closest(".note") ? "closest_paying" : "paying_now", s && s.best); }
+  if (e.target.id === "q-payall") { showAllPaying = true; renderPaying(); ph("queue_paying_all", {}); }
+});
 
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-act]");

@@ -90,6 +90,10 @@ export default async function handler(req, res) {
         if (dirty) await W.saveWatch(w);
       }
     }
+    if (Date.now() - t0 < BUDGET_MS) {
+      try { const snap = await latestSnapshot(); if (snap) out.named = await W.resolveNamed(snap.campaigns, snap.streamers || []); }
+      catch (e) { out.errors.push("named: " + String(e.message || e).slice(0, 80)); }
+    }
     await putJSON(idxPath, idx, { maxAge: 0 });
     // A public, count-only heartbeat (no keys, no emails) so the cap is observable.
     out.ms = Date.now() - t0;

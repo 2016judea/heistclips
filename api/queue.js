@@ -3,7 +3,7 @@
 // private link) so the queue follows them across devices with no login. lib/watch.js stores,
 // lib/autopilot.js decides. Exporting a queued clip is charged by /api/credits, unchanged.
 import { latestSnapshot } from "../lib/store.js";
-import { buildQueue, campaignsFor, chanKey, parseChanKey, isGeneralGta } from "../lib/autopilot.js";
+import { buildQueue, campaignsFor, parseChanKey, isGeneralGta, payingStreamers } from "../lib/autopilot.js";
 import * as W from "../lib/watch.js";
 
 const json = (res, status, obj) => { res.statusCode = status; res.setHeader("content-type", "application/json"); res.setHeader("cache-control", "no-store"); res.end(JSON.stringify(obj)); };
@@ -39,21 +39,15 @@ export async function queueFor(k, { limit = 60 } = {}) {
   };
 }
 
-// Streamers worth watching: the ones a live campaign pays for, then whoever is live in GTA.
+// "Paying right now": every streamer a live campaign names (by channel link, by name in the
+// title, or resolved from the title by the cron), best-paying first, with the clipper count.
 async function suggestions() {
   const snap = await latestSnapshot();
-  if (!snap) return { streamers: [], general: [] };
+  if (!snap) return { streamers: [], general: 0 };
+  const named = await W.namedStreamers();
   const live = snap.campaigns.filter((c) => c.budget_left > 0);
-  const rows = [];
-  for (const s of snap.streamers || []) {
-    const pays = campaignsFor(s, live);
-    if (!pays.length && !s.live_now) continue;
-    const best = pays.slice().sort((a, b) => (b.expected_per_clip || 0) - (a.expected_per_clip || 0))[0];
-    rows.push({ key: chanKey(s.platform, s.login), name: s.name || s.login, avatar: s.avatar || null, live: !!s.live_now, viewers: s.viewers_now || 0,
-      campaigns: pays.length, best: best ? { title: best.title, expected_per_clip: best.expected_per_clip, budget_left: best.budget_left } : null });
-  }
-  rows.sort((a, b) => (b.campaigns > 0) - (a.campaigns > 0) || (b.live - a.live) || ((b.best && b.best.budget_left) || 0) - ((a.best && a.best.budget_left) || 0) || b.viewers - a.viewers);
-  return { streamers: rows.slice(0, 24), general: live.filter(isGeneralGta).length };
+  const rows = payingStreamers([...(snap.streamers || []), ...named], live);
+  return { streamers: rows.slice(0, 40), general: live.filter(isGeneralGta).length, at: snap.generated_at };
 }
 
 export default async function handler(req, res) {
