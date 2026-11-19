@@ -3,6 +3,7 @@ import { parseInput, getChannel, getVod, findMoments, playlistPath, clock, twitc
 import { Clipper, pickMime } from "./render.js";
 import { LiveChat, recordingStart } from "./live.js";
 import { getKickChannel, getKickVod } from "./kick.js";
+import { paywallHTML } from "./paywall.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const h = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -266,7 +267,7 @@ ${mime === null ? `<p class="note">This browser can’t record video. Open heist
     const u = await useCredit({ vod: current.vod.id, t: Math.round(win.s), layout: cl.opts.layout });
     if (!u.ok) {
       btn.disabled = false;
-      $("#dl", ed).innerHTML = `<div class="note">You’ve used your free clips. <a href="/pricing">Buy a pack</a> (from ${"$"}0.075 a clip) and come straight back.</div>`;
+      $("#dl", ed).innerHTML = paywallHTML();
       ph("paywall_hit", {});
       return;
     }
