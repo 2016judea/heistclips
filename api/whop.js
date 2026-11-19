@@ -29,10 +29,10 @@ function guessChannels(c, snap, named) {
 }
 
 // Everything one view needs. `id` is exp_… or biz_…; `level` is admin | customer.
-export async function viewData(id, userId, level) {
+export async function viewData(id, userId, level, justSaved = null) {
   const snap = await latestSnapshot();
   const campaigns = (snap && snap.campaigns) || [];
-  let cfg = await WH.loadCfg(id);
+  let cfg = justSaved || (await WH.loadCfg(id)); // Blob reads lag writes by seconds: never re-read what we just wrote
   let inherited = false;
   if (!cfg && id.startsWith("exp_")) { // fall back to the business default
     const exp = await WH.experience(id);
@@ -112,7 +112,8 @@ export default async function handler(req, res) {
       if (!c) return json(res, 400, { error: "That campaign is not in the live list." });
       const want = [...new Set((Array.isArray(b.channels) ? b.channels : String(b.channels || "").split(/[\s,]+/)).map(W.parseChannelInput).filter(Boolean))].slice(0, 6);
       if (!want.length) return json(res, 400, { error: "Name at least one Twitch or Kick channel your clippers should clip." });
-      await WH.saveCfg(id, { v: 1, campaign_id: c.id, channels: want, updated_at: new Date().toISOString() });
+      const cfg = { v: 1, campaign_id: c.id, channels: want, updated_at: new Date().toISOString() };
+      await WH.saveCfg(id, cfg);
       // Register the channels with the autopilot cron, and read new ones now.
       const k = WH.watchKey(id);
       const w = (await W.loadWatch(k)) || { ...W.newWatch(null), k, source: "whop" };
@@ -120,7 +121,7 @@ export default async function handler(req, res) {
       w.channels = want; await W.saveWatch(w);
       const scans = [];
       for (const key of added.slice(0, 2)) { try { const r = await W.scanChannel(key); scans.push({ key, fresh: r.fresh.length, missing: !!r.missing, note: r.note || r.error || null }); } catch (e) { scans.push({ key, error: true }); } }
-      return json(res, 200, { ok: true, scans, ...(await viewData(id, a.userId, a.level)) });
+      return json(res, 200, { ok: true, scans, ...(await viewData(id, a.userId, a.level, cfg)) });
     }
     if (b.action === "state") {
       const p = WH.statePath(id, a.userId);
