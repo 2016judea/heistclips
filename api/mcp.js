@@ -7,6 +7,7 @@ import { markSpoilers } from "../public/js/spoilers.js";
 import { liveGtaStreams } from "../lib/streamers.js";
 import { getKickChannel, getKickVod, liveKickGta } from "../public/js/kick.js";
 import { loadBoard, publicList, vote, submit, notify, hashOf } from "../lib/requests.js";
+import { queueTool } from "../lib/queuetool.js";
 
 const SITE = "https://heistclips.com";
 const BASE = process.env.HC_BASE || SITE; // where this server reaches its own /api/v1 functions
@@ -82,6 +83,29 @@ export const TOOLS = [
     annotations: { title: "Posting account", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: true },
   },
   {
+    name: "my_clip_queue",
+    title: "My clip queue: ready clips from the streamers I watch, matched to the campaign that pays",
+    description: "The user's heistclips autopilot queue: clips that are ready to cut from the Twitch and Kick streamers on their watchlist (live streams and new VODs are re-read every 10 minutes), each with a hook line, a caption, why chat exploded, and the best-paying clipping campaign it fits with that campaign's $ per clip and rules still to check. Use for 'what should I clip today', 'any new clips', 'what's in my queue'. Pass the account code (hc_…) from watch_streamer or cut_clip, or the private queue link the user copied from heistclips.com/queue. Each clip carries cut_with values for cut_clip.",
+    inputSchema: { type: "object", properties: {
+      account: { type: "string", description: "The account code (hc_…) from watch_streamer or cut_clip" },
+      queue_link: { type: "string", description: "Or: the private link from the user's queue page (heistclips.com/queue?k=…), exactly as they pasted it" },
+      limit: { type: "integer", minimum: 1, maximum: 30, description: "How many clips (default 10)" },
+    }, additionalProperties: false },
+    annotations: { title: "My clip queue", ...ANN },
+  },
+  {
+    name: "watch_streamer",
+    title: "Watch a streamer for me: add a Twitch or Kick channel to my clip watchlist",
+    description: "Adds a Twitch or Kick streamer to the user's heistclips watchlist, so their live streams and new VODs are read every 10 minutes and the moments chat explodes land in my_clip_queue as ready clips. Says which clipping campaigns pay for clips of that streamer and how many clips are ready now. Use for 'watch kaicenat for me', 'tell me when X has a clip', 'follow this streamer'. Leave account out on the first call (a code is returned; keep it and pass it back), or pass the user's private queue link to use the queue they started on the website. Set remove to stop watching.",
+    inputSchema: { type: "object", properties: {
+      streamer: { type: "string", description: "Twitch channel name or link, or a Kick channel as kick.com/<name>" },
+      account: { type: "string", description: "The account code (hc_…) from an earlier call. Leave out on the very first call." },
+      queue_link: { type: "string", description: "Or: the private link from the user's queue page (heistclips.com/queue?k=…)" },
+      remove: { type: "boolean", description: "true to stop watching this streamer" },
+    }, required: ["streamer"], additionalProperties: false },
+    annotations: { title: "Watch a streamer", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: true },
+  },
+  {
     name: "live_gta_streams",
     title: "Who is live streaming GTA right now on Twitch and Kick",
     description: "Twitch and Kick channels live streaming GTA (GTA VI and GTA V) right now, by viewers, with language, each with a link to find its clip moments. Use for 'who is streaming GTA 6 right now', 'which live stream should I clip'.",
@@ -140,7 +164,7 @@ async function logCall(tool, ok, ms, meta) {
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
 
-export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do.";
+export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views, and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do.";
 
 const text = (obj) => ({ content: [{ type: "text", text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 1) }], structuredContent: typeof obj === "string" ? undefined : obj });
 
@@ -231,6 +255,10 @@ export async function callTool(name, args = {}, caller = "mcp") {
     if (d.manage) d.manage = tag(d.manage); if (d.connect) d.connect = tag(d.connect);
     delete d.open;
     return d.ok ? text(d) : { ...text(d), isError: !(d.needs_connect || d.not_open_yet) };
+  }
+  if (name === "my_clip_queue" || name === "watch_streamer") {
+    const d = await queueTool(name, args);
+    return d.ok ? text(d) : { ...text(d), isError: true };
   }
   if (name === "live_gta_streams") {
     const [tw, kk] = await Promise.all([liveGtaStreams(40), liveKickGta(20).catch(() => [])]);

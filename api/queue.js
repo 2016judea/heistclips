@@ -36,6 +36,7 @@ export async function queueFor(k, { limit = 60 } = {}) {
   return {
     watch: { channels, campaigns: w.campaigns || [], email: maskEmail(w.notify && w.notify.email), email_ok: !!(w.notify && w.notify.email_ok), push: ((w.notify && w.notify.push) || []).length, has_paid_key: !!w.paid_key },
     items: q.items, done: q.done, total: q.total, generated_at: new Date().toISOString(),
+    files: Object.entries(w.items || {}).filter(([, v]) => v.file && Date.now() - Date.parse(v.at) < 72 * 3600 * 1000).sort((a, b) => (a[1].at < b[1].at ? 1 : -1)).slice(0, 12).map(([id, v]) => ({ id, url: v.file, at: v.at, hook: v.hook || "", name: v.name || "" })),
   };
 }
 
@@ -116,7 +117,7 @@ export default async function handler(req, res) {
       for (const [id, s] of Object.entries(b.states || {}).slice(0, 200)) {
         if (!/^[A-Za-z0-9_-]{4,80}$/.test(id)) continue;
         if (s === "new") delete w.items[id];
-        else if (s === "exported" || s === "skipped") w.items[id] = { s, at: (w.items[id] && w.items[id].s === s && w.items[id].at) || now };
+        else if (s === "exported" || s === "skipped") w.items[id] = { ...(w.items[id] && w.items[id].file ? w.items[id] : {}), s: w.items[id] && w.items[id].file ? "exported" : s, at: (w.items[id] && w.items[id].s === s && w.items[id].at) || now };
       }
       const ids = Object.keys(w.items); // bounded: forget the oldest decisions
       if (ids.length > 600) for (const id of ids.sort((a, c) => (w.items[a].at < w.items[c].at ? -1 : 1)).slice(0, ids.length - 600)) delete w.items[id];

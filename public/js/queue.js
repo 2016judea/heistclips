@@ -52,6 +52,35 @@ function exportHref(i) {
   return `/clip?q=${encodeURIComponent(q)}&qi=${encodeURIComponent(i.id)}&ch=${encodeURIComponent(i.channel)}${i.match ? "&c=" + encodeURIComponent(i.match.slug) : ""}`;
 }
 
+// A phone (or any browser that cannot record video) gets the clip cut on our server instead.
+const CAN_RENDER = typeof MediaRecorder !== "undefined" && !(window.matchMedia && matchMedia("(pointer: coarse)").matches) && innerWidth >= 700;
+
+async function serverCut(item, li, btn) {
+  const prog = li.querySelector(".q-prog");
+  if (li.dataset.busy) return;
+  li.dataset.busy = "1"; btn.setAttribute("aria-disabled", "true"); btn.style.opacity = ".5";
+  prog.hidden = false;
+  const t0 = Date.now();
+  const tick = setInterval(() => { prog.innerHTML = `<span class="q-spin"></span>Cutting this clip on our server… ${Math.round((Date.now() - t0) / 1000)} s (takes about a minute; keep this page open)`; }, 1000);
+  ph("queue_export_start", { via: "server", paid: !!item.match });
+  let d;
+  try {
+    const r = await fetch("/api/v1/qcut", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ k: K, d: device, paid: store.get("hc_key") || "", ch: item.channel, moment: item.id, hook: item.hook }) });
+    d = await r.json();
+  } catch (e) { d = { ok: false, error: "The connection dropped. If the clip finished it will be under “Your cut clips” when you reload. Nothing is charged for a clip that didn’t finish." }; }
+  clearInterval(tick); delete li.dataset.busy; btn.removeAttribute("aria-disabled"); btn.style.opacity = "";
+  if (!d.ok) {
+    prog.innerHTML = d.need === "buy" ? `You’ve used your free clips. <a href="/pricing">Buy a pack</a> (50 clips for $5) and come straight back.` : h(d.error || "The cut failed. Nothing was charged.");
+    ph(d.need === "buy" ? "paywall_hit" : "queue_export_fail", { via: "server" });
+    return;
+  }
+  states[item.id] = "exported";
+  prog.innerHTML = `<video src="${h(d.download)}" controls playsinline preload="metadata"></video><a class="btn" href="${h(d.download)}" download="${h(d.filename)}">Download MP4 (${d.megabytes} MB)</a><p class="small">1080×1920, ${Math.round(d.seconds)} s. ${d.free_left != null ? `${d.free_left} free clip${d.free_left === 1 ? "" : "s"} left${d.paid_left ? " + " + d.paid_left + " paid" : ""}. ` : ""}On iPhone: press and hold the video, then Save.</p>`;
+  li.querySelector(".q-act").hidden = true;
+  const alt = li.querySelector(".q-alt"); if (alt) alt.hidden = true;
+  ph("queue_export", { via: "server", channel: item.channel_name, live: !!item.live, campaign: item.match ? item.match.slug : null, secs: Math.round((Date.now() - t0) / 1000) });
+}
+
 function itemLi(i) {
   const quote = (i.quote || []).map((q) => `“${h(q.t)}”${q.n > 1 ? " ×" + q.n : ""}`).join(" · ");
   const chips = [`<span class="chip hot">chat ${i.chat_ratio}× normal</span>`, `<span class="chip">${i.length_s} s</span>`];
@@ -65,6 +94,8 @@ ${quote ? `<p class="q-quote">${quote}</p>` : ""}
 <div class="chips">${chips.join("")}</div>
 ${payLine(i)}
 <div class="q-act"><a class="btn" data-act="export" href="${h(exportHref(i))}">Export 9:16</a><button class="btn ghost" data-act="copy">Copy caption</button><button class="btn ghost" data-act="skip" aria-label="Skip this clip">Skip</button></div>
+${CAN_RENDER && i.length_s <= 60 ? `<button class="q-alt" data-act="server">No editor: cut it for me (about a minute)</button>` : ""}
+<div class="q-prog" hidden></div>
 </li>`;
 }
 
@@ -107,7 +138,8 @@ function render() {
   $("#q-list").innerHTML = noCampaignNote() + items.map(itemLi).join("") + notes || `<li class="q-empty">Nothing in the queue yet. Chat hasn’t spiked in the streams you watch, or they haven’t streamed lately. New moments land here within about 10 minutes of happening.</li>`;
   const w = data ? data.watch : {};
   const link = `${location.origin}/queue?k=${K}`;
-  $("#q-more").innerHTML = `${data && data.done ? `<p class="small">${data.done} clip${data.done === 1 ? "" : "s"} already exported or skipped.</p>` : ""}
+  const files = (data && data.files) || [];
+  $("#q-more").innerHTML = `${files.length ? `<div class="q-card"><h2>Your cut clips</h2><p class="small">Kept for 72 hours.</p><ul class="q-files">${files.map((f) => `<li><a href="${h(f.url)}" download>${h(f.name)}: ${h(f.hook || "clip")}</a> <span class="small">${ago(f.at)}</span></li>`).join("")}</ul></div>` : ""}${data && data.done ? `<p class="small">${data.done} clip${data.done === 1 ? "" : "s"} already exported or skipped.</p>` : ""}
 <div class="q-card"><h2>Tell me when clips are ready</h2>
 <p class="small" id="q-nstat">${w.email_ok ? `Emailing ${h(w.email)}. ` : w.email ? `Check ${h(w.email)} for the link to confirm. ` : ""}${w.push ? "Notifications are on in " + w.push + " browser" + (w.push === 1 ? "" : "s") + "." : ""}</p>
 <div class="q-row"><button class="btn sm" id="q-push">Turn on notifications</button></div>
@@ -176,6 +208,7 @@ document.addEventListener("click", async (e) => {
     if (!item) return;
     if (act === "copy") { try { await navigator.clipboard.writeText(item.caption); b.textContent = "Copied"; } catch (err) { b.textContent = item.caption; } ph("queue_copy_caption", { paid: !!item.match }); }
     if (act === "skip") { states[id] = "skipped"; data.items = data.items.filter((x) => x.id !== id); data.done++; li.remove(); ph("queue_skip", { paid: !!item.match }); api({ action: "state", k: K, states }); }
+    if (act === "server" || (act === "export" && !CAN_RENDER && item.length_s <= 60)) { e.preventDefault(); return serverCut(item, li, b); }
     if (act === "export") ph("queue_export_open", { paid: !!item.match, live: !!item.live, channel: item.channel_name });
     return;
   }
