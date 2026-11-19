@@ -57,7 +57,7 @@ function setupCard() {
   const cur = picked || D.campaign;
   return `<section class="w-card" id="w-setup"><h2>${D.configured ? "Change the campaign" : "Set up: which campaign do your clippers clip for?"}</h2>
 <label for="w-q">Find your campaign by name, or paste its Content Rewards link</label>
-<input id="w-q" placeholder="e.g. Lauren Hamden, or contentrewards.com/c/campaigns/…" autocomplete="off" autocapitalize="off">
+<input id="w-q" placeholder="Campaign name, or contentrewards.com/c/campaigns/…" autocomplete="off" autocapitalize="off">
 <ul class="w-res" id="w-res">${results.map((c) => `<li><button type="button" data-pick="${h(c.id)}" class="${cur && cur.id === c.id ? "on" : ""}"><b>${h(c.title)}</b><small>${h(c.owner || "")} · ${money(c.budget_left)} left · ${c.clippers} clippers</small></button></li>`).join("")}</ul>
 <label for="w-ch">Twitch or Kick channels the campaign pays for (up to 6, separated by commas)</label>
 <input id="w-ch" placeholder="e.g. laurenhamdenn, kick.com/xqc" autocapitalize="off" autocomplete="off" value="${h((picked ? picked.suggested_channels || [] : D.channels.map((c) => c.key)).map((k) => (k.startsWith("kick:") ? "kick.com/" + k.slice(5) : k.slice(7))).join(", "))}">
