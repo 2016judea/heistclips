@@ -226,6 +226,15 @@ function cutResult(d, polls = 0) {
   if (!d.ok) return withLog({ ...text(pub), isError: !d.need }, log);
   return withLog(text({ ...pub, next: "Give the user the download link. To post it, call post_clip with clip_id, account, platform and a caption." }), log);
 }
+// Three lanes: the same cutter under three paths (api/v1/cut.js, cut2.js, cut3.js), each its
+// own function with its own CPU. Cuts that arrive a few seconds apart were being sent to one
+// instance, where they take turns (lib/cut.js inTurn); taking the next lane each time lets
+// them run side by side instead. Measured 2026-11-19 on one lane: three cuts started 4 s
+// apart finished in 18, 34 and 42 s, the last two after waiting 12 and 29 s for their turn.
+const LANES = ["/api/v1/cut", "/api/v1/cut2", "/api/v1/cut3"];
+let lane = Math.floor(Math.random() * LANES.length);
+export const cutLane = () => LANES[lane++ % LANES.length];
+
 const stillCutting = (job, waited, polls) => withLog(text({
   status: "cutting", job, waited_s: Math.round(waited / 1000),
   message: "The clip is still being cut. Call cut_clip_status with this job code now: it waits up to 40 seconds for the file and returns the download link. Do not call cut_clip again for this window; nothing is charged until the file exists.",
@@ -315,7 +324,7 @@ export async function callTool(name, args = {}, caller = "mcp") {
     // The cut runs in its own function (ffmpeg, longer limit) and goes on to the end whether or
     // not anyone is still waiting. This call waits a safe while, then hands back the job code.
     const job = newJobId(), t0 = Date.now();
-    const cut = fetch(BASE + "/api/v1/cut", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...args, via: "mcp", job }) })
+    const cut = fetch(BASE + cutLane(), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...args, via: "mcp", job }) })
       .then(async (r) => (await r.json().catch(() => null)) || { ok: false, err: "http_" + r.status, error: "The cut did not finish (" + r.status + "). Nothing was charged; try again." }, () => null);
     const d = await Promise.race([cut, sleep(CUT_WAIT_MS).then(() => undefined)]);
     if (d) return cutResult(d);

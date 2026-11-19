@@ -13,7 +13,7 @@ const { cutJob, saveJob, loadJob, newJobId, JOB, jobAgeMs } = await import("../l
 const { rankKickVariants, playlistUrls, TWITCH_QUALITIES, fetchTo, inTurn } = await import("../lib/cut.js");
 const { resolveSource } = await import("../lib/momentsource.js");
 const { findClipMoments } = await import("../lib/momentstool.js");
-const { TOOLS, callTool } = await import("../api/mcp.js");
+const { TOOLS, callTool, cutLane } = await import("../api/mcp.js");
 
 const VOD = { id: "v1", platform: "twitch", length: 5000, status: "RECORDED", channel: "x", channel_name: "X", title: "t", url: "https://www.twitch.tv/videos/v1" };
 function deps(over = {}) {
@@ -140,6 +140,12 @@ test("find_clip_moments: an unreadable source is a helpful result, and a finishe
   assert.ok(!JSON.stringify(a.log).includes("LUL"), "no chat text in analytics");
   await findClipMoments({ source: "one", limit: 12 }, { deps: d }); // more moments than were kept: read again
   assert.equal(reads, 2);
+});
+
+test("consecutive cuts go to different lanes, and every lane is a real function file", async () => {
+  const three = [cutLane(), cutLane(), cutLane()];
+  assert.equal(new Set(three).size, 3);
+  for (const p of three) { assert.ok(fs.existsSync(path.join(import.meta.dirname, "..", p + ".js")), p); assert.equal(typeof (await import(".." + p + ".js")).default, "function"); }
 });
 
 test("cut_clip_status is listed, read-only, and refuses anything that is not a job code", async () => {

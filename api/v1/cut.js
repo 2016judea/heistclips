@@ -6,10 +6,13 @@
 // written) even when the caller has stopped waiting: the connector answers "still cutting"
 // after a safe time and reads the job's result later.
 import os from "node:os";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import { waitUntil } from "@vercel/functions";
 import { cutJob, resolveVod } from "../../lib/cutjob.js";
 import { cutClip } from "../../lib/cut.js";
+
+const INSTANCE = crypto.randomBytes(3).toString("hex"); // which warm instance answered (bench runs only)
 
 async function body(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -26,6 +29,7 @@ async function bench(b) {
   const out = await cutClip(vod, { start: Number(b.start), end: Number(b.end), layout: b.layout, hook: b.hook || "", source: b.variant || "", x264: b.x264 || {} });
   fs.rmSync(out.dir, { recursive: true, force: true });
   return { ok: true, bench: true, ms: Date.now() - t0, seconds: out.seconds, megabytes: Math.round(out.bytes / 1e5) / 10, kbps: Math.round(out.bytes * 8 / out.seconds / 1000), source_quality: out.source_quality, segments: out.segments, timing: out.timing,
+    instance: INSTANCE,
     cpu: { n: os.availableParallelism(), model: (os.cpus()[0] || {}).model, mem_gb: Math.round(os.totalmem() / 1e8) / 10 } };
 }
 
