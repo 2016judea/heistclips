@@ -55,13 +55,14 @@ export const TOOLS = [
       title: { type: "string", description: "What they want, in their own words, under 90 characters" },
       detail: { type: "string", description: "Optional: what they were trying to do" },
       contact: { type: "string", description: "Optional: email or handle for a reply, verbatim, only if offered" },
+      not_a_stream: { type: "boolean", description: "Only if a previous call said the title looks like a stream and the user confirms it is really a feature request" },
     }, required: ["title"], additionalProperties: false },
     annotations: { title: "Request a feature", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
   },
   {
     name: "list_feature_requests",
     title: "heistclips feature requests",
-    description: "The public heistclips feature-request board: every request with its upvotes and status (requested, building, shipped), most upvoted first. Use before request_a_feature to find an existing request to upvote instead.",
+    description: "The public heistclips feature-request board: every request with its upvotes, status (requested, building, shipped), and for closed items the builder's response and shipped_at date, most upvoted first. Use before request_a_feature to find an existing request to upvote instead.",
     inputSchema: { type: "object", properties: { status: { type: "string", enum: ["requested", "building", "shipped"], description: "Only this status" } }, additionalProperties: false },
     annotations: { title: "List feature requests", ...ANN },
   },
@@ -96,6 +97,7 @@ export async function callTool(name, args = {}, caller = "mcp") {
   if (name === "request_a_feature") {
     if (!args.title) return text({ ok: false, needs: "Ask the user what they want heistclips to do, then call again with it as title." });
     const r = await submit(args, "mcp:" + caller, caller);
+    if (r.stream) return text({ ok: false, filed: false, looks_like_stream: r.kind, message: `Not filed: "${args.title}" is a ${r.kind}, not a feature request. Find its moments with find_moments (source "${r.q}") or open the clip link. If the user really meant it as a request, call again with not_a_stream true.`, find_moments_source: r.q, open: r.clip });
     if (!r.ok) return { ...text({ ok: false, error: r.error }), isError: true };
     if (r.item) await notify(r.item, r.contact, "MCP").catch(() => null);
     return text({ ok: true, id: r.id, duplicate: !!r.duplicate, message: r.duplicate ? "That is already on the board; it was not filed twice. Offer to upvote it." : "Filed on the public board and sent to the builder.", board: SITE + "/requests#" + r.id });

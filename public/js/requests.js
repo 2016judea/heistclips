@@ -31,9 +31,17 @@ f.addEventListener("submit", async (e) => {
   const msg = document.getElementById("reqmsg");
   const data = Object.fromEntries(new FormData(f));
   msg.textContent = "Sending…";
-  const r = await fetch("/api/requests", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "submit", d, ...data }) });
+  const r = await fetch("/api/requests", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "submit", d, ...data, not_a_stream: f.dataset.force === "1" }) });
   const j = await r.json();
+  if (j.stream) {
+    // A stream pasted into the request box: send them to the clip tool instead of the board.
+    ph("request_stream_redirect", { kind: j.kind });
+    msg.innerHTML = `That’s a ${esc(j.kind)}, not a request. <a href="/clip?q=${encodeURIComponent(j.q)}">Find its moments in the clip tool →</a> <button type="button" class="linkbtn" id="fileanyway">It’s a request, file it</button>`;
+    document.getElementById("fileanyway").onclick = () => { f.dataset.force = "1"; f.requestSubmit(); };
+    return;
+  }
   if (!j.ok) { msg.textContent = j.error; return; }
+  delete f.dataset.force;
   ph("request_submit", { duplicate: !!j.duplicate });
   if (j.duplicate) { msg.textContent = "Already on the board, so we added nothing. Upvote it:"; location.hash = j.id; return; }
   msg.textContent = "Added. It’s on the board now.";
