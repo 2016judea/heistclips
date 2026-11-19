@@ -633,32 +633,6 @@
     }
   },
   {
-    "id": "loading-no-longer-stalls",
-    "date": "2026-11-19",
-    "type": "fixed",
-    "title": "Renders no longer get stuck on “Loading the video”",
-    "body": "High-bitrate streams and streams with muted parts now finish loading. A wait tells you what it is waiting for, and there is a Cancel button.",
-    "link": "/clip",
-    "langs": {
-      "de": {
-        "title": "Renders bleiben nicht mehr bei „Video wird geladen“ hängen",
-        "body": "Streams mit hoher Bitrate und Streams mit stummgeschalteten Stellen laden jetzt fertig. Beim Warten steht da, worauf gewartet wird, und es gibt einen Abbrechen-Button."
-      },
-      "fr": {
-        "title": "Les rendus ne restent plus bloqués sur « Chargement de la vidéo »",
-        "body": "Les streams à haut débit et les streams avec des passages au son coupé se chargent maintenant jusqu’au bout. Une attente dit ce qu’elle attend, et il y a un bouton Annuler."
-      },
-      "pt": {
-        "title": "Os renders não travam mais em “Carregando o vídeo”",
-        "body": "Lives com bitrate alto e lives com trechos sem áudio agora carregam até o fim. A espera diz o que está esperando, e há um botão Cancelar."
-      },
-      "es": {
-        "title": "Los renders ya no se quedan en «Cargando el vídeo»",
-        "body": "Los directos con bitrate alto y los que tienen partes silenciadas ya terminan de cargar. La espera te dice qué está esperando, y hay un botón Cancelar."
-      }
-    }
-  },
-  {
     "id": "clip-from-a-campaign",
     "date": "2026-11-19",
     "type": "improved",
