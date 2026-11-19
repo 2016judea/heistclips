@@ -70,7 +70,7 @@ test("committing the same ticket twice charges once; a forged or foreign ticket 
   assert.equal(again.already, true);
   assert.equal((await call("GET", { d })).free_left, FREE_CLIPS - 1);
   assert.equal((await call("POST", { action: "commit", d: "dev-other", ticket: s.ticket, bytes: 5 })).status, 400);
-  assert.equal((await call("POST", { action: "commit", d, ticket: s.ticket.replace(/.$/, "0"), bytes: 5 })).status, 400);
+  assert.equal((await call("POST", { action: "commit", d, ticket: s.ticket.replace(/.$/, (c) => (c === "0" ? "1" : "0")), bytes: 5 })).status, 400);
 });
 
 test("legacy counters still count, then paid credits are spent after free ones", async () => {
