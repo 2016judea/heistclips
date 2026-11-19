@@ -28,7 +28,7 @@ async function api(body) {
 function rememberKey(k) {
   K = k; store.set("hc_queue", k);
   // The service worker reads this to ask what is new when a push arrives.
-  try { caches.open("hc").then((c) => c.put("/__queue_key", new Response(k))); } catch (e) {}
+  try { caches.open("hc").then((c) => { c.put("/__queue_key", new Response(k)); c.put("/__queue_lang", new Response((document.documentElement.lang || "en").slice(0, 2))); }); } catch (e) {}
 }
 
 function payLine(i) {
@@ -137,7 +137,7 @@ function render() {
   const notes = ((data && data.watch.channels) || []).filter((c) => c.note || c.missing).map((c) => `<li class="note"><b>${h(c.name)}</b>: ${h(c.missing ? "no channel with that name" : c.note)}</li>`).join("");
   $("#q-list").innerHTML = noCampaignNote() + items.map(itemLi).join("") + notes || `<li class="q-empty">Nothing in the queue yet. Chat hasn’t spiked in the streams you watch, or they haven’t streamed lately. New moments land here within about 10 minutes of happening.</li>`;
   const w = data ? data.watch : {};
-  const link = `${location.origin}/queue?k=${K}`;
+  const link = `${location.origin}${location.pathname}?k=${K}`;
   const files = (data && data.files) || [];
   $("#q-more").innerHTML = `${files.length ? `<div class="q-card"><h2>Your cut clips</h2><p class="small">Kept for 72 hours.</p><ul class="q-files">${files.map((f) => `<li><a href="${h(f.url)}" download>${h(f.name)}: ${h(f.hook || "clip")}</a> <span class="small">${ago(f.at)}</span></li>`).join("")}</ul></div>` : ""}${data && data.done ? `<p class="small">${data.done} clip${data.done === 1 ? "" : "s"} already exported or skipped.</p>` : ""}
 <div class="q-card"><h2>Tell me when clips are ready</h2>
@@ -220,7 +220,7 @@ document.addEventListener("submit", async (e) => {
   if (e.target.id !== "q-mail") return;
   e.preventDefault();
   const email = $("#q-email").value.trim();
-  const d = await api({ action: "email", k: K, email });
+  const d = await api({ action: "email", k: K, email, lang: (document.documentElement.lang || "en").slice(0, 2) }); // mail follows the page's language
   $("#q-nstat").textContent = d.ok ? `Sent. Open the link in the mail to ${d.email} to confirm.` : (d.error || d.why || "Couldn’t send that mail.");
   ph("queue_notify", { via: "email", ok: !!d.ok });
 });
@@ -254,7 +254,7 @@ async function enablePush(btn) {
     let msg = "";
     if (conf) { const d = await api({ action: "confirm", k: pk, token: conf }); msg = d.ok ? `Confirmed. New clips will be emailed to ${d.email}.` : (d.error || ""); ph("queue_email_confirm", { ok: !!d.ok }); }
     if (params.get("mail") === "off") { await api({ action: "mailoff", k: pk }); msg = "Emails are off."; }
-    history.replaceState(null, "", "/queue"); // keep the secret out of the address bar and referrers
+    history.replaceState(null, "", location.pathname); // keep the secret out of the address bar and referrers (pathname: /de/queue stays German)
     await load();
     if (msg) status(h(msg));
   } else await load();

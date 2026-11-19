@@ -152,3 +152,21 @@ test("mail and push words exist in every language and keep the links", async () 
   assert.equal(en.subject, "2 new clips ready: Trymacs"); assert.match(en.text, /\$3 typical per clip/);
   for (const l of ["fr", "pt", "es"]) { const m = W.readyMail({ ...w, notify: { email: "a@b.co", lang: l } }, items); assert.notEqual(m.subject, en.subject, l); assert.match(m.html, /mail=off/); }
 });
+
+test("the autopilot queue and the post page: what their scripts write, in all four languages", async () => {
+  const want = {
+    de: ["· $7,957 übrig · 1 Clipper", "Zahlt für Clips von threadguy", "✓ 38 s passt zu 15–60 s", "Noch 3 Gratis-Clips + 5 gekauft · Account-Code für Claude:", "YouTube neu verbinden", "· GTA VI · vor 5 Min. ·", "Mitte links"],
+    fr: ["· $7,957 restants · 1 clippeur", "Paie pour les clips de threadguy", "✓ 38 s, dans les 15–60 s", "3 clips gratuits restants + 5 payés · Code de compte pour Claude :", "Reconnecter YouTube", "· GTA VI · il y a 5 min ·", "au milieu à gauche"],
+    pt: ["· $7,957 restantes · 1 clipador", "Paga por clipes de threadguy", "✓ 38 s cabe em 15–60 s", "3 clipes grátis restantes + 5 pagos · Código da conta para o Claude:", "Reconectar YouTube", "· GTA VI · há 5 min ·", "no meio à esquerda"],
+    es: ["· quedan $7,957 · 1 clipper", "Paga por clips de threadguy", "✓ 38 s entra en 15–60 s", "Te quedan 3 clips gratis + 5 de pago · Código de cuenta para Claude:", "Reconectar YouTube", "· GTA VI · hace 5 min ·", "en medio a la izquierda"],
+  };
+  const en = ["· $7,957 left · 1 clipper", "Pays for threadguy clips", "✓ 38 s fits 15–60 s", "3 free clips left + 5 paid · Account code for Claude:", "Reconnect YouTube", "· GTA VI · 5 min ago ·", "middle left"];
+  for (const lang of Object.keys(want)) {
+    globalThis.document = { documentElement: { lang }, querySelector: () => null };
+    const { tr } = await import("../public/js/l10n.js?q" + lang);
+    en.forEach((line, i) => assert.equal(tr(line), want[lang][i], lang));
+    // a hook line, a chat quote or a campaign title that matches no rule is left exactly as written
+    assert.equal(tr("threadguy just pulled THIS off"), "threadguy just pulled THIS off");
+    delete globalThis.document;
+  }
+});
