@@ -19,6 +19,10 @@ clip.
   moment is flagged before you post it and lose the payout.
 - **Campaign ranker.** Every live clipping campaign ranked by what a typical approved clip has
   *actually earned*, with budget runway, so you clip for the one that pays.
+- **Never a dead end.** A name typed with spaces, a clip link, a stream that isn't saved, a
+  silent chat: each gets a plain answer and the live GTA streams you can clip right now.
+- **English, Deutsch, Français.** The tool, pricing, guides and board are at `/de` and `/fr`
+  (`lib/l10n_de.js`, `lib/l10n_fr.js`, `public/js/l10n.js`); hook lines follow the language.
 
 ## Autopilot: a queue of ready clips
 
