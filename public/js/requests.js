@@ -16,6 +16,11 @@ const want = (qlang || (pageLang !== "en" ? pageLang : (navigator.languages && n
 function localizeRow(li, x) {
   const div = li.querySelector(":scope > div");
   if (!div) return;
+  // The reply first: it is stored in every language for every row, launch items included. (The
+  // spoiler-filter reply on s07 stayed English on /de, /fr, /pt and /es because the launch-item
+  // return below came before it.)
+  const resp = li.querySelector(".resp");
+  if (resp && x.response) { const lead = resp.querySelector("b"); resp.textContent = " — " + x.response; if (lead) resp.prepend(lead); }
   const ours = !!li.querySelector(".rt");
   if (!ours && !div.hasAttribute("data-notr")) return; // hand-translated launch item
   const t = li.querySelector(".rt") || div.querySelector(":scope > b");
@@ -32,8 +37,6 @@ function localizeRow(li, x) {
     n.innerHTML = `${esc(x.tr_label.from)} · <button type="button" class="linkbtn" data-orig>${esc(x.tr_label.show)}</button>`;
     p.after(n);
   }
-  const resp = li.querySelector(".resp");
-  if (resp && x.response) { const lead = resp.querySelector("b"); resp.textContent = " — " + x.response; if (lead) resp.prepend(lead); }
 }
 async function refresh() {
   const r = await fetch("/api/requests?d=" + encodeURIComponent(d) + "&lang=" + encodeURIComponent(want));
