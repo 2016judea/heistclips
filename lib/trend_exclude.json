@@ -20,7 +20,7 @@
   },
   "house": {
    "why": "The clip desk's own account (HOUSE_ACCOUNTS), cut before house clips stopped leaving records.",
-   "n": 7
+   "n": 12
   }
  },
  "paths": [
@@ -93,6 +93,11 @@
   "trend/c/2026-11-19/mwo0esji-d8569bec~2930682741~2750.json",
   "trend/c/2026-11-19/mwo0nsyu-768ea86e~2931745878~10920.json",
   "trend/c/2026-11-19/mwo0psvc-c7089eb5~2931745878~10920.json",
-  "trend/c/2026-11-19/mwo0vtfk-941010f0~2931745878~10880.json"
+  "trend/c/2026-11-19/mwo0vtfk-941010f0~2931745878~10880.json",
+  "trend/c/2026-11-19/mwo36nvm-e7f9a808~2933588799~35020.json",
+  "trend/c/2026-11-19/mwo37viv-e68b570a~2933739024~15040.json",
+  "trend/c/2026-11-19/mwo38iwv-c93ac1e5~2933739024~4680.json",
+  "trend/c/2026-11-19/mwo38jpi-c92523c7~2933588799~1700.json",
+  "trend/c/2026-11-19/mwo3969b-23e4fd71~2933739024~13850.json"
  ]
 }
