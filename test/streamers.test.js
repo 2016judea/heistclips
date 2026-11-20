@@ -34,6 +34,8 @@ test("only paying GTA campaigns with no linked channel and no 'any GTA clip' bri
   assert.equal(needsName(camp({ title: "KreekCraft GTA 6 Clipping" })), true);
   assert.equal(needsName(camp({ title: "$2,500 AsianJeff Clipping Campaign", description: "⬇️ https://www.twitch.tv/asianjeff" })), false, "the link already joins it");
   assert.equal(needsName(camp({ title: "KreekCraft GTA 6 Clipping", budget_left: 0 })), false);
+  assert.equal(needsName(camp({ title: "Speed GTA 6", source_channels: ["https://kick.com/speedy"] })), false, "a source channel link joins it");
+  assert.equal(needsName(camp({ title: "Speed GTA 6", source_channels: ["https://www.youtube.com/@speeduniverse"] })), true, "a YouTube channel has no page: still look the name up");
   assert.equal(needsName(camp({ title: "SypherPK $7,500 Clipping Campaign", is_gta: false, categories: ["Streamer"] })), false);
 });
 
@@ -119,6 +121,8 @@ test("linkedStreamers merges brief links with resolved names", async () => {
   const named = camp({ id: "nm", title: "KreekCraft GTA 6 Clipping" });
   const out = await linkedStreamers([linked, named], { now: NOW, load: async () => null, save: async () => {}, lookup: async () => [tw("kreekcraft", 589052, "2026-11-19T15:08:34Z", { name: "KreekCraft", avatar: "k.png" })] });
   assert.deepEqual(out.map((s) => [s.platform, s.login, s.campaign_ids]), [["twitch", "darealboeshi", ["lnk"]], ["twitch", "kreekcraft", ["nm"]]]);
+  const ss = await linkedStreamers([camp({ id: "ss", title: "Speed", is_gta: false, source_channels: ["https://www.youtube.com/@speeduniverse", "https://www.twitch.tv/SpeedTV"] })], { load: async () => null, save: async () => {}, lookup: async () => [] });
+  assert.deepEqual(ss.map((s) => [s.platform, s.login, s.campaign_ids]), [["twitch", "speedtv", ["ss"]]], "source_channels: Twitch joins, YouTube does not");
   const failing = await linkedStreamers([linked], { load: async () => { throw new Error("blob down"); }, save: async () => { throw new Error("blob down"); }, lookup: async () => [] });
   assert.equal(failing.length, 1, "a Blob outage still leaves the linked channels");
 });
