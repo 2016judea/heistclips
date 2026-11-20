@@ -3,7 +3,7 @@
 // Yandex; Seznam; Naver) which pages changed.
 import { buildSnapshot } from "../lib/campaigns.js";
 import { refreshCache, rawCampaigns } from "../lib/crpages.js";
-import { liveGtaStreams, liveKick, handlesFromCampaigns, mergeStreamers } from "../lib/streamers.js";
+import { liveGtaStreams, liveKick, linkedStreamers, mergeStreamers } from "../lib/streamers.js";
 import { putJSON, getJSON } from "../lib/store.js";
 import { sitemapUrls } from "./page.js";
 import { sweepOld } from "../lib/blobfiles.js";
@@ -44,8 +44,8 @@ export default async function handler(req, res) {
   snap.source = "contentrewards.com public campaign pages (sitemap + /c/discover)";
   snap.crawl = { fetched: crawl.fetched, freshened: crawl.discover, live: crawl.live, error: crawl.error || null, backoff_until: crawl.cache.backoff_until || null };
   let live = [];
-  try { live = [...(await liveGtaStreams(40)).map((s) => ({ ...s, platform: "twitch" })), ...(await liveKick())]; } catch (e) {}
-  snap.streamers = mergeStreamers(prev && prev.streamers, live, handlesFromCampaigns(snap.campaigns), snap.generated_at);
+  try { live = [...(await liveGtaStreams(100)).map((s) => ({ ...s, platform: "twitch" })), ...(await liveKick())]; } catch (e) {}
+  snap.streamers = mergeStreamers(prev && prev.streamers, live, await linkedStreamers(snap.campaigns), snap.generated_at);
   await putJSON("snapshot/latest.json", snap, { maxAge: 60 });
 
   // Campaigns that just left the snapshot keep their page (lib/ended.js).

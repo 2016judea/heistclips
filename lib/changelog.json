@@ -1,5 +1,32 @@
 [
   {
+    "id": "more-streamers-matched-to-the-campaigns-that",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "More streamers, matched to the campaigns that pay for them",
+    "body": "Some campaigns only say a streamer's name, like KreekCraft or GATTOUZ. We now find their Twitch or Kick channel, so their page shows the campaign and the card links to their stream. The streamer list also reads deeper, so smaller GTA streamers show up too.",
+    "link": "/streamers",
+    "at": "2026-11-20T02:47:04.062Z",
+    "langs": {
+      "de": {
+        "title": "Mehr Streamer, passend zu den Kampagnen, die für sie zahlen",
+        "body": "Manche Kampagnen nennen nur den Namen eines Streamers, etwa KreekCraft oder GATTOUZ. Jetzt finden wir den passenden Twitch- oder Kick-Kanal, sodass die Seite die Kampagne zeigt und die Karte zum Stream führt. Die Streamer-Liste reicht auch tiefer, also tauchen kleinere GTA-Streamer auf."
+      },
+      "fr": {
+        "title": "Plus de streamers, reliés aux campagnes qui paient pour eux",
+        "body": "Certaines campagnes donnent seulement le nom d’un streamer, comme KreekCraft ou GATTOUZ. On trouve maintenant sa chaîne Twitch ou Kick : sa page montre la campagne et la carte mène à son stream. La liste des streamers va aussi plus loin, donc les petits streamers GTA apparaissent."
+      },
+      "pt": {
+        "title": "Mais streamers, ligados às campanhas que pagam por eles",
+        "body": "Algumas campanhas só dizem o nome do streamer, como KreekCraft ou GATTOUZ. Agora achamos o canal dele na Twitch ou na Kick, então a página mostra a campanha e o card leva à live. A lista de streamers também vai mais fundo, então streamers menores de GTA aparecem."
+      },
+      "es": {
+        "title": "Más streamers, unidos a las campañas que pagan por ellos",
+        "body": "Algunas campañas solo dicen el nombre del streamer, como KreekCraft o GATTOUZ. Ahora encontramos su canal de Twitch o Kick, así que su página muestra la campaña y la tarjeta lleva a su directo. La lista de streamers también llega más lejos, así que aparecen streamers de GTA más pequeños."
+      }
+    }
+  },
+  {
     "id": "the-connector-tells-you-what-to-do",
     "date": "2026-11-19",
     "type": "improved",

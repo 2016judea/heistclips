@@ -403,3 +403,27 @@ given my views per clip, which campaigns pay me, how much, and what must I do to
 Build. The floors are public settings, not guesses, and they split the list completely by size,
 which is the whole point. Named limits: no approval rate, the spread is an assumption, and rules
 behind Join stay "check the brief".
+
+# Streamer join — which channel a campaign pays for (2026-11-19)
+
+Written from the need before looking: a clipper on a campaign card wants the stream to clip.
+
+| entity / field | question it answers |
+|---|---|
+| Campaign → Channel (platform, login) | whose streams earn from this campaign |
+| how joined (link in brief / name in title, exact / search / hand-checked) | how sure are we |
+| channel followers, last GTA stream | is this the streamer, or a namesake |
+| not streamable (YouTube only, a character, a song) | why no channel, said out loud |
+
+## Reality check (live, 2026-11-19 evening)
+
+| field | status |
+|---|---|
+| link in brief | fills for 13 of ~800 campaigns (twitch.tv / kick.com URLs) |
+| name in title | fills: 18 names across 23 paying GTA campaigns; the rules alone (exists, ≥1,000 followers, GTA in 30 days, unambiguous) joined 13 channels, the same set the hand check found |
+| slug differs from name | fills by search: Kick `api/search` (GATTOUZ → gattouz0), Twitch `searchFor` (PARKERRYT → realparkerr, whose socials link parkerr_yt) |
+| last GTA stream | Twitch: live game, lastBroadcast, last 10 VODs. Kick: live category + VOD dates (`recent_categories` alone carries no date) |
+| not streamable | named, not derivable: Dylan Page (YouTube), Tomo (YouTube), Benji Ramos (Lysium's RP character), Tokyo Girl (a song) are hand-listed in `NAME_OVERRIDES` |
+| directory depth | Twitch: 100 per game, the anonymous API refuses page 2. Kick: 32 a page, pages on (4 + 2 read) |
+
+Code: `lib/streamers.js` (`titleNames`, `acceptAccounts`, `resolveCampaignNames`), cache `streamers/names.json` (public channel data + a per-name report).
