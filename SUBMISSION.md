@@ -30,7 +30,14 @@ For people who cut streams into Shorts, TikToks and Reels for money. Ask which c
 campaign pays most per clip right now, or for the best moments in a streamer's live or latest
 Twitch stream, and get the answer from live data: campaign rates, caps, budget runway and what
 a typical approved clip has actually earned; moment timestamps with chat speed, hook lines and
-a music-claim warning. Free, no account, no key.
+a music-claim warning. Connects with no sign-in or key; finding moments, ranking campaigns, watching
+streamers and posting cost nothing, cut_clip gives a new account 10 free clips and spends one clip
+credit per finished MP4 only once the file exists (then clip packs), and cut_clip and watch_streamer
+hand back an account code (hc_…) to pass back so credits and the watchlist carry over.
+
+> 2026-11-19: the last sentence replaced "Free, no account, no key." (11/16 kit text, false once cut_clip
+> and post_clip shipped). Facts: `FREE_CLIPS` = 10 in lib/render.js, charge on commit after the file is
+> stored in lib/cutjob.js, no charge in lib/postjob.js.
 
 ## Annotations (all explicit booleans; `test/mcp.test.js` holds them)
 | Tool | readOnly | destructive | openWorld | idempotent |
@@ -189,5 +196,7 @@ it is until a reviewer approves the edit." Pending change = tool names only (rem
 find_moments, rank_campaigns; added the 12 current names). The listing stayed **Published** throughout.
 Use cases, data handling and testing answers are locked on a published server (mcp-review@anthropic.com).
 - **Aidan:** when the approval comes, check the header; if it offers Publish for the edit, that click is his.
-- Not changed: the one-liner and description still describe only moments + campaigns and end "Free, no
-  account, no key", which predates cut_clip (free clips, then packs) and post_clip.
+- Description: the closing "Free, no account, no key." was replaced in the same pending edit with the kit
+  sentence above (Save again; the edit stayed in review, its "Submitted" time reset to just now). The
+  Review tab shows both changes, Live vs In review. The one-liner is unchanged. server.json never carried
+  the line.
