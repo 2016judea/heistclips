@@ -72,10 +72,17 @@ req = urllib.request.Request("https://api.stripe.com/v1/checkout/sessions?" + ur
     headers={"Authorization": "Basic " + base64.b64encode((SK + ":").encode()).decode()})
 sessions = json.load(urllib.request.urlopen(req))["data"]
 TEST_LANG_SESSIONS = {"6687a453-8dc5-4761-8089-9009f095dc63", "98f7dbb9-e675-4ac6-8355-f8ca65bfad89", "7b46103b-d9ab-4b01-adef-013d4fdf2809"}
+# 2026-11-19 21:59-22:05 CT: verifying the per-session branding (f3ccf60) live. Four from a headless
+# Chrome on this Mac (device below, St Paul) and three API calls with no device.
+TEST_DEVICES = {"54584469-83fa-42f0-9ebe-41f238c59750"}
+TEST_SESSION_IDS = {"cs_live_agoXIEAg2OF0HWINPHgKNQhKA9dsN6eUT4Z6MHF6sxMYvCjIJ1d24H4ZVQ",
+    "cs_live_agSw2Y1HmIcv1hFxWY6ioNsOBIwvwIJTqbNl46e2BiksXUcCVMAXjSuX2J",
+    "cs_live_agrDfDNxHARBVX0uSFjP4MeAObzMUfYBd6DJmKRCdXDlFNzpvJ8MmRqDEp"}
 def ours(s):
     m = s.get("metadata") or {}
     dev = m.get("device", "")
-    return m.get("product") != "heistclips" or dev == "qa-test" or dev.startswith("probe") or dev in TEST_LANG_SESSIONS
+    return (m.get("product") != "heistclips" or dev == "qa-test" or dev.startswith("probe")
+            or dev in TEST_LANG_SESSIONS or dev in TEST_DEVICES or s["id"] in TEST_SESSION_IDS)
 
 pay = {}
 for s in sessions:
