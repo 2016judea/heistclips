@@ -21,6 +21,7 @@ const NAMES = {
   es: (n) => [`heistclips – ${n} clips`, `${n} clips 9:16 exportados. Sin caducidad, sin marca de agua.`],
 };
 // Stripe's name for each page language (Portuguese here is Brazil's).
+export const BRAND_FILES = { logo: "file_1Udj13BzD4mN8eODB5jLuMXE", icon: "file_1Udj15BzD4mN8eODTkPUX5GK" };
 const STRIPE_LOCALE = { en: "auto", de: "de", fr: "fr", pt: "pt-BR", es: "es" };
 const LANG_RE = "de|fr|pt|es";
 
@@ -57,6 +58,18 @@ export function sessionForm(pack, { origin, lang, back, device, pmc }) {
     // The page in the buyer's own language, the price in their own currency.
     locale: STRIPE_LOCALE[l] || "auto",
     "adaptive_pricing[enabled]": "true",
+    // The Stripe account is Brick & Mortar's; without this the checkout page showed its name and
+    // logo, and 5 of 7 buyers left it without typing anything (2026-11-19). Same pattern as the
+    // magazines on the Glean account. Files uploaded to that account 2026-11-19 (purpose
+    // business_logo / business_icon) from public/img/icon.svg and the site's wordmark.
+    "branding_settings[display_name]": "heistclips",
+    "branding_settings[background_color]": "#0b0b0d",
+    "branding_settings[button_color]": "#c8ff3d",
+    "branding_settings[border_style]": "rounded",
+    "branding_settings[logo][type]": "file",
+    "branding_settings[logo][file]": BRAND_FILES.logo,
+    "branding_settings[icon][type]": "file",
+    "branding_settings[icon][file]": BRAND_FILES.icon,
   });
   if (pmc) f.set("payment_method_configuration", pmc);
   return f;

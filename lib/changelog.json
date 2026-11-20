@@ -1,5 +1,14 @@
 [
   {
+    "id": "checkout-now-says-heistclips",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "Checkout now says heistclips",
+    "body": "The payment page shows the heistclips name, logo and colors. Your card statement reads BRICKANDMO* HEISTCLIPS.",
+    "link": "/pricing",
+    "at": "2026-11-20T04:03:14.546Z"
+  },
+  {
     "id": "more-gta-campaigns-from-more-sites",
     "date": "2026-11-19",
     "type": "improved",

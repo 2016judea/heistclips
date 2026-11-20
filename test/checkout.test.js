@@ -34,3 +34,12 @@ test("checkout keeps the price, speaks the buyer's language and comes back to th
   assert.equal(en.get("cancel_url"), "https://heistclips.com/pricing");
   assert.equal(en.get("payment_method_configuration"), null);
 });
+
+test("checkout is branded heistclips, not the Brick & Mortar account it runs on", async () => {
+  const { sessionForm, BRAND_FILES } = await import("../api/checkout.js");
+  const f = sessionForm({ id: "p50", clips: 50, price: 5 }, { origin: "https://heistclips.com", lang: "en" });
+  assert.equal(f.get("branding_settings[display_name]"), "heistclips");
+  assert.equal(f.get("branding_settings[logo][file]"), BRAND_FILES.logo);
+  assert.equal(f.get("branding_settings[icon][file]"), BRAND_FILES.icon);
+  assert.equal(f.get("payment_intent_data[statement_descriptor_suffix]"), "HEISTCLIPS");
+});
