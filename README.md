@@ -9,6 +9,10 @@ them to 9:16 (facecam over gameplay) with a hook line, on your own machine. It w
 streams that are **still live**. Then it tells you which clipping campaign pays most for the
 clip.
 
+YouTube streams work too, through YouTube's official API only: a live stream's moments come from
+its chat, a finished one's from viewers' timestamped comments, and you cut the clip from your own
+copy of the video in the browser (YouTube does not allow downloading, so heistclips never does).
+
 - **Built for gameplay, not podcasts.** Transcript-based clippers miss gaming moments, which
   are visual. Chat doesn't: every spike is a timestamp, and each pick shows the lines chat
   typed so you can see why it was picked.
