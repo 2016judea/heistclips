@@ -97,7 +97,9 @@ while t <= now:
 ENTRY = """with p as (select person_id, argMin(properties.$current_url, timestamp) first_url, argMin(properties.$referring_domain, timestamp) ref,
   max(if(event in ('clip_render_done','clip_made'),1,0)) did from events where properties.$host='heistclips.com' group by person_id)
 select multiIf(first_url ilike '%src=mcp%' or (first_url ilike '%/clip?q=%&t=%' and first_url not ilike '%src=%'), 'A link from Claude',
-  ref ilike '%chatgpt%' or first_url ilike '%utm_source=chatgpt%', 'ChatGPT', ref ilike '%google%', 'Google',
+  ref ilike '%chatgpt%' or first_url ilike '%utm_source=chatgpt%', 'ChatGPT',
+  first_url ilike '%src=tiktok%' or ref ilike '%tiktok%', 'TikTok',
+  first_url ilike '%src=youtube%' or ref ilike '%youtube%' or ref ilike '%youtu.be%', 'YouTube', ref ilike '%google%', 'Google',
   ref ilike '%bing%' or ref ilike '%perplexity%' or ref ilike '%claude.ai%', 'Other AI and search',
   ref in ('$direct','') or ref is null, 'Direct or shared link', 'Other sites') ch,
   count() people, sum(did) clipped from p group by ch order by people desc"""
