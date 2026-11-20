@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 process.env.HC_STORE = "memory"; // never the live store
 process.env.TOKEN_ENC_KEY = "ab".repeat(32);
 const { seal, unseal, signState, readState, createAccount, getAccount, keep, creditIds, ACCT, creditCall } = await import("../lib/accounts.js");
-const { pickSegments, filterGraph, hookLines } = await import("../lib/cut.js");
+const { pickSegments, filterGraph, hookLines, camBox } = await import("../lib/cut.js");
 const { seconds } = await import("../lib/cutjob.js");
 const { storeTokens, accessToken, available, COMING_SOON } = await import("../lib/social.js");
 const { postJob } = await import("../lib/postjob.js");
@@ -90,6 +90,23 @@ test("every layout trims inside the graph and ends in a 30 fps yuv420p stream", 
     assert.match(graph, /drawtext/); assert.equal(out, "[v]"); assert.equal(aout, "[aud]");
   }
   assert.equal(filterGraph({ layout: "fit", audio: false }).aout, null);
+});
+
+test("a facecam box drawn on a phone is cut exactly, anywhere in the frame (board request rmwpavxkz)", () => {
+  // Kai Cenat's webcam sits mid-left, away from every corner the server used to offer.
+  const kai = { x: 0.02, y: 0.4, w: 0.2, h: 0.3 };
+  assert.deepEqual(camBox(kai), kai);
+  assert.deepEqual(camBox([0.02, 0.4, 0.2, 0.3]), kai);
+  assert.deepEqual(camBox("0.02,0.4,0.2,0.3"), kai);
+  assert.deepEqual(camBox({ x: 0.9, y: -1, w: 0.3, h: 0.01 }), { x: 0.7, y: 0, w: 0.3, h: 0.06 }); // kept inside the frame
+  for (const bad of [null, undefined, "tr", [1, 2], { x: "a", y: 0, w: 1, h: 1 }]) assert.equal(camBox(bad), null);
+  const g = filterGraph({ layout: "split", box: kai, dur: 30 }).graph;
+  assert.match(g, /crop=iw\*0\.2:ih\*0\.3:iw\*0\.02:ih\*0\.4,/);
+  // The panel is as tall as the box's shape needs (render.js drawCam): 0.2 x 0.3 of 16:9 -> 1080 / 1.185 = 911 px.
+  assert.match(g, /scale=1080:912:force_original_aspect_ratio=increase,crop=1080:912\[cam\]/);
+  assert.match(g, /scale=1080:1008\[game\]/);
+  // No box: the corner cut is unchanged.
+  assert.match(filterGraph({ layout: "split", cam: "bl" }).graph, /crop=iw\*0\.28:iw\*0\.28\*9\/16\*1\.25:0:ih-/);
 });
 
 test("hook lines wrap to at most three and drop emoji; times parse from seconds or h:mm:ss", () => {

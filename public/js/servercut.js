@@ -21,8 +21,10 @@ async function code(device) {
 
 export const SERVER_MAX_S = 60;
 
-export async function serverCut({ vod, start, end, layout, corner, hook, hookTyped, device }) {
+// box: the facecam box drawn in the editor ({ x, y, w, h }, fractions of the stream frame); the
+// server cuts exactly that box (lib/cut.js camBox). corner is the fallback when there is none.
+export async function serverCut({ vod, start, end, layout, corner, box, hook, hookTyped, device }) {
   const source = vod.platform === "kick" ? `https://kick.com/video/${vod.id}` : String(vod.id);
-  const r = await post("/api/v1/cut", { source, start: Math.round(start), end: Math.round(end), layout, facecam: corner || "tr", hook: hook || "", hook_typed: !!hookTyped, account: await code(device), via: "web" });
+  const r = await post("/api/v1/cut", { source, start: Math.round(start), end: Math.round(end), layout, facecam: corner || "tr", ...(box ? { facecam_box: [box.x, box.y, box.w, box.h] } : {}), hook: hook || "", hook_typed: !!hookTyped, account: await code(device), via: "web" });
   return r.json().catch(() => ({ ok: false, error: "The server did not answer (" + r.status + "). Nothing was charged." }));
 }

@@ -29,6 +29,20 @@ function deps(over = {}) {
 }
 const clean = (d) => { const o = {}; for (const k in d) if (d[k] !== undefined && k !== "calls") o[k] = d[k]; return o; };
 
+test("the clip page's drawn facecam box reaches the cutter; the connector's corner still works", async () => {
+  const seen = [];
+  const spy = (d) => { const c = d.cutClip; d.cutClip = async (v, o) => { seen.push(o); return c(v, o); }; return d; };
+  const d = spy(deps());
+  const r = await cutJob({ source: "v1", start: 100, end: 130, layout: "split", facecam_box: [0.02, 0.4, 0.2, 0.3], via: "web" }, clean(d));
+  assert.equal(r.ok, true);
+  assert.deepEqual(seen[0].box, { x: 0.02, y: 0.4, w: 0.2, h: 0.3 });
+  assert.equal(d.calls.events.find((e) => e[0] === "server_cut")[1].cam, "box");
+  const d2 = spy(deps());
+  await cutJob({ source: "v1", start: 100, end: 130, layout: "split", facecam: "bl" }, clean(d2));
+  assert.equal(seen[1].box, null); assert.equal(seen[1].cam, "bl");
+  assert.equal(d2.calls.events.find((e) => e[0] === "server_cut")[1].cam, "corner");
+});
+
 test("a finished cut is charged once, carries its timing, and its job can be read back with the account", async () => {
   const d = deps(), job = newJobId();
   assert.match(job, JOB); assert.ok(jobAgeMs(job) < 1000);

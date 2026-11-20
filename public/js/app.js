@@ -9,11 +9,11 @@ import { markSpoilers, spoilerCheck } from "./spoilers.js";
 import "./post.js?v=2"; // Post to YouTube / TikTok buttons; listens for hc:rendered
 import { fillHot, topLive } from "./hot.js";
 import { queueHandoff } from "./queuehand.js";
-import { serverCut, SERVER_MAX_S } from "./servercut.js?v=2";
+import { serverCut, SERVER_MAX_S } from "./servercut.js?v=3";
 import { keepClean, flagged, mask } from "./wordguard.js";
 import { vodChapters, gameAt, isGta, shortGame } from "./games.js?v=1";
 import { campaignPanel } from "./campaign.js?v=1";
-import { FaceCheck, boxAround, cornerFor } from "./facecam.js?v=1";
+import { FaceCheck, boxAround } from "./facecam.js?v=1";
 import { ytOpen, ytGate, ytRow, ytShift } from "./ytclip.js?v=2";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -546,14 +546,14 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
 <div class="nudge"><span>End</span>${[-15, -5, -1, 1, 5, 15].map((d) => `<button type="button" class="btn sm ghost" data-nudge="e" data-d="${d}">${d > 0 ? "+" : "−"}${Math.abs(d)}s</button>`).join("")}</div></div>
 <div><label>Layout</label><div class="seg" data-k="layout"><button data-v="split">Facecam + gameplay</button><button data-v="fit">Full frame, blurred fill</button><button data-v="crop">Centre crop</button></div></div>
 <div id="chatrow"><label>Chat overlay</label><div class="seg" data-k="chat"><button data-v="1">On</button><button data-v="0">Off</button></div></div>
-<details id="camrow" class="more" ${camSaved ? "" : "open"}><summary>Facecam: position, style, effects</summary><label>Where is the facecam in the stream? Drag the box onto it; drag the dot to resize.</label>
+<details id="camrow" class="more" ${camSaved ? "" : "open"}><summary id="camsum">Facecam: position, style, effects</summary><label>Where is the facecam in the stream? Drag the box onto it; drag the dot to resize.</label>
 <div class="campick"><canvas width="320" height="180"></canvas><div class="cambox" id="cambox"><i class="camgrip"></i></div></div>
 <div class="seg camquick" data-k="campreset"><button data-v="tl" title="top left">↖</button><button data-v="ml" title="middle left">←</button><button data-v="bl" title="bottom left">↙</button><button data-v="tr" title="top right">↗</button><button data-v="mr" title="middle right">→</button><button data-v="br" title="bottom right">↘</button></div>
-<label style="margin-top:10px">Put the facecam</label><div class="seg" data-k="camOut"><button data-v="top">On top</button><button data-v="bottom">At the bottom</button></div>
+<div id="camextra"><label style="margin-top:10px">Put the facecam</label><div class="seg" data-k="camOut"><button data-v="top">On top</button><button data-v="bottom">At the bottom</button></div>
 <label style="margin-top:10px">Facecam style</label><div class="seg" data-k="camStyle"><button data-v="split">Panel</button><button data-v="rounded">Rounded box</button><button data-v="circle">Circle</button></div>
 <div class="seg" data-k="punch" style="margin-top:6px"><button data-v="0">No zoom</button><button data-v="1">Punch-in on the loudest second</button></div>
 <label style="margin-top:10px">Funny facecam</label><div class="seg" data-k="camFx"><button data-v="none">Off</button><button data-v="bighead">Big head</button><button data-v="fisheye">Fisheye</button><button data-v="shake">Shake when loud</button><button data-v="fried">Deep fried</button><button data-v="wobble">Jelly</button></div>
-<p class="small" id="fxhint" hidden>Big head and Fisheye blow up the middle of the box. Drag the box so the face is in the middle.</p></details>
+<p class="small" id="fxhint" hidden>Big head and Fisheye blow up the middle of the box. Drag the box so the face is in the middle.</p></div></details>
 <details class="more" id="morerow"><summary>More: pan, quality</summary>
 <div><label>Pan gameplay</label><input type="range" min="-1" max="1" step="0.05" value="0" data-k="pan"></div>
 <div id="qualrow" style="margin-top:10px"><label>Quality</label><div class="seg" data-k="quality"><button data-v="std">Standard · about 12 Mbps</button><button data-v="max">Max · about 20 Mbps</button></div></div>
@@ -598,7 +598,10 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   });
   const endDrag = () => { if (drag) { drag = null; saveCam(); ph("facecam_box", { w: Math.round(cl.opts.cam.w * 100), h: Math.round(cl.opts.cam.h * 100) }); } };
   box.addEventListener("pointerup", endDrag); box.addEventListener("pointercancel", endDrag);
-  const syncCam = () => { $("#camrow", ed).hidden = cl.opts.layout !== "split" || serverMode; $("#fxhint", ed).hidden = !(cl.opts.camFx === "bighead" || cl.opts.camFx === "fisheye"); };
+  // The server cut (phones) takes the box as drawn but no style or effect, so on a phone only the
+  // box and its presets show (board request rmwpavxkz: on a phone the facecam could only be one
+  // of four corners at one size, and a webcam anywhere else never made it into the clip).
+  const syncCam = () => { $("#camrow", ed).hidden = cl.opts.layout !== "split"; $("#camextra", ed).hidden = serverMode; $("#camsum", ed).textContent = serverMode ? "Facecam: position" : "Facecam: position, style, effects"; $("#fxhint", ed).hidden = !(cl.opts.camFx === "bighead" || cl.opts.camFx === "fisheye"); };
   ed.addEventListener("click", (e) => {
     const b = e.target.closest(".seg button");
     if (b) {
@@ -722,30 +725,24 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   ed.addEventListener("change", (e) => { if (e.target.name === "hk") warnHook(); });
   const opts = $("#opts", ed);
   // Phone / no recorder: the server cuts it. It has no chat overlay, facecam styles or pan, so
-  // those rows go, and the preview shows what the server will make.
+  // those rows go, and the preview shows what the server will make. The facecam box stays as
+  // drawn: the server cuts that exact box (lib/cut.js camBox).
   function applyMode() {
     const note = $("#srvnote", ed);
     for (const id of ["chatrow", "morerow"]) { const el = ed.querySelector("#" + id); if (el) el.hidden = serverMode; }
     const hm = ed.querySelector('.seg[data-k="hookMode"]'); if (hm) hm.style.display = serverMode ? "none" : ""; // .seg is display:flex, which beats [hidden]
     if (serverMode) {
       Object.assign(cl.opts, { chat: false, camOut: "top", camStyle: "split", punch: false, camFx: "none", pan: 0, hookMode: "always" });
-      const c = cl.opts.cam || CAM_DEFAULT, corner = (c.y + c.h / 2 < 0.5 ? "t" : "b") + (c.x + c.w / 2 < 0.5 ? "l" : "r");
-      cl.opts.cam = camPreset(corner, { w: 0.28, h: 0.35 }); cl.srvCorner = corner;
+      cl.opts.cam = clampBox(cl.opts.cam || CAM_DEFAULT);
       note.hidden = false;
       note.innerHTML = (SAFARI ? `Safari records clips without sound, so yours is cut on our server: about a minute. Chrome, Edge and Firefox render it here with every option.` : PHONE || IOS ? `On a phone your clip is cut on our server: about a minute, with sound.` : `This browser can’t record video, so your clip is cut on our server: about a minute, with sound.`) + (canLocal ? ` <button type="button" class="linkbtn" id="uselocal">Render on this phone instead</button>` : "");
       if (win.e - win.s > SERVER_MAX_S) setWin(win.s, win.s + SERVER_MAX_S, "e");
     } else if (PHONE && canLocal && !YT) { note.hidden = false; note.innerHTML = `Rendering on this phone: keep this tab open and the screen on. <button type="button" class="linkbtn" id="useserver">Cut it on our server instead</button>`; }
     else note.hidden = true;
-    const corners = ed.querySelector('.seg[data-k="srvcam"]');
-    if (serverMode && !corners) $("#chatrow", ed).insertAdjacentHTML("afterend", `<div id="srvcamrow"><label>Which corner is the facecam in?</label><div class="seg" data-k="srvcam"><button data-v="tl">↖</button><button data-v="tr">↗</button><button data-v="bl">↙</button><button data-v="br">↘</button></div></div>`);
-    const row = ed.querySelector("#srvcamrow"); if (row) { row.hidden = !serverMode || cl.opts.layout !== "split"; segOn("srvcam", cl.srvCorner || "tr"); }
     syncCam(); syncSegs(); showEst(); cl.draw();
   }
   ed.addEventListener("click", (e) => {
-    if (e.target.id === "uselocal" || e.target.id === "useserver") { serverMode = e.target.id === "useserver"; pref.phoneLocal = !serverMode; savePref(); ph("render_mode", { server: serverMode }); if (!serverMode && camSaved && camSaved.cam) cl.opts.cam = clampBox(camSaved.cam); applyMode(); placeBox(); }
-    const c = e.target.closest('.seg[data-k="srvcam"] button');
-    if (c) { cl.srvCorner = c.dataset.v; cl.opts.cam = camPreset(c.dataset.v, { w: 0.28, h: 0.35 }); cl.opts.srvcam = undefined; segOn("srvcam", c.dataset.v); saveCam(); cl.draw(); }
-    if (e.target.closest('.seg[data-k="layout"] button')) { const row = ed.querySelector("#srvcamrow"); if (row) row.hidden = !serverMode || cl.opts.layout !== "split"; }
+    if (e.target.id === "uselocal" || e.target.id === "useserver") { serverMode = e.target.id === "useserver"; pref.phoneLocal = !serverMode; savePref(); ph("render_mode", { server: serverMode }); applyMode(); placeBox(); }
   });
   reSpan(); paintWin();
   syncCam(); syncSegs(); placeBox(); cl.fxPreview(); applyMode();
@@ -755,14 +752,13 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   // a face? If not, offer the face we found (one tap) or the full frame. Never blocks a render.
   let faceChk = null, faceDismissed = false, faceTimer = 0, faceRun = 0;
   const faceEl = $("#facemiss", ed);
-  const camNow = () => (serverMode ? camPreset(cl.srvCorner || "tr", { w: 0.28, h: 0.35 }) : cl.opts.cam || CAM_DEFAULT);
+  const camNow = () => cl.opts.cam || CAM_DEFAULT;
   const hideFace = () => { faceEl.hidden = true; faceEl.innerHTML = ""; };
+  // No face found is not "no facecam": the detector misses some webcams, so the clipper can always
+  // drag the box onto it themselves ("Place it myself" opens the picker).
   function showFace(face) {
-    const corner = face && serverMode ? cornerFor(face) : null;
-    const canMove = face && (!serverMode || corner);
-    faceEl.dataset.corner = corner || "";
-    faceEl.innerHTML = `<b>The facecam box isn’t on a face.</b> ${face ? (canMove ? "We found one." : "We found one, away from the corners: use the full frame.") : "We couldn’t find one in this clip."}
-<div class="actions">${canMove ? `<button type="button" class="btn sm" data-face="move">Move the box to the face</button>` : ""}<button type="button" class="btn sm${canMove ? " ghost" : ""}" data-face="fit">Use full frame</button><button type="button" class="btn sm ghost" data-face="keep">Keep it</button></div>`;
+    faceEl.innerHTML = `<b>The facecam box isn’t on a face.</b> ${face ? "We found one." : "We couldn’t find one in this clip."}
+<div class="actions">${face ? `<button type="button" class="btn sm" data-face="move">Move the box to the face</button>` : ""}<button type="button" class="btn sm${face ? " ghost" : ""}" data-face="draw">Place it myself</button><button type="button" class="btn sm ghost" data-face="fit">Use full frame</button><button type="button" class="btn sm ghost" data-face="keep">Keep it</button></div>`;
     faceEl.hidden = false;
     faceEl._face = face;
   }
@@ -792,19 +788,20 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
     if (f) {
       const how = f.dataset.face, face = faceEl._face;
       if (how === "move" && face) {
-        if (serverMode && faceEl.dataset.corner) { cl.srvCorner = faceEl.dataset.corner; cl.opts.cam = camPreset(cl.srvCorner, { w: 0.28, h: 0.35 }); segOn("srvcam", cl.srvCorner); }
-        else cl.opts.cam = clampBox(boxAround(face, (cl.video.videoWidth || 16) / (cl.video.videoHeight || 9)));
+        cl.opts.cam = clampBox(boxAround(face, (cl.video.videoWidth || 16) / (cl.video.videoHeight || 9)));
         placeBox(); saveCam(); cl.draw();
+      } else if (how === "draw") {
+        const row = $("#camrow", ed); row.open = true; placeBox();
+        pick.scrollIntoView({ behavior: "smooth", block: "center" });
       } else if (how === "fit") {
         cl.opts.layout = "fit"; segOn("layout", "fit"); savePref(); syncCam();
-        const row = ed.querySelector("#srvcamrow"); if (row) row.hidden = true;
         cl.draw(); showEst();
       } else faceDismissed = true;
       hideFace();
       ph("facecam_fix", { how, server_mode: serverMode });
       return;
     }
-    if (e.target.closest('.seg[data-k="campreset"] button, .seg[data-k="srvcam"] button, .seg[data-k="layout"] button') || e.target.id === "uselocal" || e.target.id === "useserver") faceSoon("change");
+    if (e.target.closest('.seg[data-k="campreset"] button, .seg[data-k="layout"] button') || e.target.id === "uselocal" || e.target.id === "useserver") faceSoon("change");
   });
   // On a slow connection the first picture can arrive after load() returns: say so, not "0×0".
   const showSource = () => {
@@ -901,7 +898,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
       ph("clip_render_start", { ...common(), len: lenNow, live: !!m.live, vod_live: current.vod.status === "RECORDING" });
       const tick = setInterval(() => { const sx = Math.round((performance.now() - t0) / 1000); vstat.textContent = `Cutting your clip on our server… ${sx} s (about a minute; keep this page open)`; progress("server", sx < 240 ? sx : 240); }, 1000);
       try {
-        const d = await serverCut({ vod: current.vod, start: win.s, end: win.e, layout: cl.opts.layout, corner: cl.srvCorner || "tr", hook: cl.opts.hook || "", hookTyped: hookTyped(), device });
+        const d = await serverCut({ vod: current.vod, start: win.s, end: win.e, layout: cl.opts.layout, box: cl.opts.layout === "split" ? clampBox(cl.opts.cam || CAM_DEFAULT) : null, hook: cl.opts.hook || "", hookTyped: hookTyped(), device });
         clearInterval(tick);
         if (!d.ok) {
           if (d.need === "buy") showPaywall();
