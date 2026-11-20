@@ -1,5 +1,14 @@
 [
   {
+    "id": "live-moments-work-on-every-live-stream",
+    "date": "2026-11-19",
+    "type": "fixed",
+    "title": "Live moments work on every live stream",
+    "body": "Some live streams showed \"couldn't sync to the recording\" and only listed moments from earlier chat. They now sync, so new moments show up while the stream is still going.",
+    "link": "/clip",
+    "at": "2026-11-20T00:30:45.035Z"
+  },
+  {
     "id": "hooks-never-suggest-words-that-get-posts",
     "date": "2026-11-19",
     "type": "improved",

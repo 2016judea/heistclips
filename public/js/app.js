@@ -941,7 +941,7 @@ async function startLive(vod) {
   const url = playlistPath(vod, "chunked");
   let rs;
   if (vod.platform === "kick") rs = { start: vod.start_ms };
-  else try { rs = await recordingStart(url); } catch (e) { rs = {}; }
+  else try { rs = await recordingStart(url, vod.created_at); } catch (e) { rs = { start: Date.parse(vod.created_at) || null }; }
   if (!rs.start) { $("#livetxt").textContent = "Live, but couldn’t sync to the recording; moments from chat so far are below."; return; }
   const lc = new LiveChat(vod.channel, {
     vod, recordingStart: rs.start,

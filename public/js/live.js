@@ -91,11 +91,23 @@ function median(xs) {
   return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2;
 }
 
-// When did the recording start? The first PROGRAM-DATE-TIME in the VOD playlist.
-export async function recordingStart(playlistUrl) {
-  const r = await fetch(playlistUrl, { cache: "no-store" });
-  const txt = await r.text();
+// When did the recording start? The first PROGRAM-DATE-TIME in the VOD playlist. Twitch's newer
+// playlists (EXT-X-VERSION:6, e.g. illojuan 2026-11-19) carry no PROGRAM-DATE-TIME; there the
+// playlist's own clock (ID3-EQUIV-TDTG, UTC without a zone) minus TWITCH-TOTAL-SECS is the start.
+// On a playlist that has both, the two agree to the second (kaicenat, 2026-11-19).
+export function parseRecordingStart(txt, fallback) {
   const m = txt.match(/#EXT-X-PROGRAM-DATE-TIME:([^\s]+)/);
-  const total = txt.match(/#EXT-X-TWITCH-TOTAL-SECS:([\d.]+)/);
-  return { start: m ? Date.parse(m[1]) : null, total: total ? Number(total[1]) : null };
+  const totalM = txt.match(/#EXT-X-TWITCH-TOTAL-SECS:([\d.]+)/);
+  const total = totalM ? Number(totalM[1]) : null;
+  let start = m ? Date.parse(m[1]) : NaN;
+  if (!Number.isFinite(start)) {
+    const tdtg = txt.match(/#ID3-EQUIV-TDTG:([0-9T:.-]+)/);
+    if (tdtg && total != null) start = Date.parse(tdtg[1] + "Z") - total * 1000;
+  }
+  if (!Number.isFinite(start) && fallback) start = Date.parse(fallback);
+  return { start: Number.isFinite(start) ? start : null, total };
+}
+export async function recordingStart(playlistUrl, fallback) {
+  const r = await fetch(playlistUrl, { cache: "no-store" });
+  return parseRecordingStart(await r.text(), fallback);
 }
