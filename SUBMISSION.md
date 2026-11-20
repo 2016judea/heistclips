@@ -142,3 +142,52 @@ github.com/settings/applications. "Keep our description on registry updates" is 
 
 **mcp.so.** The form only shows a $39 button. An unpaid checkout is kept as a free submission
 (`plan: free, paid: false, status: submitted`). Stripe was left unpaid.
+
+## 2026-11-19 (evening, CT): directory errors read, fixed, tool list resynced
+
+**What the directory showed** (claude.ai/directory/manage/heistclips, read 11-20 ~02:00 UTC; metrics lag up to 24 h):
+- Overview: 663 accounts finished connecting, 294 used a tool, 3K tool calls, rank #1,979, health "Worth a look".
+- Usage → Reliability, verbatim: "REQUEST ERRORS 2.4%", "TOOL ERRORS 7.1%", "4xx 0%", "5xx 2.4%",
+  "Top error types · Last 30 days: Upstream HTTP error 504 UpstreamHttpError504". Rows: last day 2,553 calls,
+  9.4% error rate, 2.1% request errors; 7 and 30 days 2,986 calls, 9.5%, 2.4%.
+- Tools tab (our 11-16 list): find_moments 52 calls, "25% error rate, 13.5% tool errors"; campaign_details 23,
+  rank_campaigns 21, live_gta_streams 13, all 0%. The 12 newer tools were not in the listing, so their calls
+  had no row. Where it's used: Claude Code Remote 1.7K calls (p95 73,208 ms), Claude Code Desktop 644
+  (17,561 ms), Claude.ai 351 (74,869 ms), Claude Desktop 310 (77,630 ms).
+
+**What the 504s were.** Vercel's request log (`vercel.com/api/logs/request-logs?requestPath=/mcp`) has 95 504s
+on /mcp, 11-17 05:02 to 11-19 17:07 UTC, all from `Claude-User`, all `FUNCTION_INVOCATION_TIMEOUT` ("Task timed
+out after 120 seconds") on the 11-16 build, where `api/*.js` had `maxDuration: 120`. The proxy did not time
+out: it waited for our 504. Since 17:15 UTC (300 s limit, then cut_clip's 45 s job cap at 19:54) there are
+**zero** /mcp 504s in 9,582 requests, and 22 Claude-User calls that ran over 200 s (max 241 s) came back 200.
+So the proxy's own limit is above 241 s. The cut_clip cap stays at 45 s plus cut_clip_status at 40 s; no new
+cap was needed.
+
+**What the tool errors were.** find_moments returned isError for "no saved stream", "live but not saved",
+YouTube links and typos. PostHog `mcp_tool_call` since 21:00 UTC: no_vods 11, live_no_vod 10, youtube 6,
+kickvod_missing 1 (already non-error in the current code), cut_clip no_credits 2, clipping_campaign_details
+1 not-found, watch_streamer 1 bare error. The 6 post_clip "error"s were one burst through the proxy at
+20:51:46–54 UTC, each /api/v1/post answering 200 in 0.4–1.8 s. Their cause cannot be read back: neither the
+arguments nor the error text were logged. Every post failure now carries a code (bad_platform,
+bad_account, bad_clip_id, clip_gone, needs_connect, not_open_yet, youtube_refused/tiktok_refused).
+
+**Changed (commit cbd7c65, deploy READY, live tools/list = 16 tools):**
+- Designed outcomes come back without isError and with a `next` step: live_no_vod, no_vods, kick_no_vod,
+  youtube, no_channel, kick_no_channel, kickvod_missing, vod_missing, clip_missing, clip_no_vod, no_name,
+  not_public, too_long, too_short, bad_window, past_end, no_campaign, clip_gone, no_queue. live_no_vod and
+  no_vods offer watch_streamer for that streamer. `err` still goes to PostHog (`ANSWERS` in api/mcp.js).
+- clipping_campaign_details also matches a title ("Tokyo Girl"), and an ended campaign points at the ranking.
+- posting_account and watch_streamer: `idempotentHint` false (no account = a new account each call). cut_clip
+  (spends a credit) and post_clip (publishes) were already readOnly false, idempotent false, openWorld true.
+- Server instructions: a result with found: false or a next field is an answer; follow next.
+- Genuine failures (encoder, store, a platform refusing an upload, exceptions) keep isError and the
+  report_a_bug hint.
+
+**Listing.** Full editor → Tools & prompts → **Sync from server** (16 tools, with the live annotation summary
+attached for reviewers) → Save → "Changes saved." Review tab: "An edit is in review. The live listing stays as
+it is until a reviewer approves the edit." Pending change = tool names only (removed campaign_details,
+find_moments, rank_campaigns; added the 12 current names). The listing stayed **Published** throughout.
+Use cases, data handling and testing answers are locked on a published server (mcp-review@anthropic.com).
+- **Aidan:** when the approval comes, check the header; if it offers Publish for the edit, that click is his.
+- Not changed: the one-liner and description still describe only moments + campaigns and end "Free, no
+  account, no key", which predates cut_clip (free clips, then packs) and post_clip.
