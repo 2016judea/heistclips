@@ -55,6 +55,11 @@ export function sessionForm(pack, { origin, lang, back, device, pmc }) {
     "metadata[lang]": l,
     "payment_intent_data[statement_descriptor_suffix]": "HEISTCLIPS",
     "payment_intent_data[metadata][product]": "heistclips",
+    // Every payment emails the buyer a paid invoice (Aidan's standing rule, 2026-11-20: "a big
+    // trust thing"). 0.4% capped at $2, approved.
+    "invoice_creation[enabled]": "true",
+    "invoice_creation[invoice_data][description]": name,
+    "invoice_creation[invoice_data][metadata][product]": "heistclips",
     // The page in the buyer's own language, the price in their own currency.
     locale: STRIPE_LOCALE[l] || "auto",
     "adaptive_pricing[enabled]": "true",

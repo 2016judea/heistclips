@@ -118,6 +118,11 @@ export function hostedSessionForm(c, { origin, pmc }) {
     "payment_intent_data[metadata][product]": "heistclips",
     "payment_intent_data[metadata][kind]": "hosted",
     "payment_intent_data[metadata][campaign]": c.id,
+    // Every payment emails the buyer a paid invoice (Aidan's standing rule, 2026-11-20).
+    "invoice_creation[enabled]": "true",
+    "invoice_creation[invoice_data][description]": `Clip budget and fee: ${c.title}`,
+    "invoice_creation[invoice_data][metadata][product]": "heistclips",
+    "invoice_creation[invoice_data][metadata][campaign]": c.id,
     locale: "auto",
     // Branded per session, as the clip packs are (api/checkout.js): the account is Brick & Mortar's.
     "branding_settings[display_name]": "heistclips",
