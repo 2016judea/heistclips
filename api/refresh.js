@@ -3,6 +3,7 @@
 // Yandex; Seznam; Naver) which pages changed.
 import { buildSnapshot } from "../lib/campaigns.js";
 import { refreshCache, rawCampaigns } from "../lib/crpages.js";
+import { refreshMarketplaces, otherCampaigns, mirroredCrIds } from "../lib/sources/index.js";
 import { liveGtaStreams, liveKick, linkedStreamers, mergeStreamers } from "../lib/streamers.js";
 import { putJSON, getJSON } from "../lib/store.js";
 import { sitemapUrls } from "./page.js";
@@ -31,8 +32,13 @@ export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
   if (secret && auth !== `Bearer ${secret}`) { res.statusCode = 401; return res.end("no"); }
   const t0 = Date.now();
+  // Other marketplaces first (3 hosts, a handful of pages): Ssemble's board also names Content
+  // Rewards campaigns the sitemap misses, which the CR crawl then reads (lib/sources/index.js).
+  const mkCached = await getJSON("mk/pages.json", { fresh: true }).catch(() => null);
+  const mk = await refreshMarketplaces(mkCached, { pauseMs: 700 }).catch((e) => ({ cache: mkCached || {}, runs: [{ error: String(e.message || e) }] }));
+  await putJSON("mk/pages.json", mk.cache, { maxAge: 60 }).catch(() => null);
   const cached = await getJSON("cr/pages.json", { fresh: true }).catch(() => null);
-  const crawl = await refreshCache(cached, { maxPages: 26, pauseMs: 700 });
+  const crawl = await refreshCache(cached, { maxPages: 26, maxNew: 24, pauseMs: 700, extraIds: mirroredCrIds(mk.cache) });
   await putJSON("cr/pages.json", crawl.cache, { maxAge: 60 });
   const prev = await getJSON("snapshot/latest.json", { fresh: true }).catch(() => null);
   const raw = rawCampaigns(crawl.cache);
@@ -40,9 +46,10 @@ export default async function handler(req, res) {
     res.setHeader("content-type", "application/json");
     return res.end(JSON.stringify({ ok: false, kept_previous: true, crawl: { fetched: crawl.fetched, error: crawl.error, cached: raw.length } }));
   }
-  const snap = buildSnapshot(raw);
-  snap.source = "contentrewards.com public campaign pages (sitemap + /c/discover)";
-  snap.crawl = { fetched: crawl.fetched, freshened: crawl.discover, live: crawl.live, error: crawl.error || null, backoff_until: crawl.cache.backoff_until || null };
+  const others = otherCampaigns(mk.cache);
+  const snap = buildSnapshot(raw, Date.now(), others);
+  snap.source = "public campaign pages: Content Rewards (sitemap, /c/discover, its GTA article), Ssemble, Vyro, Clipstake";
+  snap.crawl = { fetched: crawl.fetched, freshened: crawl.discover, discover_pages: crawl.discover_pages, renamed: crawl.renamed, new_read: crawl.new_read, live: crawl.live, extra: crawl.extra, error: crawl.error || null, backoff_until: crawl.cache.backoff_until || null, marketplaces: mk.runs };
   let live = [];
   try { live = [...(await liveGtaStreams(100)).map((s) => ({ ...s, platform: "twitch" })), ...(await liveKick())]; } catch (e) {}
   snap.streamers = mergeStreamers(prev && prev.streamers, live, await linkedStreamers(snap.campaigns), snap.generated_at);
@@ -50,7 +57,7 @@ export default async function handler(req, res) {
 
   // Campaigns that just left the snapshot keep their page (lib/ended.js).
   let ended = null;
-  try { ended = await archiveEnded(prev, snap, new Set(raw.map((r) => r.id))); } catch (e) { ended = "error: " + e.message; }
+  try { ended = await archiveEnded(prev, snap, new Set([...raw.map((r) => r.id), ...others.map((g) => g.id)])); } catch (e) { ended = "error: " + e.message; }
   // Most-clipped streams, rebuilt once an hour (lib/trend.js).
   let trend = null;
   try {
@@ -91,5 +98,5 @@ export default async function handler(req, res) {
   // Server-cut clips and upload parts are kept 72 hours (lib/blobfiles.js).
   let swept = null;
   try { swept = await sweepOld(); } catch (e) { swept = "error: " + e.message; }
-  res.end(JSON.stringify({ ok: true, swept, ended, trend, ms: Date.now() - t0, campaigns: snap.campaigns.length, crawl: snap.crawl, gta: snap.summary.gta, streamers: snap.streamers.length, live_gta: live.length, indexnow: ping }));
+  res.end(JSON.stringify({ ok: true, swept, ended, trend, ms: Date.now() - t0, campaigns: snap.campaigns.length, crawl: snap.crawl, gta: snap.summary.gta, gta_by_marketplace: snap.summary.gta_by_marketplace, streamers: snap.streamers.length, live_gta: live.length, indexnow: ping }));
 }

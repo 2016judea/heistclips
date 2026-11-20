@@ -1,5 +1,32 @@
 [
   {
+    "id": "more-gta-campaigns-from-more-sites",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "More GTA campaigns, from more sites",
+    "body": "The campaign list now reads Ssemble, Vyro and Clipstake too, and finds Content Rewards campaigns their own list missed. Each one says where to join it.",
+    "link": "/gta-6-clipping-campaigns?f=gta",
+    "at": "2026-11-20T02:56:06.534Z",
+    "langs": {
+      "de": {
+        "title": "Mehr GTA-Kampagnen, von mehr Seiten",
+        "body": "Die Kampagnenliste liest jetzt auch Ssemble, Vyro und Clipstake und findet Content-Rewards-Kampagnen, die in deren eigener Liste fehlten. Bei jeder steht, wo du beitrittst."
+      },
+      "fr": {
+        "title": "Plus de campagnes GTA, venues de plus de sites",
+        "body": "La liste des campagnes lit maintenant aussi Ssemble, Vyro et Clipstake, et trouve les campagnes Content Rewards absentes de leur propre liste. Chacune dit où la rejoindre."
+      },
+      "pt": {
+        "title": "Mais campanhas de GTA, de mais sites",
+        "body": "A lista de campanhas agora lê também Ssemble, Vyro e Clipstake, e acha campanhas da Content Rewards que faltavam na lista deles. Cada uma diz onde entrar."
+      },
+      "es": {
+        "title": "Más campañas de GTA, de más sitios",
+        "body": "La lista de campañas ahora lee también Ssemble, Vyro y Clipstake, y encuentra campañas de Content Rewards que faltaban en su propia lista. Cada una dice dónde unirte."
+      }
+    }
+  },
+  {
     "id": "more-streamers-matched-to-the-campaigns-that",
     "date": "2026-11-19",
     "type": "improved",

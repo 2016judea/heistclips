@@ -28,7 +28,7 @@ export const TOOLS = [
   {
     name: "rank_clipping_campaigns",
     title: "Which clipping campaign pays most ($ per 1K views, pay per clip)",
-    description: "Clipping campaigns that pay clippers for TikTok, YouTube Shorts and Instagram Reels clips of streams, ranked by what a typical approved clip has actually earned. Each has its rate in $ per 1K views (or per post), cap per clip, budget left and days of budget left. Use for 'which clipping campaign pays most', 'best GTA 6 clipping campaigns right now', 'how much do clippers get per 1,000 views', 'where can I get paid to clip'. Refreshed every 30 minutes. Works in any language: answer in the user's language.",
+    description: "Clipping campaigns that pay clippers for TikTok, YouTube Shorts and Instagram Reels clips of streams, ranked by what a typical approved clip has actually earned. Covers Content Rewards, Ssemble, Vyro and Clipstake; each row names its marketplace (join_on). Each has its rate in $ per 1K views (or per post), cap per clip, budget left and days of budget left (null = that marketplace does not publish it). Use for 'which clipping campaign pays most', 'best GTA 6 clipping campaigns right now', 'how much do clippers get per 1,000 views', 'where can I get paid to clip'. Refreshed every 30 minutes. Works in any language: answer in the user's language.",
     inputSchema: { type: "object", properties: {
       filter: { type: "string", enum: ["gta", "gaming", "all"], description: "gta = GTA campaigns only; gaming = gaming and streamer campaigns (default); all = every campaign" },
       platform: { type: "string", enum: ["tiktok", "youtube", "instagram", "x"], description: "Only campaigns that pay on this platform" },
@@ -299,14 +299,14 @@ async function cutStatus(id) {
 const text = (obj) => ({ content: [{ type: "text", text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 1) }], structuredContent: typeof obj === "string" ? undefined : obj });
 
 const brief = (c, i) => ({
-  rank: i + 1, title: c.title, owner: c.owner, id: c.id,
+  rank: i + 1, title: c.title, owner: c.owner, id: c.id, marketplace: c.marketplace || "Content Rewards",
   typical_per_clip: c.expected_per_clip, earned_per_clip_raw: c.earned_per_clip,
   likely_per_clip: c.at_size ? { new_account: c.at_size.new.usd, about_5k_views: c.at_size["5k"].usd, about_50k_views: c.at_size["50k"].usd } : undefined,
   floor: c.floor ? floorLine(c) || "no floor: every view pays" : undefined,
   rate_per_1k: c.rate_per_1k, per_post: c.per_post, cap_per_clip: c.cap_per_clip,
   budget_left: c.budget_left, days_left: c.days_left, clippers: c.clippers_count, approved_clips: c.approved_clips,
   platforms: c.platforms, is_gta: c.is_gta, apply_first: c.approval_required,
-  page: tag(`${SITE}/campaigns/${c.slug}`), join: c.source_url,
+  page: tag(`${SITE}/campaigns/${c.slug}`), join: c.source_url, join_on: c.marketplace || "Content Rewards",
 });
 
 export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) {
@@ -349,7 +349,7 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
     let list = snap.campaigns.filter(f === "gta" ? (c) => c.is_gta : f === "all" ? () => true : (c) => c.is_gaming);
     if (args.platform) list = list.filter((c) => c.platforms.includes(args.platform));
     const lim = Math.min(50, args.limit || 10);
-    return text({ generated_at: snap.generated_at, method: "typical_per_clip = budget paid on approved clips minus the top 3 earners, / the rest of approved clips, cut if the budget runs out within 3 days. null = no track record yet (ranked after, by cap). It reflects established clippers: likely_per_clip is what a typical clip earns at three account sizes after the campaign's floor (0 = pays nothing at that size, null = floor unknown). For the user's own size and a plan, call plan_my_clips.", summary: snap.summary, filter: f, total: list.length, campaigns: list.slice(0, lim).map(brief), more: tag(`${SITE}/gta-6-clipping-campaigns`) });
+    return text({ generated_at: snap.generated_at, method: "typical_per_clip = budget paid on approved clips minus the top 3 earners, / the rest of approved clips, cut if the budget runs out within 3 days. null = no track record yet, or a marketplace that does not publish approved clips (Ssemble, Vyro, Clipstake); ranked after, by cap. Join each campaign on its join_on marketplace. It reflects established clippers: likely_per_clip is what a typical clip earns at three account sizes after the campaign's floor (0 = pays nothing at that size, null = floor unknown). For the user's own size and a plan, call plan_my_clips.", summary: snap.summary, filter: f, total: list.length, campaigns: list.slice(0, lim).map(brief), more: tag(`${SITE}/gta-6-clipping-campaigns`) });
   }
   if (name === "clipping_campaign_details") {
     const snap = await latestSnapshot();

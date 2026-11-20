@@ -427,3 +427,72 @@ Written from the need before looking: a clipper on a campaign card wants the str
 | directory depth | Twitch: 100 per game, the anonymous API refuses page 2. Kick: 32 a page, pages on (4 + 2 read) |
 
 Code: `lib/streamers.js` (`titleNames`, `acceptAccounts`, `resolveCampaignNames`), cache `streamers/names.json` (public channel data + a per-name report).
+
+---
+
+# Campaigns across marketplaces — ideal model (written 2026-11-19, before the sources were read)
+
+## Need
+
+Aidan, 2026-11-19: "are there any other streamers or campaigns we are missing?" A clipper
+does not care which marketplace pays. The ranker should hold every campaign that pays for GTA
+clips, wherever it runs, in one list, and say where to join each one. A campaign we never
+see is money the clipper never hears about; a dead campaign we list as live is a wasted hour.
+
+## Entities
+
+### Marketplace
+| field | question it answers |
+|---|---|
+| name, home url | where do I sign up |
+| live list (every open campaign, public) | did we see all of them, and is this one still open |
+| how often the list changes | how fresh is "live" |
+
+### Campaign (the Campaign entity above, plus where it lives)
+| field | question it answers |
+|---|---|
+| marketplace, id on it, join url | where do I join this one |
+| status (open, paused, ended) | can I still earn from it today |
+| title, owner, brief | whose clips, what do they want |
+| rate per 1K, per platform; cap per clip; min payout or min views | what one clip can earn, and from what size |
+| budget total, budget spent → **budget left** | is there money left for my clip |
+| clippers, approved clips, views | how crowded; what an ordinary clip earned |
+| source channels | which streams count |
+| game tags | is it GTA |
+
+## Joins
+Marketplace → Campaign (one live list per marketplace). Campaign ↔ Source by channel handle,
+as before. The same campaign listed on two marketplaces (a mirror) is one campaign, on the
+marketplace that runs it.
+
+## Reality check (filled 2026-11-19 evening, each source read once by hand)
+
+| marketplace | live list | per-campaign fields | call |
+|---|---|---|---|
+| **Content Rewards** | **partial**: `/sitemap.xml` (764 campaigns) misses some open ones. "GTA 6 x ARON ORLANDO MUSIC CLIPPING" (launched 11/19, open, $1,000) is in neither the sitemap nor any `/c/discover` page (469 clipping cards over 5 pages, all in the sitemap). CR's own article `/articles/gta-6-clipping` links it. Ssemble's board mirrors 168 CR campaigns by id; 16 of them were open and missing from the sitemap (read 2026-11-19 evening). | fills (the Campaign reality check above) | read the sitemap, every page of `/c/discover/clipping` and `/ugc` (`?page=N`, linked from the page itself), CR's GTA article and Ssemble's mirror ids; read any page they name; keep it while it says `active` |
+| Ssemble | fills: `/clip-rewards` server-renders `liveCampaigns` (200 rows: 31 its own, 168 CR mirrors, 1 PromoteFun) | rate, budget total, budget spent, platforms, clippers, views, the streamer's channel, first seen. **No** cap, floor, brief, per-campaign page | add (own rows only) |
+| Vyro | fills: `/sitemap/campaigns.xml` (7 at 18:40, 8 by 20:50) | title, owner, rate per 1M, platforms, pay type. **No** budget at all, cap, floor, clippers | add; budget shown as not public |
+| Clipstake | fills: `/marketplace` server-renders every campaign (34: 13 active, 17 paused, 4 ended) with status | rate, budget, spent, balance, platforms, views, geo pricing. **No** cap, floor, clippers | add (active rows only) |
+| **Clipster** | **can't fill**: the list loads from `/api`, which its robots.txt disallows | its public page (`/discover?openedCampaignId=`) shows title, rate and total budget only, with **no status and no budget left**: a campaign with $0 left renders the same as a live one | skip |
+
+Field by field for the new sources: `budget_left` fills for Ssemble and Clipstake, **can't fill**
+for Vyro (shown "not public", never 0); `cap_per_clip` and the floor **can't fill** for any of
+the three (floor shows "unknown, check the brief", as for an unread CR page); `expected_per_clip`
+needs approved clips, which none of them publish, so they rank after the proven CR campaigns,
+as brand-new CR campaigns already do. Clipper names and avatars are not stored.
+
+What else the check found: "TOMO GTA VI Clipping" is out of the sitemap because it is
+**paused with its $1,000 spent**, so it rightly does not rank. "GTA VI | PARKERRYT STREAM" and
+"DiegoLoveless GTA 6 Clipping" were in our cache under their old non-GTA names: discover cards
+carry the current title, so a rename now lands within one run. But a **group** card ("GTA 6", six
+campaigns) carries one member's id with the group's title and total: it had set LACY, YourRAGE
+and Clix to a $15,000 budget each in the live snapshot. Group cards are now skipped and their
+tainted members re-read. The 103 sitemap ids missing from
+the snapshot were never read yet (older September campaigns, 26 pages a run shared with
+re-reads); new ids now get their own budget. "Miami Crime RP" is a Roblox game, not GTA RP, so
+it stays out; FiveM (GTA V roleplay servers) now counts as GTA.
+
+### Call
+Build for Content Rewards (discovery), Ssemble, Vyro and Clipstake. Skip Clipster: no public
+list, and its public page cannot say whether money is left, so it would list spent campaigns as
+live. Named limits: Vyro's budget is not public; no new source publishes a floor or a cap.
