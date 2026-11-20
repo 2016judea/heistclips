@@ -1,5 +1,32 @@
 [
   {
+    "id": "clip-youtube-streams",
+    "date": "2026-11-19",
+    "type": "new",
+    "title": "Clip YouTube streams",
+    "body": "Paste a YouTube stream link: live streams get moments from chat, and finished ones from the times viewers wrote in the comments. YouTube does not let us download videos, so you cut the clip from your own copy, right in your browser.",
+    "link": "/clip",
+    "at": "2026-11-20T04:45:22.813Z",
+    "langs": {
+      "de": {
+        "title": "YouTube-Streams clippen",
+        "body": "Füge einen YouTube-Stream-Link ein: Live-Streams bekommen Momente aus dem Chat, fertige Streams aus den Zeiten, die Zuschauer in die Kommentare schreiben. YouTube erlaubt uns keine Downloads, also schneidest du den Clip aus deiner eigenen Kopie, direkt im Browser."
+      },
+      "fr": {
+        "title": "Clippe des streams YouTube",
+        "body": "Colle le lien d’un stream YouTube : les lives ont des moments tirés du chat, et les streams finis ceux que les viewers ont notés avec l’heure dans les commentaires. YouTube ne nous laisse pas télécharger les vidéos, alors tu coupes le clip depuis ta propre copie, directement dans ton navigateur."
+      },
+      "pt": {
+        "title": "Clipe streams do YouTube",
+        "body": "Cole o link de uma live do YouTube: lives ao vivo ganham momentos do chat, e as que já acabaram, dos tempos que o público escreveu nos comentários. O YouTube não deixa a gente baixar vídeos, então você corta o clipe da sua própria cópia, direto no navegador."
+      },
+      "es": {
+        "title": "Clipea streams de YouTube",
+        "body": "Pega el enlace de un stream de YouTube: los directos sacan momentos del chat, y los terminados, de los tiempos que la gente puso en los comentarios. YouTube no nos deja descargar videos, así que cortas el clip desde tu propia copia, en tu navegador."
+      }
+    }
+  },
+  {
     "id": "checkout-now-says-heistclips",
     "date": "2026-11-19",
     "type": "improved",
