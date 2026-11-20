@@ -22,6 +22,8 @@ test("the names a campaign title gives", () => {
   assert.deepEqual(titleNames(camp({ title: "YourRAGE $5,000 GTA 6 Pool Campaign" })), ["YourRAGE"]);
   assert.deepEqual(titleNames(camp({ title: "Lysium/Benji Ramos Clips" })), ["Lysium", "Benji Ramos"]);
   assert.deepEqual(titleNames(camp({ title: "$7,500 LUXDROP Logo Clipping Campaign" })), ["LUXDROP"]);
+  assert.deepEqual(titleNames(camp({ title: "iShowSpeed Plays GTA 6 Clipping | $1 CPM" })), ["iShowSpeed"]);
+  assert.deepEqual(titleNames(camp({ title: "DonBet Logo Campaign (GTA6)" })), ["DonBet"]);
   assert.deepEqual(titleNames(camp({ title: "Gaming Storytelling " })), [], "all campaign vocabulary");
   assert.deepEqual(titleNames(camp({ title: "Things I Could've Said | Audio Only Campaign | Gaming", categories: ["Gaming"] })), [], "a sound campaign names a song");
   assert.deepEqual(titleNames(camp({ title: "GTA 6 Clipping Campaign - Tokyo Girl", categories: ["Music"] })), []);
