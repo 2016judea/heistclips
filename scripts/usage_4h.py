@@ -5,9 +5,10 @@ Writes two JSON files ({rows, meta}) to the directory given as argv[1]:
   heistclips_usage_4h.json  visitors, clips by where they were made, checkouts, payments
   heistclips_entry.json     people by how they first arrived, and how many made a clip
   heistclips_mcp.json       connector tool calls per 4-hour block, by caller (from 2026-11-19 11:00 CT)
-  heistclips_directory.json Anthropic's own numbers for the Claude listing, copied from
-                            scripts/directory_snapshots.json (hand-entered from claude.ai/directory/manage/heistclips;
-                            no API — add a row each time someone reads the page)
+  heistclips_directory.json Anthropic's own numbers for the Claude listing, one row per read of
+                            claude.ai/directory/manage/heistclips (scripts/directory_pull.py)
+  heistclips_directory_daily.json  Anthropic's daily history for the listing (accounts, tool calls,
+                            errors per complete UTC day), merged from every Export CSV
 
 Sources: PostHog (HogQL, creds in ~/Desktop/workspace/bricks/.env) and Stripe Checkout
 (live key read from the heistclips Vercel project). Counting rules are in meta and in
@@ -134,7 +135,27 @@ while t <= now:
                      "calls_other": g("other"), "calls_total": sum(v[0] for v in m.values()), "claude_no_result": g("claude", 1),
                      "partial": t + timedelta(hours=4) > now, "data_through": now.strftime("%b %-d, %-I:%M %p") + " Central"})
     t += timedelta(hours=4)
-directory = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "directory_snapshots.json")))
+# Anthropic's numbers for the Claude listing live outside this public repo, in ~/.config/heistclips/directory/
+# (scripts/directory_pull.py writes them). snapshots.json: one row per read of the 30-day tiles.
+# exports/*.csv: "Export CSV" from the Usage tab, each with ~30 days of daily history (complete UTC days).
+# Daily rows: every export merged, the newest export winning for a day it covers.
+import csv as _csv, glob as _glob
+DIRD = os.path.expanduser("~/.config/heistclips/directory")
+directory = json.load(open(os.path.join(DIRD, "snapshots.json")))
+daily = {}
+for f in sorted(_glob.glob(os.path.join(DIRD, "exports", "heistclips-usage-*.csv"))):
+    rowsd = {}
+    for r in _csv.DictReader(open(f, encoding="utf-8-sig")):
+        if r["section"] == "history" and r["date"] and r["key"] == "" and r["value"] != "":
+            rowsd.setdefault(r["date"], {})[r["metric"]] = float(r["value"])
+    for d, m in rowsd.items():
+        if "users" in m or "calls" in m:
+            daily[d] = m
+first_live = min((d for d, m in daily.items() if m.get("calls", 0) > 0), default=None)
+directory_daily = [{"day": d, "users": int(m.get("users", 0)), "calls": int(m.get("calls", 0)), "errors": int(m.get("errors", 0)),
+                    "error_pct": round(100 * m.get("errors", 0) / m["calls"], 1) if m.get("calls") else None,
+                    "p95_s": round(m["p95_ms"] / 1000, 1) if m.get("p95_ms") else None}
+                   for d, m in sorted(daily.items()) if first_live and d >= first_live]
 
 stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
 code = open(__file__).read()
@@ -143,4 +164,5 @@ json.dump({"rows": rows, "meta": meta}, open(os.path.join(OUT, "heistclips_usage
 json.dump({"rows": entry, "meta": meta}, open(os.path.join(OUT, "heistclips_entry.json"), "w"))
 json.dump({"rows": mcp_rows, "meta": meta}, open(os.path.join(OUT, "heistclips_mcp.json"), "w"))
 json.dump({"rows": directory, "meta": meta}, open(os.path.join(OUT, "heistclips_directory.json"), "w"))
+json.dump({"rows": directory_daily, "meta": meta}, open(os.path.join(OUT, "heistclips_directory_daily.json"), "w"))
 print(json.dumps(rows[-3:], indent=0)); print(json.dumps(entry, indent=0)); print(json.dumps(mcp_rows, indent=0))
