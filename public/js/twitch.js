@@ -4,6 +4,7 @@
 
 import { kickCommentPage, kickRate } from "./kick.js";
 import { flagged } from "./wordguard.js";
+import { ytParse } from "./youtube.js";
 
 const GQL = "https://gql.twitch.tv/gql";
 const CID = "kimne78kx3ncx6brgo4mv6wki5h1ko"; // Twitch's own public web client id
@@ -29,6 +30,7 @@ const LOGIN = /^[A-Za-z0-9_]{3,25}$/;
 //   "clips.twitch.tv/Slug", "twitch.tv/xqc/clip/Slug"     -> clip (resolved to its VOD and second)
 //   "kai cenat", "ishowspeed gta6"                        -> search (login = the words joined)
 //   "gta 6"                                               -> gta (no name in it: offer live streams)
+//   "youtube.com/watch?v=…", "youtu.be/…", "youtube.com/@tomovids" -> youtube / ythandle
 // Measured 2026-11-19: the old last-token regex read "kai cenat" as the channel "cenat", a clip
 // link as its last path word, and claude.ai/directory/heistclips as the channel "heistclips".
 export function parseInput(raw) {
@@ -37,7 +39,8 @@ export function parseInput(raw) {
   if (k) return { kind: "kickvod", id: k[1].toLowerCase() };
   k = s.match(/^(?:https?:\/\/)?(?:www\.)?kick\.com\/([A-Za-z0-9_-]{2,40})\/?(?:\?.*)?$/i) || s.match(/^kick:([A-Za-z0-9_-]{2,40})$/i);
   if (k) return { kind: "kick", login: k[1].toLowerCase() };
-  if (/(?:youtube\.com|youtu\.be)\//i.test(s)) return { kind: "unknown", site: "youtube" };
+  const yt = ytParse(s); // watch, youtu.be, /live/ and @handle links (public/js/youtube.js)
+  if (yt) return yt;
   const c = s.match(/clips\.twitch\.tv\/([A-Za-z0-9_-]{4,})/i) || s.match(/twitch\.tv\/[A-Za-z0-9_]+\/clip\/([A-Za-z0-9_-]{4,})/i);
   if (c && c[1] !== "embed") return { kind: "clip", slug: c[1] };
   const m = s.match(/videos\/(\d{6,})/) || s.match(/^(\d{8,})$/) || s.match(/[?&]video=v?(\d{6,})/);
@@ -136,6 +139,7 @@ function shapeVod(v) {
 // (the CDN sends no CORS header, and a canvas can only read same-origin video).
 export function playlistPath(vod, quality = "chunked") {
   if (vod.platform === "kick") return vod.source || null; // stream.kick.com sends CORS *
+  if (vod.platform === "youtube") return vod.localUrl || null; // only ever the clipper's own file (public/js/ytclip.js)
   if (!vod.cdn) return null;
   return `/tv/${vod.cdn.host}/${vod.cdn.dir}/${quality}/index-dvr.m3u8`;
 }

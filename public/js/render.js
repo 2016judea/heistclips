@@ -81,7 +81,12 @@ export class Clipper {
     this.url = url;
     if (this.hls) { this.hls.destroy(); this.hls = null; }
     const v = this.video;
-    if (window.Hls && window.Hls.isSupported()) {
+    if (/^blob:/.test(url)) {
+      // The clipper's own file (a YouTube stream they saved): a plain video element plays it, and
+      // a blob: URL is same-origin, so the canvas and Web Audio read it like the stream.
+      v.src = url;
+      await new Promise((ok, bad) => { v.onloadedmetadata = ok; v.onerror = () => bad(new Error("this browser can't play that file. Try an MP4 or WebM")); });
+    } else if (window.Hls && window.Hls.isSupported()) {
       const Base = window.Hls.DefaultConfig.loader;
       class PlaylistLoader extends Base {
         load(context, config, callbacks) {
@@ -503,7 +508,7 @@ export class Clipper {
     // No fixed time limit: while bytes arrive the wait goes on and says so; when they stop it
     // says that, restarts the loader up to three times, then fails with the reason. It used to
     // give up silently after 120 s and record a window that was not there.
-    const site = /kick/i.test(String(this.url)) ? "Kick" : "Twitch";
+    const site = /^blob:/.test(String(this.url)) ? "your file" : /kick/i.test(String(this.url)) ? "Kick" : "Twitch";
     let seen = -1, seenBytes = -1, moved = Date.now(), restarts = 0;
     while (!this.bufferedTo(end)) {
       this.checkCancel();

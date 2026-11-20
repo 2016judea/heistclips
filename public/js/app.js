@@ -14,6 +14,7 @@ import { keepClean, flagged, mask } from "./wordguard.js";
 import { vodChapters, gameAt, isGta, shortGame } from "./games.js?v=1";
 import { campaignPanel } from "./campaign.js?v=1";
 import { FaceCheck, boxAround, cornerFor } from "./facecam.js?v=1";
+import { ytOpen, ytGate, ytRow, ytShift } from "./ytclip.js?v=1";
 
 const $ = (s, el = document) => el.querySelector(s);
 const h = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -230,9 +231,12 @@ function dead(why, html, exclude) {
 async function start(q) {
   let inp = parseInput(q);
   if (inp.kind === "gta") return dead("no_name", `Whose stream? Type a streamer’s name or paste their link, or pick one below.`);
-  if (inp.kind === "unknown") return dead("bad_input_" + (inp.site || "text"), inp.site === "youtube"
-    ? `YouTube streams can’t be read yet: heistclips reads Twitch and Kick. <a href="/requests">Vote for YouTube Live</a>, or clip one of these.`
-    : `That isn’t a Twitch or Kick channel or video. Paste a link like these: <b>twitch.tv/kaicenat</b> · <b>kick.com/adinross</b> · <b>twitch.tv/videos/…</b>`);
+  if (inp.kind === "unknown") return dead("bad_input_" + (inp.site || "text"), inp.site === "youtube_short"
+    ? `That’s a YouTube Short, not a stream. Paste the stream’s link (<b>youtube.com/watch?v=…</b> or <b>youtube.com/@name</b>), or clip one of these.`
+    : inp.site === "youtube" ? `That YouTube link isn’t a video or a channel. Paste a stream’s link (<b>youtube.com/watch?v=…</b>) or a channel (<b>youtube.com/@name</b>).`
+    : `That isn’t a Twitch, Kick or YouTube channel or video. Paste a link like these: <b>twitch.tv/kaicenat</b> · <b>kick.com/adinross</b> · <b>youtube.com/@name</b>`);
+  // YouTube: moments from our server, the cut from the clipper's own copy (public/js/ytclip.js).
+  if (inp.kind === "youtube" || inp.kind === "ythandle") return ytOpen(q, inp, { say, dead, ph, current, renderMoments, momentLi, openEditor, drawCurve, creditText, spoilToggle, jumpT: params.get("t") != null ? jumpT : null });
   say(`<div class="status">Looking up ${h(inp.text || inp.login || inp.id || "that clip")}…</div>`);
   ph("clip_lookup", { kind: inp.kind });
   try {
@@ -434,7 +438,8 @@ function chips(m) {
   const c = [];
   const g = gameOf(m);
   if (g) c.push(`<span class="chip game${isGta(g) ? "" : " risk-medium"}" data-notr>${h(shortGame(g))}</span>`);
-  if (!m.asked) c.push(`<span class="chip${m.quiet ? "" : " hot"}">chat ${m.chat_ratio}× normal speed</span>`);
+  if (m.signal === "comments") c.push(`<span class="chip hot">${m.comments} viewer${m.comments === 1 ? "" : "s"} timestamped this${m.likes ? ` (${m.likes} likes)` : ""}</span>`);
+  else if (!m.asked) c.push(`<span class="chip${m.quiet ? "" : " hot"}">chat ${m.chat_ratio}× normal speed</span>`);
   if (m.quiet) c.push(`<span class="chip">small spike</span>`);
   if (m.asked) c.push(`<span class="chip hot">the second you linked</span>`);
   if (m.event_type !== "reaction") c.push(`<span class="chip">${h(m.event_type)}</span>`);
@@ -462,8 +467,8 @@ function momentLi(m, i) {
   return `<li class="moment${m.live ? " fresh" : ""}" data-i="${i}">
 <div class="mhead"><b>${clock(m.t_start)} – ${clock(m.t_end)}</b><span class="small">${m.live ? "just now" : "#" + (i + 1)}</span></div>
 <div class="chips">${chips(m)}</div>
-<div class="quote">${topLines(m) || "&nbsp;"}</div>
-<div class="actions"><button class="btn sm" data-act="cut">Cut this</button><a class="btn sm ghost" href="${h(m.url)}" target="_blank" rel="noopener">Watch on ${vod.platform === "kick" ? "Kick" : "Twitch"}</a><button class="btn sm ghost" data-act="hide" title="Not a good pick">✕ Skip</button><a class="reqlink" href="/requests">Missing something? Request it</a></div>
+<div class="quote">${topLines(m) || (m.quotes ? m.quotes.map((q) => `“${h([...q.text].length > 60 ? [...q.text].slice(0, 59).join("") + "…" : q.text)}”`).join(" · ") : "") || "&nbsp;"}</div>
+<div class="actions"><button class="btn sm" data-act="cut">Cut this</button><a class="btn sm ghost" href="${h(m.url)}" target="_blank" rel="noopener">Watch on ${vod.platform === "kick" ? "Kick" : vod.platform === "youtube" ? "YouTube" : "Twitch"}</a><button class="btn sm ghost" data-act="hide" title="Not a good pick">✕ Skip</button><a class="reqlink" href="/requests">Missing something? Request it</a></div>
 <div class="ed"></div></li>`;
 }
 
@@ -493,19 +498,23 @@ document.addEventListener("click", (e) => {
 
 // ---- editor ---------------------------------------------------------------------------------
 async function openEditor(i) {
-  const m = current.moments[i];
   const li = document.querySelector(`.moment[data-i="${i}"]`);
   if (!li) return;
   document.querySelectorAll(".moment .ed").forEach((x) => (x.innerHTML = ""));
   if (current.clipper) { current.clipper.destroy(); current.clipper = null; }
   const ed = $(".ed", li);
+  // YouTube: no file of theirs yet, so the picker instead; then the moment in the file's seconds.
+  const YT = current.vod.platform === "youtube";
+  if (YT && ytGate(ed, current.vod, current.moments[i], () => openEditor(i), ph)) { li.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  const m = YT ? ytShift(current.moments[i], current.vod) : current.moments[i];
   const mime = pickMime();
   // Facecam choices are remembered per channel; layout, hook mode, chat and quality for everyone.
   const camKey = `hc_cam:${current.vod.platform || "twitch"}:${current.vod.channel}`;
   let camSaved = null; try { camSaved = JSON.parse(store.get(camKey) || "null"); } catch (e) {}
   let pref = {}; try { pref = JSON.parse(store.get("hc_ed") || "{}") || {}; } catch (e) {}
   const canLocal = mime !== null && !IOS && !SAFARI;
-  let serverMode = mime === null || IOS || SAFARI || (PHONE && pref.phoneLocal !== true);
+  // A YouTube cut is always made here, from their file: our server can't fetch YouTube video.
+  let serverMode = !YT && (mime === null || IOS || SAFARI || (PHONE && pref.phoneLocal !== true));
   const win = { s: m.t_start, e: m.t_end };
   const mprops = () => ({ t_start: Math.round(win.s), clip_secs: Math.round(win.e - win.s) });
   ph("moment_cut_open", { rank: i + 1, live: !!m.live, ...mprops(), server_mode: serverMode });
@@ -553,6 +562,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
 <p class="reqlink">Want another layout, captions, or something else? <a href="/requests">Request a feature</a> — we build what clippers ask for.</p>
 </div></div>`;
   li.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (YT) ytRow(ed, current.vod, () => openEditor(i), ph);
   const cv = $("canvas", ed);
   const cl = new Clipper(cv);
   current.clipper = cl;
@@ -611,7 +621,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   const maxLen = () => (serverMode ? SERVER_MAX_S : LOCAL_MAX_S);
   // A still-live VOD keeps growing, so the length read when the page opened is no limit
   // (clamping to it put the end before the start: a 0-byte file, 2026-11-18).
-  const maxEnd = () => (current.vod.status === "RECORDING" ? Infinity : current.vod.length || Infinity);
+  const maxEnd = () => (YT ? current.vod.fileLength || Infinity : current.vod.status === "RECORDING" ? Infinity : current.vod.length || Infinity);
   let span = null, seekT = 0;
   const reSpan = () => { const pad = Math.max(45, (win.e - win.s) * 0.9); const a = Math.max(0, win.s - pad); span = { a, b: Math.min(maxEnd(), Math.max(win.e + pad, a + 60)) }; drawStrip(); };
   function drawStrip() {
@@ -724,7 +734,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
       note.hidden = false;
       note.innerHTML = (SAFARI ? `Safari records clips without sound, so yours is cut on our server: about a minute. Chrome, Edge and Firefox render it here with every option.` : PHONE || IOS ? `On a phone your clip is cut on our server: about a minute, with sound.` : `This browser can’t record video, so your clip is cut on our server: about a minute, with sound.`) + (canLocal ? ` <button type="button" class="linkbtn" id="uselocal">Render on this phone instead</button>` : "");
       if (win.e - win.s > SERVER_MAX_S) setWin(win.s, win.s + SERVER_MAX_S, "e");
-    } else if (PHONE && canLocal) { note.hidden = false; note.innerHTML = `Rendering on this phone: keep this tab open and the screen on. <button type="button" class="linkbtn" id="useserver">Cut it on our server instead</button>`; }
+    } else if (PHONE && canLocal && !YT) { note.hidden = false; note.innerHTML = `Rendering on this phone: keep this tab open and the screen on. <button type="button" class="linkbtn" id="useserver">Cut it on our server instead</button>`; }
     else note.hidden = true;
     const corners = ed.querySelector('.seg[data-k="srvcam"]');
     if (serverMode && !corners) $("#chatrow", ed).insertAdjacentHTML("afterend", `<div id="srvcamrow"><label>Which corner is the facecam in?</label><div class="seg" data-k="srvcam"><button data-v="tl">↖</button><button data-v="tr">↗</button><button data-v="bl">↙</button><button data-v="br">↘</button></div></div>`);
@@ -811,7 +821,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   } catch (e) {
     // "chunked" is Twitch's source rendition; fall back to the next sharpest one that loads.
     try {
-      if (current.vod.platform === "kick") throw e;
+      if (current.vod.platform === "kick" || YT) throw e;
       let ok = false;
       for (const q of ["1080p60", "720p60"]) { try { await cl.load(playlistPath(current.vod, q), win.s); ok = true; break; } catch (e3) {} }
       if (!ok) throw e;
@@ -820,7 +830,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
     catch (e2) { vstat.textContent = "Couldn’t load the video: " + e.message + (m.live ? " (live moments need ~30 s before the video catches up; try again shortly)" : ""); return; }
   }
   faceCheck("load");
-  $("#pv", ed).onclick = async () => { ph("clip_preview", { layout: cl.opts.layout }); $("#pv", ed).disabled = true; try { await cl.playWindow(win.s, win.e); } finally { $("#pv", ed).disabled = false; } };
+  $("#pv", ed).onclick = async () => { clearTimeout(seekT); ph("clip_preview", { layout: cl.opts.layout }); $("#pv", ed).disabled = true; try { await cl.playWindow(win.s, win.e); } finally { $("#pv", ed).disabled = false; } };
   // ---- render ---------------------------------------------------------------------------
   const say = (html) => ($("#dl", ed).querySelector(".rnote") || $("#dl", ed).insertAdjacentElement("afterbegin", Object.assign(document.createElement("div"), { className: "note rnote" }))).innerHTML = html;
   const showPaywall = () => { $("#dl", ed).innerHTML = paywallHTML(); ph("paywall_hit", {}); ph("paywall_shown", { free_left: 0, paid_left: credits.paid_left || 0, where: "render" }); };
@@ -844,7 +854,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   // A clip that came out silent where the stream has sound (seen on Safari): offer the server's
   // cut, which always carries the audio.
   const offerServer = (mount) => {
-    if (win.e - win.s > SERVER_MAX_S) return;
+    if (win.e - win.s > SERVER_MAX_S || YT) return;
     mount.insertAdjacentHTML("beforeend", `<p class="small">Your browser recorded this without sound. <button type="button" class="linkbtn" data-srvcut>Cut it on our server with sound</button> (about a minute, uses one clip).</p>`);
     mount.querySelector("[data-srvcut]").addEventListener("click", () => { serverMode = true; applyMode(); $("#rec", ed).click(); });
   };
@@ -852,6 +862,10 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
   const awake = async (on) => { try { if (on && navigator.wakeLock) lock = await navigator.wakeLock.request("screen"); else if (!on && lock) { await lock.release(); lock = null; } } catch (e) {} };
 
   $("#rec", ed).onclick = async () => {
+    // Typing an end time and clicking Render blurs the field, and setWin schedules a seek to the new
+    // end edge 140 ms later: it landed after the recording had started at the window's start and
+    // ended it at once (a 0.2 s file, found driving the YouTube editor, 2026-11-19).
+    clearTimeout(seekT);
     const btn = $("#rec", ed);
     // While a render runs the same button is its way out.
     if (btn.dataset.busy === "local") { btn.disabled = true; cl.cancel(); ph("clip_render_cancel", { phase: cl.phase || "", ...mprops() }); return; }
@@ -861,7 +875,7 @@ ${m.music_risk.level !== "low" ? `<div class="note">Music risk ${m.music_risk.le
     const lenNow = Math.round(win.e - win.s);
     if (!(lenNow >= 2)) { btn.disabled = false; say("This clip window is empty. Set a start before the end."); return; }
     const label = btn.textContent, t0 = performance.now();
-    const common = () => ({ ...mprops(), layout: cl.opts.layout, hook: !!cl.opts.hook, chat: !!cl.opts.chat, path: serverMode ? "browser_server" : "browser", quality: serverMode ? "server" : cl.opts.quality, free_left: credits.free_left, paid_left: credits.paid_left || 0 });
+    const common = () => ({ ...mprops(), ...(YT ? { src: "own_copy", file_offset: Math.round(current.vod.fileOffset || 0) } : {}), layout: cl.opts.layout, hook: !!cl.opts.hook, chat: !!cl.opts.chat, path: serverMode ? "browser_server" : "browser", quality: serverMode ? "server" : cl.opts.quality, free_left: credits.free_left, paid_left: credits.paid_left || 0 });
     // Leaving mid-render, or a phase that stops moving, is counted: 21% of renders used to end
     // with no event at all (610 started, 478 finished, 5 failed, 11/16-11/19).
     let phase = serverMode ? "server" : "load", pct = -1, pctAt = performance.now(), gone = false, running = true;

@@ -61,6 +61,31 @@ Events about one moment also carry `t_start` (the clip's first second in the str
 `started = done + fail + cancel + abandon` should now hold. Before 2026-11-19, 21% of renders
 ended with no event (610 started, 478 done, 5 failed).
 
+## YouTube (`public/js/ytclip.js`, `api/youtube.js`, `lib/youtube.js`; from 2026-11-19)
+
+A YouTube stream carries `platform: "youtube"` on every clip-tool event above (`vod_id` is the
+11-character video id, `channel` the channel id `UC…`), and on `clip_lookup`, `clip_moments`,
+`clip_dead` and `live_moment` it is also set explicitly. Renders from the clipper's own file carry
+`src: "own_copy"` and `file_offset` (the stream second their file starts at) on
+`clip_render_start`, `clip_render_done` and `clip_render_fail`; `clip_made` carries
+`platform: "youtube"`.
+
+| Event | When | Properties beyond the common ones |
+|---|---|---|
+| `clip_moments` (YouTube) | moments arrived | `signal` (`live_chat`, `comments`, `live_chat+comments`), `comments_read`, `with_timestamps`, `msgs` (live chat messages read so far), `quota` |
+| `clip_dead` (YouTube) | nothing to show | `why`: `yt_quota`, `yt_no_comment_moments`, `yt_comments_off`, `yt_missing`, `yt_no_channel`, `yt_no_streams`, `yt_upcoming`, `youtube_error` |
+| `yt_quota_out` | YouTube's daily API limit is used up, and the page said so | `where` (`lookup`, `moments`), `live` |
+| `yt_cut_open` | "Cut this" on a YouTube moment, before the editor (the file picker) | `need_file`, `miss` (their file does not reach the moment), `t_start` |
+| `yt_file_pick` | a file was picked for "Cut from your own copy" | `ok`, `why` (`unplayable`), `mb`, `secs` (file length), `offset`, `fits` (the moment is inside the file), `type` |
+| `yt_offset` | "My file starts at" was changed | `offset` (seconds), `where` (`picker`, `typed`, `step`) |
+| `yt_moments_server` (server) | the first moments request of a page view | `status` (`live`, `finished`), `signal`, `n`, `quota`, `comments_read`, `msgs` |
+
+The connector's `mcp_tool_call` for a YouTube `find_clip_moments` carries `platform: "youtube"`,
+`live`, `signal`, `moments`, `quota`, `comments_read`, `msgs`; a YouTube `cut_clip` logs
+`err: "youtube_no_server_cut"` (it answers with the editor link; nothing is cut or charged).
+The quota ledger itself is in Blob (`yt/q/<Pacific day>/`, one file per call, units in the name);
+`GET /api/youtube?op=quota` sums it.
+
 ## Server events (`lib/track.js`; cannot be blocked in a browser)
 
 | Event | Fired from | Properties |

@@ -496,3 +496,88 @@ it stays out; FiveM (GTA V roleplay servers) now counts as GTA.
 Build for Content Rewards (discovery), Ssemble, Vyro and Clipstake. Skip Clipster: no public
 list, and its public page cannot say whether money is left, so it would list spent campaigns as
 live. Named limits: Vyro's budget is not public; no new source publishes a floor or a cap.
+
+---
+
+# YouTube streams — ideal model (written 2026-11-19 night, before the API was read)
+
+## Need
+
+Aidan, 2026-11-19: "build it". Campaigns pay for YouTube streamers (Tomo, Dylan Page's 120-hour
+marathon, Vyro's "GTA VI YouTube Livestream"), and 12 lookups in 3 days failed on a YouTube link.
+A clipper pasting a YouTube stream wants the same answer a Twitch stream gets: where the moments
+are, and a 9:16 file of one of them. Only official, robots-allowed routes: the Data API v3,
+oEmbed and plain watch links.
+
+## Entities
+
+### YouTube source — one video (a live stream, or a finished one)
+| field | question it answers |
+|---|---|
+| video id, watch url | what am I clipping, where do I watch it |
+| title, channel name, channel id, handle | whose stream is this |
+| length, started at, ended at | how long; what second of the stream is "now" |
+| live state (live / upcoming / finished / not a stream) | can moments come from live chat, or only afterwards |
+| active live chat id | where live chat is read |
+| thumbnail | the card |
+| channel → current live, latest finished streams | "@tomovids" → which stream did they mean |
+
+### Moment (the Moment entity above, plus where it came from)
+| field | question it answers |
+|---|---|
+| t_peak, t_start, t_end (stream seconds) | where to cut |
+| signal: live chat speed / viewers' timestamped comments | why we think it is a moment, said honestly |
+| chat ratio, top phrase, event type (live) or n comments, likes, the best comment (finished) | how strong; what happened |
+| greetings and requests filtered out | is it a reaction, not a roll call |
+| watch link at the second (`watch?v=ID&t=Ns`) | check it before cutting |
+
+### Shared live poller — one per live stream, however many people watch it
+| field | question it answers |
+|---|---|
+| video id, live chat id, next page token, polling interval YouTube asks for | where to read next, and how soon we may |
+| last looked at (site visitor or connector call) | is anyone still watching; stop when not |
+| messages (stream second, text; no author) for the last hours | the rate curve and the moments |
+
+### Quota — the Data API's daily budget
+| field | question it answers |
+|---|---|
+| units spent today (Pacific day), per call kind | how many stream-hours are left today |
+| exhausted flag + reset time (midnight Pacific) | what to tell people when it runs out |
+
+### Local copy — the clipper's own file of the stream
+| field | question it answers |
+|---|---|
+| file (stays on their device; never uploaded) | what the editor cuts from |
+| offset (the stream second their file starts at) | where the moment is in their file |
+| file length | is the moment in it at all |
+
+## Joins
+YouTube source → Moments (by video id). Source → shared poller (one per live video). Moment +
+local copy (+ offset) → the editor's window in file seconds. Campaign `source_channels` (YouTube
+handles) → YouTube channel → its live or latest stream.
+
+## Reality check (filled 2026-11-19 night, against the live Data API with our key)
+
+| field | status |
+|---|---|
+| video id, title, channel, length, live state, started/ended, thumbnail | **fills**: `videos.list` (1 unit) with `liveStreamingDetails`; a live stream's length is now minus `actualStartTime` |
+| active live chat id | **fills** for a live stream (`activeLiveChatId`); gone once it ends |
+| @handle → current live / latest finished | **fills** for 3 units: `channels.list forHandle` → uploads playlist (a stream in progress IS in it, checked on IShowSpeed) → `videos.list`. `search.list` is out: it has its own **100 a day** cap on this project |
+| live chat messages, no author | **fills with an API key** (no OAuth): `liveChatMessages.list`, first page reaches back ~1-2 min of text (plus older gift events). **5 units** a call, refused calls too (measured: 40 calls = 200 units) |
+| live chat history before anyone looked | **can't fill**: the API has no history. Moments start when reading starts; said on the page and to the assistant |
+| finished stream's chat | **can't fill**: the API has no replay (`liveChatEnded`), and the replay route the probe found is robots-disallowed. Replaced by the one official signal: viewers' timestamped comments |
+| timestamped comments → moments | **fills for big streams, thin for small ones**: IShowSpeed's 23.8 h GTA stream: 224 of 1,000 comments carry a time, top moment 42 comments / 856 likes at 8:28:50. Kai Cenat Part 1: 57 of 396, mostly one viewer's chapter list. TheBurntPeanut: 30 of 477, 1 moment. Tomo Day 2: 9 comments, 0 times: the honest "none to go on" message |
+| moment signal said out loud | fills: `signal` = `live_chat` or `comments`, shown as "chat N× normal speed" or "N viewers timestamped this" |
+| greetings/requests filtered | fills: `public/js/youtube.js` `noiseKind`; 7.6% of IShowSpeed's (363 of 4,802) and 6.3% (220 of 3,509) of TheBurntPeanut's live messages were noise (14 min, 2026-11-19) |
+| poller: one per stream, stop when nobody looks | fills: look markers (10 min site, 30 min connector), a per-minute claim file, a per-minute cron |
+| quota spent today, exhausted, reset | fills: append-only ledger in Blob summed by list; YouTube's own `quotaExceeded` marks the day; reset = midnight Pacific |
+| local copy: file, offset, length | fills: a blob: URL in the browser, never uploaded; the length from the file's metadata |
+| campaign `source_channels` → YouTube channel page | **not built**: a streamer page reads live state keylessly from Twitch/Kick; a YouTube one costs a `videos.list` per check. Left for later, named here |
+
+### Call
+Build. The model fills except the two chat-history fields, which no official route can fill;
+the comment signal stands in for a finished stream and the page says which signal each moment
+came from. Quota math: a live stream polled once a minute = 60 calls × 5 = **300 units an
+hour**; live polling stops at 9,000 of the 10,000, so **~30 stream-hours a day** (e.g. 6
+streams watched for 5 hours), lookups and comment reads (1 unit each, ≤10 a finished stream)
+keep the last 1,000.

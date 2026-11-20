@@ -94,7 +94,7 @@ const metaOf = (m) => {
   const out = { vod: String(x.vod || "").slice(0, 40), t: Number(x.t) || 0, layout: String(x.layout || "").slice(0, 20), bytes: Number(x.bytes) || 0 };
   // Optional, for the clip_made event (lib/track.js): the stream, the clip's length, the path.
   if (x.channel) out.channel = String(x.channel).toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40);
-  if (x.platform === "kick" || x.platform === "twitch") out.platform = x.platform;
+  if (x.platform === "kick" || x.platform === "twitch" || x.platform === "youtube") out.platform = x.platform;
   if (Number(x.secs) > 0) out.secs = Math.round(Number(x.secs));
   if (x.via === "web") out.via = "web";
   if (typeof x.ph === "string" && /^[A-Za-z0-9_-]{8,80}$/.test(x.ph)) out.ph = x.ph;

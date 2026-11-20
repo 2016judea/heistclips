@@ -9,6 +9,8 @@ import { bugEvent, BUG_FAILURES } from "./requests.js";
 import { latestEntries, PATH as NEWS_PATH } from "../lib/changelog.js";
 import { queueTool } from "../lib/queuetool.js";
 import { findClipMoments, sourceNext } from "../lib/momentstool.js";
+import { ytCutAnswer } from "../lib/youtube.js";
+import { parseInput } from "../public/js/twitch.js";
 import { JOB, newJobId, jobAgeMs, JOB_DEAD_MS, loadJob } from "../lib/cutjob.js";
 import { MAX_CLIP_S, MIN_CLIP_S } from "../lib/cut.js";
 import { isTest } from "../lib/marks.js";
@@ -59,10 +61,10 @@ export const TOOLS = [
   },
   {
     name: "find_clip_moments",
-    title: "Find the best moments to clip in a Twitch or Kick stream (live or VOD)",
-    description: "Finds the highlights worth clipping in a Twitch or Kick stream, live or a VOD, by reading chat: where chat exploded against its normal pace, 'clip it' requests, clips viewers already made. Returns timestamps, a clip window, event type, 3-5 hook lines for the first second, music-claim risk, spoiler risk (set skip_spoilers for campaigns that ban story spoilers), and a cut_it link that opens the moment ready to render as a 9:16 clip for TikTok, Shorts or Reels. Use for 'best moments in xQc's stream', 'find highlights in this VOD', 'what should I clip from kick.com/<name>', 'clip this stream'. Pass a Twitch channel or just the streamer's name (the live stream if live, else the latest), a Kick channel as kick.com/<name>, a VOD link or id, or a Twitch clip link (its whole stream is read). Chat in any language works (German, Spanish, Portuguese…); answer in the user's language. A long Twitch stream takes 5-20 seconds and a stream that was read before answers at once; Kick takes about 2 minutes the first time. If the source cannot be read the result has found: false with the reason and channels that are live now: tell the user, do not retry the same source.",
+    title: "Find the best moments to clip in a Twitch, Kick or YouTube stream (live or VOD)",
+    description: "Finds the highlights worth clipping in a Twitch or Kick stream, live or a VOD, by reading chat: where chat exploded against its normal pace, 'clip it' requests, clips viewers already made. Returns timestamps, a clip window, event type, 3-5 hook lines for the first second, music-claim risk, spoiler risk (set skip_spoilers for campaigns that ban story spoilers), and a cut_it link that opens the moment ready to render as a 9:16 clip for TikTok, Shorts or Reels. Use for 'best moments in xQc's stream', 'find highlights in this VOD', 'what should I clip from kick.com/<name>', 'clip this stream'. Pass a Twitch channel or just the streamer's name (the live stream if live, else the latest), a Kick channel as kick.com/<name>, a VOD link or id, a Twitch clip link (its whole stream is read), or a YouTube stream link or channel (youtube.com/watch?v=…, youtube.com/@name). YouTube moments come from live chat for a live stream (read from the first call on) and from viewers' timestamped comments for a finished one; YouTube cannot be cut on heistclips' server, so its cut_it link opens the editor for the user's own copy of the video. Chat in any language works (German, Spanish, Portuguese…); answer in the user's language. A long Twitch stream takes 5-20 seconds and a stream that was read before answers at once; Kick takes about 2 minutes the first time. If the source cannot be read the result has found: false with the reason and channels that are live now: tell the user, do not retry the same source.",
     inputSchema: { type: "object", properties: {
-      source: { type: "string", description: "Twitch channel name or URL, a Kick channel URL (kick.com/<name>), a VOD URL (twitch.tv/videos/… or kick.com/<name>/videos/…), or a Twitch clip URL" },
+      source: { type: "string", description: "Twitch channel name or URL, a Kick channel URL (kick.com/<name>), a VOD URL (twitch.tv/videos/… or kick.com/<name>/videos/…), a Twitch clip URL, or a YouTube stream or channel URL (youtube.com/watch?v=…, youtu.be/…, youtube.com/@name)" },
       limit: { type: "integer", minimum: 1, maximum: 15, description: "How many moments (default 8)" },
       skip_spoilers: { type: "boolean", description: "true = leave out moments that look like story spoilers (chat warns about spoilers, talks about the ending, or reacts to a story scene), for campaigns that ban spoilers. Skipped moments come back in skipped_spoilers with the reason. Default false: every moment is returned with a spoiler_risk field." },
     }, required: ["source"], additionalProperties: false },
@@ -384,6 +386,9 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
   if (name === "cut_clip_status") return cutStatus(args.job);
   if (name === "cut_clip") {
     if (args.job && !args.source) return cutStatus(args.job);
+    // YouTube cannot be cut on our server (its Terms bar downloading): an answer with the editor link.
+    const yin = parseInput(args.source);
+    if (yin.kind === "youtube" || yin.kind === "ythandle") return withLog(text(ytCutAnswer(yin, args, tag)), { err: "youtube_no_server_cut", platform: "youtube" });
     // The cut runs in its own function (ffmpeg, longer limit) and goes on to the end whether or
     // not anyone is still waiting. This call waits a safe while, then hands back the job code.
     const job = newJobId(), t0 = Date.now();
