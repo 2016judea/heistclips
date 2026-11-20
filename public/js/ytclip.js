@@ -70,7 +70,12 @@ ${A.spoilToggle()}
     const fresh = d.moments.filter((m) => !shown.has(m.signal + ":" + m.t_peak));
     for (const m of fresh) shown.add(m.signal + ":" + m.t_peak);
     markSpoilers(vod, fresh);
-    if (d.curve && d.curve.length > 2) { const cv = $("#curve"); if (cv) { cv.hidden = false; A.drawCurve(cv, d.curve, Math.max(vod.length, d.curve[d.curve.length - 1][0] + 30), d.moments); } }
+    // The curve spans the minutes heistclips has read, not the whole stream (on a 9-hour stream
+    // the first 8 minutes of reading were a sliver at the right edge, 2026-11-19).
+    if (d.curve && d.curve.length > 2) {
+      const cv = $("#curve"), a = d.curve[0][0], b = d.curve[d.curve.length - 1][0] + 10;
+      if (cv) { cv.hidden = false; A.drawCurve(cv, d.curve.map(([t, r]) => [t - a, r]), Math.max(60, b - a), d.moments.filter((m) => m.t_peak >= a).map((m) => ({ t_peak: m.t_peak - a }))); }
+    }
     if (first) {
       A.current.moments = fresh;
       A.renderMoments();

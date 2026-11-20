@@ -14,7 +14,7 @@ import { keepClean, flagged, mask } from "./wordguard.js";
 import { vodChapters, gameAt, isGta, shortGame } from "./games.js?v=1";
 import { campaignPanel } from "./campaign.js?v=1";
 import { FaceCheck, boxAround, cornerFor } from "./facecam.js?v=1";
-import { ytOpen, ytGate, ytRow, ytShift } from "./ytclip.js?v=1";
+import { ytOpen, ytGate, ytRow, ytShift } from "./ytclip.js?v=2";
 
 const $ = (s, el = document) => el.querySelector(s);
 const h = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
