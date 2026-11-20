@@ -60,7 +60,7 @@ Negative: "Clip this YouTube Live stream" → find_moments says it takes Twitch 
 - **ChatGPT:** filed 2026-11-17 00:48 UTC, 0.1.0 in review. **When the approval email comes, he
   clicks Publish** at platform.openai.com/plugins/manage/plugin_asdk_app_6afba27819348191bfed030276cf83be.
   Approval does not publish it. Leave Vercel env `OPENAI_APPS_CHALLENGE` set: OpenAI re-checks it.
-- **Claude directory:** filed 2026-11-16, in review. Nothing to do.
+- **Claude directory:** filed 2026-11-16, **Published** (Aidan; confirmed on claude.ai/directory/manage 11/19: "used a tool: 294 accounts").
 - **Grok:** filed 2026-11-16 through xAI's form. A reply comes by email to aidan@brickandmortar.dev.
 
 ## Submissions (2026-11-16, "prepare for distribution")
@@ -68,7 +68,7 @@ Negative: "Clip this YouTube Live stream" → find_moments says it takes Twitch 
 | Where | Status | UTC | Listing / ID |
 |---|---|---|---|
 | Official MCP Registry | LISTED | 11-16 | `com.heistclips/heistclips` 0.1.0 |
-| Claude Connectors Directory | **SUBMITTED, in review** ("can take a few weeks") | 23:04 | claude.ai/directory/manage/heistclips · slug `heistclips` (permanent) |
+| Claude Connectors Directory | **PUBLISHED** (Aidan, 11-16; 294 accounts used a tool as of 11-19) | 23:04 | claude.ai/directory/manage/heistclips · slug `heistclips` (permanent) |
 | ChatGPT plugin directory | **SUBMITTED, 0.1.0 in review**; he clicks Publish after approval | 11-17 00:48 | plugin `plugin_asdk_app_6afba27819348191bfed030276cf83be` |
 | xAI Connector Marketplace (Grok, Grok Bot, Cursor) | **SUBMITTED, pending review** | 21:10 | x.ai/bot/marketplace/submit-a-plugin · no ID shown · reply to aidan@brickandmortar.dev |
 | Glama | **LISTED, claimed, health check passing** | 21:20 | https://glama.ai/mcp/connectors/com.heistclips/heistclips |
