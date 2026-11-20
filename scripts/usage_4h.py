@@ -82,7 +82,9 @@ TEST_SESSION_IDS = {"cs_live_agoXIEAg2OF0HWINPHgKNQhKA9dsN6eUT4Z6MHF6sxMYvCjIJ1d
 def ours(s):
     m = s.get("metadata") or {}
     dev = m.get("device", "")
-    return (m.get("product") != "heistclips" or dev == "qa-test" or dev.startswith("probe")
+    # Every real purchase carries a pack (p50/p200...). Sessions without one are tests from other work
+    # on the shared Stripe account (two $110 "heistclips" sessions with no pack or device, 11/20 11:23 CT).
+    return (m.get("product") != "heistclips" or not m.get("pack") or dev == "qa-test" or dev.startswith("probe")
             or dev in TEST_LANG_SESSIONS or dev in TEST_DEVICES or s["id"] in TEST_SESSION_IDS)
 
 pay = {}
