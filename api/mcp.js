@@ -8,8 +8,9 @@ import { loadBoard, publicList, vote, submit, notify, hashOf, KINDS } from "../l
 import { bugEvent, BUG_FAILURES } from "./requests.js";
 import { latestEntries, PATH as NEWS_PATH } from "../lib/changelog.js";
 import { queueTool } from "../lib/queuetool.js";
-import { findClipMoments } from "../lib/momentstool.js";
+import { findClipMoments, sourceNext } from "../lib/momentstool.js";
 import { JOB, newJobId, jobAgeMs, JOB_DEAD_MS, loadJob } from "../lib/cutjob.js";
+import { MAX_CLIP_S, MIN_CLIP_S } from "../lib/cut.js";
 import { isTest } from "../lib/marks.js";
 import { callerOf, sealCaller, findGate, newAccountRefusal, isOutside, BUILDERS_LINE } from "../lib/callers.js";
 import { createAccount } from "../lib/accounts.js";
@@ -109,7 +110,7 @@ export const TOOLS = [
     title: "Connect YouTube or TikTok for posting, and check clip credits",
     description: "Shows whether YouTube and TikTok are connected for a heistclips account code, how many clips it has left, and the one-time link where the user connects or disconnects them. Call with no account to get a new code and link.",
     inputSchema: { type: "object", properties: { account: { type: "string", description: "The account code (hc_…) from cut_clip; leave out to start a new one" } }, additionalProperties: false },
-    annotations: { title: "Posting account", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: true },
+    annotations: { title: "Posting account", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
   },
   {
     name: "my_clip_queue",
@@ -132,7 +133,7 @@ export const TOOLS = [
       queue_link: { type: "string", description: "Or: the private link from the user's queue page (heistclips.com/queue?k=…)" },
       remove: { type: "boolean", description: "true to stop watching this streamer" },
     }, required: ["streamer"], additionalProperties: false },
-    annotations: { title: "Watch a streamer", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: true },
+    annotations: { title: "Watch a streamer", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
   },
   {
     name: "live_gta_streams",
@@ -232,7 +233,7 @@ async function logCall(tool, ok, ms, meta, extra = {}) {
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
 
-export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back; if it answers status 'cutting', call cut_clip_status with the job code instead of cutting again), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use plan_my_clips when the user asks what to clip today or which campaign they can actually earn from: it takes their views per clip (or account size) and returns only campaigns that can pay at that size, with moments, the rule checklist, a caption with the required tags and cut_clip arguments (most campaigns pay nothing below a floor, so a new account's answer differs from the ranking). Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views (each row also says what a new account's typical clip is likely to earn and the floor), and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do. If something heistclips did went wrong (an error, a broken or silent clip, wrong moments), offer report_a_bug and, if the user agrees, file it with everything you already know: stream, moment, tool, error text. whats_new lists the latest fixes and features.";
+export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back; if it answers status 'cutting', call cut_clip_status with the job code instead of cutting again), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use plan_my_clips when the user asks what to clip today or which campaign they can actually earn from: it takes their views per clip (or account size) and returns only campaigns that can pay at that size, with moments, the rule checklist, a caption with the required tags and cut_clip arguments (most campaigns pay nothing below a floor, so a new account's answer differs from the ranking). Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views (each row also says what a new account's typical clip is likely to earn and the floor), and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. A result with found: false or a next field is an answer, not a failure: tell the user plainly and follow next (for a streamer whose stream is not saved, that is offering watch_streamer). Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do. If something heistclips did went wrong (an error, a broken or silent clip, wrong moments), offer report_a_bug and, if the user agrees, file it with everything you already know: stream, moment, tool, error text. whats_new lists the latest fixes and features.";
 
 // A tool result may carry `log`: analytics fields for this call. It never reaches the client.
 const withLog = (result, log) => Object.defineProperty(result, "log", { value: log, enumerable: false });
@@ -241,10 +242,29 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // cut_clip_status call waits. Both sit well inside every client's tool timeout.
 const CUT_WAIT_MS = Number(process.env.HC_CUT_WAIT_MS) || 45000, STATUS_WAIT_MS = 40000;
 
+// Outcomes that are answers, not failures: the call was understood and the honest reply is
+// "nothing there to read" or "not that window". They go back WITHOUT isError and with a `next`
+// step; `err` still goes to PostHog, so our analytics keep seeing them. Why: the Claude
+// directory counts every isError result as a failed call (find_moments: 13.5% "tool errors"
+// on 2026-11-19, which is what these were). A genuine failure (a cut that broke, a post the
+// platform refused, an exception) keeps isError and the report_a_bug hint.
+export const ANSWERS = new Set(["live_no_vod", "no_vods", "youtube", "no_channel", "kick_no_channel", "kick_no_vod", "kickvod_missing", "vod_missing", "clip_missing", "clip_no_vod", "no_name", "not_public",
+  "too_long", "too_short", "bad_window", "past_end", "no_campaign", "clip_gone", "no_queue"]);
+export function cutNext(err) {
+  if (err === "too_long") return `Pick a window of ${MAX_CLIP_S} seconds or less inside the moment (for example start = t_start_s, end = t_start_s + ${MAX_CLIP_S}) and call cut_clip again. Nothing was charged.`;
+  if (err === "too_short" || err === "bad_window") return `Widen the window to at least ${MIN_CLIP_S} seconds (end - start) and call cut_clip again. Nothing was charged.`;
+  if (err === "past_end") return "Use a start inside the stream: t_start_s from find_clip_moments for this stream. Nothing was charged.";
+  if (err === "not_public") return "This stream's video is subscriber-only or deleted, so no one can cut it. Pick a moment from another stream (find_clip_moments). Nothing was charged.";
+  return sourceNext(err);
+}
+
 function cutResult(d, polls = 0) {
   const log = { err: d.ok ? undefined : d.err || "unknown", platform: d.platform, layout: d.layout, clip_secs: d.seconds, source_quality: d.source_quality, megabytes: d.megabytes, cut_ms: d.cut_in_ms, polls, ...(d.timing || {}) };
   const { timing, err, total_ms, platform, ...pub } = d;
-  if (!d.ok) return withLog({ ...text(pub), isError: !d.need }, log);
+  if (!d.ok) {
+    const answer = ANSWERS.has(d.err), next = answer && cutNext(d.err);
+    return withLog({ ...text(next ? { ...pub, next } : pub), isError: !d.need && !answer }, log);
+  }
   return withLog(text({ ...pub, next: "Give the user the download link. To post it, call post_clip with clip_id, account, platform and a caption." }), log);
 }
 // Three lanes: the same cutter under three paths (api/v1/cut.js, cut2.js, cut3.js), each its
@@ -334,8 +354,13 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
   if (name === "clipping_campaign_details") {
     const snap = await latestSnapshot();
     const q = String(args.campaign || "").trim().toLowerCase();
-    const c = snap.campaigns.find((x) => x.id === q || x.slug === q || q.includes(x.id) || q.endsWith("/" + x.slug) || q.includes(x.id.split("-")[0]));
-    if (!c) return { ...text("No live campaign matches that. Use rank_clipping_campaigns to list them."), isError: true };
+    // An assistant often passes the campaign's title ("Tokyo Girl") instead of its id: match
+    // that too, on letters and digits only, the highest-ranked campaign first.
+    const flat = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "");
+    const c = (q && snap.campaigns.find((x) => x.id === q || x.slug === q || q.includes(x.id) || q.endsWith("/" + x.slug) || q.includes(x.id.split("-")[0])))
+      || (flat(q).length >= 4 && snap.campaigns.find((x) => flat(x.title).includes(flat(q))));
+    // A campaign that ended or a mistyped id is an answer: say so and point at the live list.
+    if (!c) return withLog(text({ found: false, campaign: String(args.campaign || "").slice(0, 120), message: "No live campaign matches that: it may have ended or run out of budget, or the id is mistyped.", next: "Call rank_clipping_campaigns (filter all) to list the live campaigns, then call this again with one of their ids.", campaigns: tag(`${SITE}/gta-6-clipping-campaigns`) }), { err: "no_campaign" });
     return text({ generated_at: snap.generated_at, rank: snap.campaigns.indexOf(c) + 1, of: snap.campaigns.length, ...c, page: tag(`${SITE}/campaigns/${c.slug}`) });
   }
   if (name === "find_clip_moments") {
@@ -381,16 +406,22 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
     }
     const r = await fetch(BASE + "/api/v1/post", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(280000),
       body: JSON.stringify(name === "post_clip" ? { ...args, op: "post", via: "mcp" } : { op: "status", account: args.account, via: "mcp" }) });
-    let d = await r.json().catch(() => ({ ok: false, error: "heistclips did not answer (" + r.status + ")." }));
+    let d = await r.json().catch(() => ({ ok: false, err: "http_" + r.status, error: "heistclips did not answer (" + r.status + ")." }));
     if (d.manage) d.manage = tag(d.manage); if (d.connect) d.connect = tag(d.connect);
     delete d.open;
-    return d.ok ? text(d) : { ...text(d), isError: !(d.needs_connect || d.not_open_yet) };
+    const { err, ...pub } = d;
+    if (d.ok) return text(pub);
+    // Not connected yet and not open yet are steps, not failures; a clip past its 72 hours is an
+    // answer. Everything else (a platform that refused the upload, a bad argument) stays an error,
+    // now with a code: on 2026-11-19 six post_clip failures were logged as a bare "error".
+    const answer = ANSWERS.has(err);
+    return withLog({ ...text(answer ? { ...pub, next: "Cut the moment again with cut_clip (same source, start and end), then post the new clip_id." } : pub), isError: !(d.needs_connect || d.not_open_yet || answer) }, { err: err || "post_failed" });
   }
   if (name === "my_clip_queue" || name === "watch_streamer") {
     const d = await queueTool(name, args, meta.caller);
     if (d.ok) return text(d);
     const { err, ...pub } = d;
-    return withLog({ ...text(pub), isError: !pub.need }, err ? { err } : {});
+    return withLog({ ...text(pub), isError: !pub.need && !ANSWERS.has(err) }, err ? { err } : {});
   }
   if (name === "live_gta_streams") {
     const [tw, kk] = await Promise.all([liveGtaStreams(40), liveKickGta(20).catch(() => [])]);
@@ -412,7 +443,8 @@ async function readBody(req) {
 // already known, so the assistant can OFFER to file it. It is never filed without the user.
 const NO_HINT = new Set(["report_a_bug", "request_a_feature", "list_feature_requests", "upvote_feature_request", "whats_new"]);
 // A call we refused because of what was passed (a 5-minute window, a wrong code) is not a bug.
-const CALLER_ERRS = new Set(["too_long", "too_short", "bad_time", "bad_window", "bad_account", "bad_job", "past_end", "account_cap", "caller_account_cap", "rate_limited", "no_credits", "bad_input", "youtube", "no_name"]);
+const CALLER_ERRS = new Set(["too_long", "too_short", "bad_time", "bad_window", "bad_account", "bad_job", "past_end", "account_cap", "caller_account_cap", "rate_limited", "no_credits", "bad_input", "youtube", "no_name",
+  "bad_platform", "bad_clip_id", "bad_queue_link", "watchlist_full"]);
 export function withBugHint(out, tool, args = {}) {
   if (!out || !out.isError || out.noBugHint || NO_HINT.has(tool) || CALLER_ERRS.has(out.log && out.log.err)) return out;
   const sc = out.structuredContent || {};

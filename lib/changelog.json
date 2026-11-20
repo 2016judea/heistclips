@@ -1,5 +1,32 @@
 [
   {
+    "id": "the-connector-tells-you-what-to-do",
+    "date": "2026-11-19",
+    "type": "improved",
+    "title": "The connector tells you what to do next",
+    "body": "When a stream has no saved video, a link points at nothing, or a clip window is too long, the connector now says so plainly and offers the next step, like watching that streamer for you. It no longer shows these as errors.",
+    "link": "/connect",
+    "at": "2026-11-20T00:55:51.421Z",
+    "langs": {
+      "de": {
+        "title": "Der Connector sagt dir, was als Nächstes kommt",
+        "body": "Wenn ein Stream kein gespeichertes Video hat, ein Link ins Leere führt oder ein Clip-Fenster zu lang ist, sagt der Connector das jetzt klar und bietet den nächsten Schritt an, zum Beispiel diesen Streamer für dich zu beobachten. Er zeigt das nicht mehr als Fehler an."
+      },
+      "fr": {
+        "title": "Le connecteur te dit quoi faire ensuite",
+        "body": "Quand un stream n'a pas de vidéo enregistrée, qu'un lien ne mène à rien ou qu'une fenêtre de clip est trop longue, le connecteur le dit clairement et propose l'étape suivante, comme surveiller ce streamer pour toi. Il ne l'affiche plus comme une erreur."
+      },
+      "pt": {
+        "title": "O conector diz o que fazer em seguida",
+        "body": "Quando uma live não tem vídeo salvo, um link não leva a nada ou a janela do clipe é longa demais, o conector agora diz isso com clareza e oferece o próximo passo, como acompanhar esse streamer para você. Ele não mostra mais isso como erro."
+      },
+      "es": {
+        "title": "El conector te dice qué hacer después",
+        "body": "Cuando un stream no tiene video guardado, un enlace no lleva a nada o la ventana del clip es demasiado larga, el conector ahora lo dice claro y ofrece el siguiente paso, como vigilar a ese streamer por ti. Ya no lo muestra como un error."
+      }
+    }
+  },
+  {
     "id": "live-moments-work-on-every-live-stream",
     "date": "2026-11-19",
     "type": "fixed",
