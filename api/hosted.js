@@ -14,6 +14,7 @@ import { BRAND_FILES } from "./checkout.js";
 import { serverEvent } from "../lib/track.js";
 
 const SITE = "https://heistclips.com";
+const PMC = process.env.STRIPE_PMC || "pmc_1UdYSABzD4mN8eODaB1CkgfW";
 const TWITCH_REDIRECT = SITE + "/oauth/twitch/callback";
 export const twitchOAuthOn = () => !!(process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET);
 
@@ -93,11 +94,7 @@ async function twitchCallback(req, res, u) {
 }
 
 // ---- checkout -----------------------------------------------------------------------------------
-// Card (with Apple Pay and Google Pay) and Link only: they settle at once. A bank debit completes
-// the session unpaid and pays days later, and stripe-router forwards only
-// checkout.session.completed, so such a campaign would never be funded (seen on the live
-// checkout 2026-11-20: "Bank, $5 back").
-export function hostedSessionForm(c, { origin }) {
+export function hostedSessionForm(c, { origin, pmc }) {
   const r = c.rules;
   const f = new URLSearchParams({
     mode: "payment",
@@ -122,8 +119,6 @@ export function hostedSessionForm(c, { origin }) {
     "payment_intent_data[metadata][kind]": "hosted",
     "payment_intent_data[metadata][campaign]": c.id,
     locale: "auto",
-    "payment_method_types[0]": "card",
-    "payment_method_types[1]": "link",
     // Branded per session, as the clip packs are (api/checkout.js): the account is Brick & Mortar's.
     "branding_settings[display_name]": "heistclips",
     "branding_settings[background_color]": "#0b0b0d",
@@ -134,6 +129,7 @@ export function hostedSessionForm(c, { origin }) {
     "branding_settings[icon][type]": "file",
     "branding_settings[icon][file]": BRAND_FILES.icon,
   });
+  if (pmc) f.set("payment_method_configuration", pmc);
   return f;
 }
 
@@ -148,15 +144,16 @@ async function checkout(b, req) {
   await putJSON(H.P.campaign(c.id), c, { maxAge: 0 });
   await putJSON(H.P.ownerCampaign(b.k, c.id), { at: c.created }, { maxAge: 0 });
   if (!process.env.STRIPE_SECRET_KEY) return [503, { ok: false, error: "Payments are not set up on this server." }];
-  const post = (logo = true) => {
-    const f = hostedSessionForm(c, { origin: originOf(req) });
+  const post = (pmc, logo = true) => {
+    const f = hostedSessionForm(c, { origin: originOf(req), pmc });
     if (!logo) for (const k of [...f.keys()]) if (/^branding_settings\[(logo|icon)\]/.test(k)) f.delete(k);
     return fetch("https://api.stripe.com/v1/checkout/sessions", { method: "POST", headers: { authorization: "Bearer " + process.env.STRIPE_SECRET_KEY, "content-type": "application/x-www-form-urlencoded" }, body: f });
   };
-  // A test-mode key (previews, local) does not know the live logo files: retry without them
-  // rather than show no checkout.
-  let r = await post(), s = await r.json();
-  if (!r.ok) { r = await post(false); s = await r.json(); }
+  // A test-mode key (previews, local) knows neither the live payment-method config nor the live
+  // logo files: fall back step by step rather than show no checkout.
+  let r = await post(PMC), s = await r.json();
+  if (!r.ok && PMC) { r = await post(null); s = await r.json(); }
+  if (!r.ok) { r = await post(null, false); s = await r.json(); }
   if (!r.ok) return [502, { ok: false, error: (s.error && s.error.message) || "Stripe did not answer." }];
   return [200, { ok: true, url: s.url, campaign: c.id, total: c.total, fee: c.fee, fee_pct: c.fee_pct }];
 }
