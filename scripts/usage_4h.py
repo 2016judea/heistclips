@@ -4,6 +4,10 @@
 Writes two JSON files ({rows, meta}) to the directory given as argv[1]:
   heistclips_usage_4h.json  visitors, clips by where they were made, checkouts, payments
   heistclips_entry.json     people by how they first arrived, and how many made a clip
+  heistclips_mcp.json       connector tool calls per 4-hour block, by caller (from 2026-11-19 11:00 CT)
+  heistclips_directory.json Anthropic's own numbers for the Claude listing, copied from
+                            scripts/directory_snapshots.json (hand-entered from claude.ai/directory/manage/heistclips;
+                            no API — add a row each time someone reads the page)
 
 Sources: PostHog (HogQL, creds in ~/Desktop/workspace/bricks/.env) and Stripe Checkout
 (live key read from the heistclips Vercel project). Counting rules are in meta and in
@@ -105,9 +109,31 @@ select multiIf(first_url ilike '%src=mcp%' or (first_url ilike '%/clip?q=%&t=%' 
   count() people, sum(did) clipped from p group by ch order by people desc"""
 entry = [{"channel": c, "people": n, "clipped": k, "clip_rate": round(100 * k / n) if n else 0} for c, n, k in hog(ENTRY)]
 
+# Connector tool calls by caller. mcp_tool_call began 2026-11-19 17:16 UTC, so the series starts with the
+# 8 AM-noon CT block that day. Our own scripts, test benches and the clip desk are left out.
+MCP_START = datetime(2026, 11, 19, 8, tzinfo=CT)
+OURS = "('heistclips-desk','heistclips-verify','claude-test-bench','eng-lead-qa','vscode-agent-host','BrickBlueBot')"
+CALLER = """multiIf(properties.client_ua ilike 'Claude-User%' or (properties.client='claude' and properties.client_ua is null), 'claude',
+  properties.client='chatgpt', 'chatgpt', properties.client_ua='Clipbot', 'clipbot', 'other')"""
+mcp = {}
+for b, who, n, bad in hog(f"""select {B} b, {CALLER} who, count(), countIf(properties.ok = false) from events where event='mcp_tool_call'
+  and coalesce(properties.client,'') != 'script' and coalesce(properties.client_ua,'') not in {OURS}
+  and coalesce(properties.client_ua,'') not like 'hc-%' group by b, who"""):
+    mcp.setdefault(b[:16], {})[who] = (n, bad)
+mcp_rows, t = [], MCP_START
+while t <= now:
+    k = t.strftime("%Y-%m-%dT%H:%M"); m = mcp.get(k, {}); g = lambda w, i=0: m.get(w, (0, 0))[i]
+    mcp_rows.append({"bucket_start": t.isoformat(), "calls_claude": g("claude"), "calls_chatgpt": g("chatgpt"), "calls_clipbot": g("clipbot"),
+                     "calls_other": g("other"), "calls_total": sum(v[0] for v in m.values()), "claude_no_result": g("claude", 1),
+                     "partial": t + timedelta(hours=4) > now, "data_through": now.strftime("%b %-d, %-I:%M %p") + " Central"})
+    t += timedelta(hours=4)
+directory = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "directory_snapshots.json")))
+
 stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
 code = open(__file__).read()
 meta = [{"label": "usage_4h.py", "value": code, "type": "code", "lang": "python"}, {"label": "Built", "value": stamp}]
 json.dump({"rows": rows, "meta": meta}, open(os.path.join(OUT, "heistclips_usage_4h.json"), "w"))
 json.dump({"rows": entry, "meta": meta}, open(os.path.join(OUT, "heistclips_entry.json"), "w"))
-print(json.dumps(rows[-3:], indent=0)); print(json.dumps(entry, indent=0))
+json.dump({"rows": mcp_rows, "meta": meta}, open(os.path.join(OUT, "heistclips_mcp.json"), "w"))
+json.dump({"rows": directory, "meta": meta}, open(os.path.join(OUT, "heistclips_directory.json"), "w"))
+print(json.dumps(rows[-3:], indent=0)); print(json.dumps(entry, indent=0)); print(json.dumps(mcp_rows, indent=0))
