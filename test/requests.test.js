@@ -24,3 +24,33 @@ test("board items carry response and shipped_at, and the page shows them", () =>
   assert.equal(closeOut(c), "");
   assert.match(closeOut({ status: "building", response: "On it" }), /<b>Building<\/b> — On it/);
 });
+
+// Board item rmwp8atut (2026-11-20) was "clip ishwspped gta 6": an ask for a streamer's clips,
+// misspelled. It goes to /clip as IShowSpeed; real requests that mention clips or GTA still file.
+test("a sentence asking for a streamer's clips goes to /clip, typos included", async () => {
+  const { streamCheck, askedName, nearName } = await import("../lib/requests.js");
+  const chan = (login, name, vods = [{}]) => ({ login, name, is_live: false, vods });
+  const deps = {
+    getChannel: async (l) => (l === "ishowspeed" ? chan("ishowspeed", "IShowSpeed") : l === "kaicenat" ? chan("kaicenat", "KaiCenat") : l === "youtube" ? chan("youtube", "YouTube") : l === "tinyguy" ? chan("tinyguy", "tinyguy") : null),
+    searchChannels: async (t) => (/^ishwspped$|^ishowspeed$|speed/.test(t) ? [{ login: "ishowspeed", followers: 5e6, live: true }]
+      : /kai/.test(t) ? [{ login: "kaicenat", followers: 1e7, live: false }]
+      : /youtube/.test(t) ? [{ login: "youtube", followers: 2e6, live: false }]
+      : /tiny/.test(t) ? [{ login: "tinyguy", followers: 40, live: false }]
+      : /spoiler/.test(t) ? [{ login: "spoilerking", followers: 50000, live: true }] : []),
+  };
+  assert.deepEqual(await streamCheck("clip ishwspped gta 6", "", deps), { kind: "Twitch channel", q: "ishowspeed", name: "IShowSpeed" });
+  assert.equal((await streamCheck("ishowspeed gta 6 clips", "", deps)).q, "ishowspeed");
+  assert.equal((await streamCheck("kai cenat gta 6", "", deps)).q, "kaicenat");
+  assert.equal((await streamCheck("xqc", "", { getChannel: async () => chan("xqc", "xQc"), searchChannels: async () => [] })).q, "xqc");
+  // Real requests, including ones already on the board, are not streams.
+  for (const t of ["Clip YouTube streams", "Spoiler filter", "clip spoiler filter", "Post clip directly to TikTok/YouTube from the connector", "Facecam-over-gameplay vertical layout", "clip with captions", "gta 6 clips"])
+    assert.equal(await streamCheck(t, "", deps), null, t);
+  assert.equal(await streamCheck("clip tinyguy gta 6", "", deps), null, "a 40-follower channel is not who they meant");
+  assert.equal(await streamCheck("clip ishwspped gta 6", "with subtitles please", deps), null, "a detail line means they wrote a request");
+  assert.equal(askedName("clip ishwspped gta 6").key, "ishwspped");
+  assert.equal(askedName("ishwspped"), null);
+  assert.equal(nearName("ishwspped", "ishowspeed"), true);
+  assert.equal(nearName("xqc", "xqcow"), false);
+  assert.equal(nearName("kaicenat", "kaicenat"), true);
+  assert.equal(nearName("spoiler", "spoilerking"), false);
+});

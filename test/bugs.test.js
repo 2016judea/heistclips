@@ -88,7 +88,7 @@ test("/requests shows the Bug tag, the filter and the bug form in every language
     assert.ok(html, lang);
     assert.match(html, /id="r1"[^>]*data-kind="bug"/, lang); assert.match(html, /id="r2"[^>]*data-kind="feature"/, lang);
     assert.equal((html.match(/class="st st-bug"/g) || []).length, 1, lang + ": one Bug tag, on the bug");
-    for (const need of ['name="kind" value="bug"', 'name="what_happened"', 'name="expected"', 'name="source"', 'id="reqfilter"', 'data-kind="bug"', "data-ph-bug=", "requests.js?v=8"]) assert.ok(html.includes(need), lang + " " + need);
+    for (const need of ['name="kind" value="bug"', 'name="what_happened"', 'name="expected"', 'name="source"', 'id="reqfilter"', 'data-kind="bug"', "data-ph-bug=", "requests.js?v=9"]) assert.ok(html.includes(need), lang + " " + need);
   }
   assert.ok(pages.de.includes("Bug melden") && pages.fr.includes("Signaler un bug") && pages.pt.includes("Reportar um bug") && pages.es.includes("Reportar un bug"));
 });

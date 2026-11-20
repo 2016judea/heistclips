@@ -371,7 +371,7 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
   if (name === "request_a_feature") {
     if (!args.title) return text({ ok: false, needs: "Ask the user what they want heistclips to do, then call again with it as title." });
     const r = await submit(args, "mcp:" + caller, caller);
-    if (r.stream) return text({ ok: false, filed: false, looks_like_stream: r.kind, message: `Not filed: "${args.title}" is a ${r.kind}, not a feature request. Find its moments with find_clip_moments (source "${r.q}") or open the clip link. If the user really meant it as a request, call again with not_a_stream true.`, find_clip_moments_source: r.q, open: tag(r.clip) });
+    if (r.stream) return text({ ok: false, filed: false, looks_like_stream: r.kind, message: `Not filed: "${args.title}" is a ${r.kind}${r.name ? ` (${r.name})` : ""}, not a feature request. Find its moments with find_clip_moments (source "${r.q}") or open the clip link. If the user really meant it as a request, call again with not_a_stream true.`, find_clip_moments_source: r.q, open: tag(r.clip) });
     if (!r.ok) return { ...text({ ok: false, error: r.error }), isError: true };
     if (r.item) await notify(r.item, r.contact, "MCP").catch(() => null);
     return text({ ok: true, id: r.id, duplicate: !!r.duplicate, message: r.duplicate ? "That is already on the board; it was not filed twice. Offer to upvote it." : "Filed on the public board and sent to the builder.", board: tag(SITE + "/requests#" + r.id) });

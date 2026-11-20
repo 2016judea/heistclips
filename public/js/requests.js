@@ -115,7 +115,7 @@ f.addEventListener("submit", async (e) => {
   if (j.stream) {
     // A stream pasted into the request box: send them to the clip tool instead of the board.
     ph("request_stream_redirect", { kind: j.kind });
-    msg.innerHTML = `That’s a ${esc(j.kind)}, not a request. <a href="/clip?q=${encodeURIComponent(j.q)}">Find its moments in the clip tool →</a> <button type="button" class="linkbtn" id="fileanyway">It’s a request, file it</button>`;
+    msg.innerHTML = `That’s a ${esc(j.kind)}${j.name ? ` (${esc(j.name)})` : ""}, not a request. <a href="/clip?q=${encodeURIComponent(j.q)}">Find its moments in the clip tool →</a> <button type="button" class="linkbtn" id="fileanyway">It’s a request, file it</button>`;
     document.getElementById("fileanyway").onclick = () => { f.dataset.force = "1"; f.requestSubmit(); };
     return;
   }
