@@ -179,3 +179,15 @@ test("end to end in memory: fund, verify, submit, track, earn, export", async ()
   const other = await T.submitClip({ account, campaign: "other-1", url: "https://www.tiktok.com/@clipper1/video/1" }, { snapshot: snapFn, deps, now: NOW });
   assert.equal(other.log.err, "not_hosted"); assert.match(other.out.message, /contentrewards\.com/);
 });
+
+test("hosted Checkout: budget and fee as two lines, branded, card and Link only (no delayed bank debit)", async () => {
+  const { hostedSessionForm } = await import("../api/hosted.js");
+  const c = H.draftCampaign({ ownerKey: H.newOwnerKey(), channel: { login: "somestreamer", name: "SomeStreamer" }, rules: { ...RULES, budget: 250 }, now: NOW });
+  const f = hostedSessionForm(c, { origin: "https://heistclips.com" });
+  assert.equal(f.get("line_items[0][price_data][unit_amount]"), "25000");
+  assert.equal(f.get("line_items[1][price_data][unit_amount]"), "2500");
+  assert.equal(f.get("metadata[kind]"), "hosted"); assert.equal(f.get("metadata[product]"), "heistclips"); assert.equal(f.get("metadata[campaign]"), c.id);
+  assert.equal(f.get("branding_settings[display_name]"), "heistclips");
+  assert.deepEqual(f.getAll("payment_method_types[0]").concat(f.getAll("payment_method_types[1]")), ["card", "link"]);
+  assert.equal(f.get("payment_method_configuration"), null);
+});
