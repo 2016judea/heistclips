@@ -19,6 +19,7 @@ import { createAccount } from "../lib/accounts.js";
 import { planMyClips } from "../lib/plan.js";
 import { floorLine } from "../lib/atsize.js";
 import { loadTrend } from "../lib/trend.js";
+import { verifyAccount, submitClip, myEarnings } from "../lib/hostedtool.js";
 
 const SITE = "https://heistclips.com";
 const BASE = process.env.HC_BASE || SITE; // where this server reaches its own /api/v1 functions
@@ -138,6 +139,35 @@ export const TOOLS = [
     annotations: { title: "Watch a streamer", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
   },
   {
+    name: "verify_account",
+    title: "Verify my TikTok or YouTube account for campaigns hosted on heistclips",
+    description: "Proves the user owns the TikTok or YouTube account they post clips from, so its posts can be submitted to clipping campaigns hosted on heistclips (submit_clip). The first call returns a short code (hc-…); the user puts it anywhere in their TikTok bio or YouTube channel description and saves; the second call with the same arguments reads the public profile and confirms. Leave account out on the very first call: a heistclips account code (hc_…) is returned; keep it and pass it back on every later call. Use for 'verify my TikTok', 'link my YouTube channel', 'how do I get paid for clips on heistclips'. Never asks for a password and never posts anything.",
+    inputSchema: { type: "object", properties: {
+      platform: { type: "string", enum: ["tiktok", "youtube"], description: "Where the user posts clips" },
+      handle: { type: "string", description: "The account: TikTok @name or profile link; YouTube @handle, channel link or UC… channel id" },
+      account: { type: "string", description: "The heistclips account code (hc_…) from an earlier call. Leave out on the very first call." },
+    }, required: ["platform", "handle"], additionalProperties: false },
+    annotations: { title: "Verify my account", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: true },
+  },
+  {
+    name: "submit_clip",
+    title: "Submit my posted clip to a campaign hosted on heistclips",
+    description: "Submits a clip the user already posted on TikTok or YouTube Shorts to a clipping campaign hosted on heistclips, so its views count and earn. Pass the post's link and the campaign (an id or slug from rank_clipping_campaigns where hosted is 'hosted on heistclips'). Checks, from the post's public page: it was posted from an account the user verified (verify_account), it is fresh (posted after the campaign opened and within 48 hours), it is on a platform the campaign pays for, its length, and the caption tags the campaign requires. A post that fails a check is not submitted and the answer says what to fix. Views are then read every 30 minutes. Campaigns on Content Rewards, Ssemble, Vyro or Clipstake are submitted on those sites, not here. Never moves money: payouts are made on heistclips.com.",
+    inputSchema: { type: "object", properties: {
+      account: { type: "string", description: "The heistclips account code (hc_…) that verified the posting account" },
+      campaign: { type: "string", description: "The campaign id (h…) or slug of a campaign hosted on heistclips" },
+      url: { type: "string", description: "The posted clip's link: tiktok.com/@name/video/…, a TikTok short link, or youtube.com/shorts/…" },
+    }, required: ["account", "campaign", "url"], additionalProperties: false },
+    annotations: { title: "Submit a clip", readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
+  },
+  {
+    name: "my_earnings",
+    title: "My clipping earnings on heistclips: views, earned, owed, paid",
+    description: "What the user has earned from campaigns hosted on heistclips: each submitted clip with its latest view count and earnings, totals earned, paid and still owed, by week, which accounts are verified, and whether a payout destination is set (with the page where they set it). Read-only. Payouts are sent weekly from heistclips.com, never through the chat. Use for 'how much have I made', 'my earnings', 'did my clip count'.",
+    inputSchema: { type: "object", properties: { account: { type: "string", description: "The heistclips account code (hc_…)" } }, required: ["account"], additionalProperties: false },
+    annotations: { title: "My earnings", ...ANN },
+  },
+  {
     name: "live_gta_streams",
     title: "Who is live streaming GTA right now on Twitch and Kick",
     description: "Twitch and Kick channels live streaming GTA (GTA VI and GTA V) right now, by viewers, with language, each with a link to find its clip moments. Use for 'who is streaming GTA 6 right now', 'which live stream should I clip'.",
@@ -235,7 +265,7 @@ async function logCall(tool, ok, ms, meta, extra = {}) {
 }
 const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
 
-export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back; if it answers status 'cutting', call cut_clip_status with the job code instead of cutting again), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use plan_my_clips when the user asks what to clip today or which campaign they can actually earn from: it takes their views per clip (or account size) and returns only campaigns that can pay at that size, with moments, the rule checklist, a caption with the required tags and cut_clip arguments (most campaigns pay nothing below a floor, so a new account's answer differs from the ranking). Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views (each row also says what a new account's typical clip is likely to earn and the floor), and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. A result with found: false or a next field is an answer, not a failure: tell the user plainly and follow next (for a streamer whose stream is not saved, that is offering watch_streamer). Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do. If something heistclips did went wrong (an error, a broken or silent clip, wrong moments), offer report_a_bug and, if the user agrees, file it with everything you already know: stream, moment, tool, error text. whats_new lists the latest fixes and features.";
+export const INSTRUCTIONS = "heistclips is a clipping tool for people who cut Twitch and Kick streams into TikTok, YouTube Shorts and Instagram Reels clips, often for clipping campaigns that pay $ per 1K views. Use find_clip_moments when the user wants highlights, the best moments, or something to clip from a stream, a VOD or a live channel. Use cut_clip to turn a moment into a finished 9:16 MP4 without the web editor (keep the account code it returns and pass it back; if it answers status 'cutting', call cut_clip_status with the job code instead of cutting again), then post_clip to post it to YouTube Shorts or TikTok with the user's caption once they have connected their account through the link it gives. Use plan_my_clips when the user asks what to clip today or which campaign they can actually earn from: it takes their views per clip (or account size) and returns only campaigns that can pay at that size, with moments, the rule checklist, a caption with the required tags and cut_clip arguments (most campaigns pay nothing below a floor, so a new account's answer differs from the ranking). Use rank_clipping_campaigns for which campaign pays most per clip or per 1K views (each row also says what a new account's typical clip is likely to earn and the floor), and clipping_campaign_details for one campaign. live_gta_streams lists who is live. watch_streamer puts a streamer on the user's watchlist and my_clip_queue lists the clips that are ready from it, each matched to the campaign that pays; keep the account code these return and pass it back. Quote numbers exactly as returned and always show the page and cut_it links. A result with found: false or a next field is an answer, not a failure: tell the user plainly and follow next (for a streamer whose stream is not saved, that is offering watch_streamer). Works in any language: reply in the language the user writes in, and pass their words verbatim to request_a_feature if they ask for something heistclips cannot do. If something heistclips did went wrong (an error, a broken or silent clip, wrong moments), offer report_a_bug and, if the user agrees, file it with everything you already know: stream, moment, tool, error text. whats_new lists the latest fixes and features. Campaigns marked hosted on heistclips are funded on heistclips itself: the user verifies the account they post from with verify_account, posts the clip themselves, submits the link with submit_clip, and checks views and earnings with my_earnings; payouts are made on heistclips.com, never in the chat.";
 
 // A tool result may carry `log`: analytics fields for this call. It never reaches the client.
 const withLog = (result, log) => Object.defineProperty(result, "log", { value: log, enumerable: false });
@@ -309,6 +339,7 @@ const brief = (c, i) => ({
   budget_left: c.budget_left, days_left: c.days_left, clippers: c.clippers_count, approved_clips: c.approved_clips,
   platforms: c.platforms, is_gta: c.is_gta, apply_first: c.approval_required,
   page: tag(`${SITE}/campaigns/${c.slug}`), join: c.source_url, join_on: c.marketplace || "Content Rewards",
+  ...(c.hosted ? { hosted: c.hosted_label, submit_with: "submit_clip (after verify_account)" } : {}),
 });
 
 export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) {
@@ -427,6 +458,24 @@ export async function callTool(name, args = {}, caller = "mcp", meta = NO_META) 
     if (d.ok) return text(d);
     const { err, ...pub } = d;
     return withLog({ ...text(pub), isError: !pub.need && !ANSWERS.has(err) }, err ? { err } : {});
+  }
+  if (name === "verify_account") {
+    // A first call makes the account, under the same per-caller limit as cut_clip (lib/callers.js).
+    const newAccount = async () => {
+      const no = await newAccountRefusal(meta.caller);
+      if (no) { const { err, ...pub } = no; return { refused: pub, err }; }
+      return { code: (await createAccount("mcp", meta.caller)).code };
+    };
+    const { out, log } = await verifyAccount(args, { newAccount });
+    return withLog(text(out), log);
+  }
+  if (name === "submit_clip") {
+    const { out, log } = await submitClip(args, { snapshot: latestSnapshot });
+    return withLog(text(out), log);
+  }
+  if (name === "my_earnings") {
+    const { out, log } = await myEarnings(args, { tag });
+    return withLog(text(out), log);
   }
   if (name === "live_gta_streams") {
     const [tw, kk] = await Promise.all([liveGtaStreams(40), liveKickGta(20).catch(() => [])]);

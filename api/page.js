@@ -16,6 +16,8 @@ import { loadEnded, findEnded } from "../lib/ended.js";
 import { campaignsFor } from "../lib/autopilot.js";
 import * as NEW from "../lib/changelog.js";
 import { whatsNewPage, whatsNewFeed } from "../lib/changelogpage.js";
+import { launchPage, earningsPage } from "../lib/launchpage.js";
+import { loadCampaign, loadFunded, toCampaign, P as HP } from "../lib/hosted.js";
 
 const INDEXNOW_KEY = "066cce158f4bc73e04afdcb48bb189f7";
 // Data files are meant to be fetched by other sites and by assistants.
@@ -34,7 +36,7 @@ export function sitemapUrls(snap, trend = null) {
   const streamerPath = (s) => (s.platform === "kick" ? "/streamers/kick/" : "/streamers/") + s.login;
   const inSnap = (snap.streamers || []).filter((s) => s.platform === "twitch" ? /^[a-z0-9_]{3,25}$/.test(s.login) : /^[a-z0-9_-]{2,40}$/.test(s.login));
   const clipped = ((trend && trend.streams) || []).filter((s) => s.platform === "twitch" && /^[a-z0-9_]{3,25}$/.test(s.login)); // a Kick page needs its snapshot row
-  const urls = ["/", "/clip", "/twitch-clip-maker", "/kick-clip-maker", "/most-clipped-streams", "/queue", "/post", "/requests", NEW.PATH, "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", "/streamers", "/guides", "/data", "/pricing", "/connect", "/about", "/privacy", "/terms",
+  const urls = ["/", "/clip", "/twitch-clip-maker", "/kick-clip-maker", "/most-clipped-streams", "/queue", "/post", "/requests", NEW.PATH, "/gta-6-clipping-campaigns", "/gta-6-clipping-rates-today", "/streamers", "/guides", "/data", "/pricing", "/connect", "/launch", "/about", "/privacy", "/terms",
     ...GUIDES.map((g) => "/guides/" + g.slug),
     ...snap.campaigns.map((c) => "/campaigns/" + c.slug),
     ...new Set([...inSnap, ...clipped].map(streamerPath))];
@@ -48,6 +50,12 @@ export function sitemapUrls(snap, trend = null) {
 async function campaignCtx(snap, slug) {
   const c = snap.campaigns.find((x) => x.slug === slug) || snap.campaigns.find((x) => slug.endsWith("-" + x.id.split("-")[0]));
   if (c) return c.slug !== slug ? { redirect: c.slug } : { campaign: c };
+  // A campaign funded on heistclips in the last minute is not in this instance's snapshot yet.
+  const hm = slug.match(/-(h[0-9a-f]{12})$/);
+  if (hm) {
+    const [hc, hf, hs] = await Promise.all([loadCampaign(hm[1]), loadFunded(hm[1]), getJSON(HP.state(hm[1]), { fresh: true }).catch(() => null)]);
+    if (hc && hf) return hc.slug !== slug ? { redirect: hc.slug } : { campaign: toCampaign(hc, hf, hs) };
+  }
   // Not live any more: the page stays, marked ended, with what pays now (lib/ended.js).
   const e = findEnded(await loadEnded().catch(() => ({})), slug);
   if (e && e.campaign.slug !== slug) return { redirect: e.campaign.slug };
@@ -74,7 +82,7 @@ async function streamerCtx(snap, kick, login) {
 }
 
 // Paths that are English on purpose (or are files, not pages): a /de/… request goes to the English one.
-const ENGLISH_ONLY = /^\/(?:for\/|data\/|llms(?:-full)?\.txt$|sitemap\.xml$|robots\.txt$|\.well-known\/|post$|[0-9a-f]{32}\.txt$)/;
+const ENGLISH_ONLY = /^\/(?:launch$|earnings$|for\/|data\/|llms(?:-full)?\.txt$|sitemap\.xml$|robots\.txt$|\.well-known\/|post$|[0-9a-f]{32}\.txt$)/;
 
 export default async function handler(req, res) {
   const u = new URL(req.url, "https://heistclips.com");
@@ -164,6 +172,8 @@ export default async function handler(req, res) {
       return send(res, 200, ratesPage(snap, hist));
     }
     if (p === "/queue") return send(res, 200, queuePage(), undefined, 3600);
+    if (p === "/launch") return send(res, 200, launchPage(snap), undefined, 600);
+    if (p === "/earnings") return send(res, 200, earningsPage(), undefined, 3600);
     if (p === "/pricing") return send(res, 200, R.pricingPage(), undefined, 3600);
     if (p === "/connect") return send(res, 200, R.connectPage(MCP_TOOLS), undefined, 3600);
     if (p === "/about") return send(res, 200, R.aboutPage(), undefined, 3600);

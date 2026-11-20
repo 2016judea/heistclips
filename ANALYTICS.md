@@ -165,3 +165,36 @@ nothing. To see real events: a headless Chrome started with
 `--disable-blink-features=AutomationControlled`, then `posthog.register({ qa_test: true })` in the
 page so the test's events can be filtered out, or the iOS simulator's Safari. A run that renders or
 cuts a clip also sends the test header (above), so the clip itself is not counted.
+
+## Hosted campaigns (`/launch`, `/earnings`, `api/hosted.js`, `lib/hosted.js`; from 2026-11-20)
+
+The owner funnel, in order. Browser events from `public/js/launch.js` carry `page: "launch"`;
+none carries a channel name, an owner key, an email or anything typed.
+
+| Event | When | Properties |
+|---|---|---|
+| `launch_view` | /launch loaded | `has_key` (this browser has started before), `back_from` (`stripe`, `stripe_cancel`, `twitch`) |
+| `launch_channel` | a Twitch channel was accepted | `verified` (already proven on this browser), `oauth` (Twitch sign-in offered) |
+| `launch_signin_start` | the proof step began | `how` (`code_shown`, `twitch_oauth`) |
+| `launch_check_miss` | Check pressed and the code is not in the bio or panels yet | |
+| `launch_verified` | the channel is proven theirs | `via` (`bio_code`, `twitch_oauth`) |
+| `launch_pitch_shown` | their own last streams were read | `flagged`, `clipped`, `no_clip_found`, `vods`, `heistclips_clips` |
+| `launch_checkout_start` | Pay pressed | `budget`, `rate_per_1k`, `floor_views`, `cap_per_clip`, `platforms`, `fee_pct` |
+| `launch_checkout_open` / `launch_checkout_error` | Stripe Checkout opened / the form was refused | `campaign` / `field` |
+| `launch_paid` | back from Stripe and the campaign is funded | `campaign` |
+| `launch_dash_view`, `launch_reject` | the owner dashboard opened / a submission was rejected | `campaigns` |
+| `hosted_campaign_paid` (server) | `fund()` in `lib/hosted.js`, once per paid campaign (webhook or return, whichever is first) | `budget`, `fee`, `fee_pct`, `livemode`, `via` |
+| `hosted_reject` (server) | an owner rejected a submission | `platform` |
+
+The clipper side, all server events (the connector has no browser). The distinct id is a keyed
+hash of the account code (`acct_…`), never the code itself.
+
+| Event | When | Properties |
+|---|---|---|
+| `clipper_verify` | `verify_account` | `result` (`started` = code handed out, `passed`), `platform`, `new_account` |
+| `clipper_submit` | `submit_clip` | `ok`, `reason` when refused (`not_verified`, `not_fresh`, `before_campaign`, `too_long`, `too_short`, `missing_tags`, `wrong_platform`, `duplicate`, `budget_out`, `not_hosted`, `no_campaign`, `bad_link`, `post_unreadable`, `bad_account`), `platform`, `campaign` |
+| `earnings_view`, `payout_set_web` | /earnings opened / a payout email saved (browser, `page: "earnings"`) | `subs`, `payout_set` |
+| `payout_set` (server) | a payout destination was stored | `method` (`paypal`) |
+
+Funnel read: `launch_view` → `launch_verified` → `launch_pitch_shown` → `launch_checkout_start` →
+`hosted_campaign_paid`; clippers `clipper_verify result=started` → `passed` → `clipper_submit ok`.

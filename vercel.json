@@ -27,6 +27,10 @@
     {
       "path": "/api/youtube?op=tick",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/hosted?op=track",
+      "schedule": "15,45 * * * *"
     }
   ],
   "rewrites": [
@@ -53,6 +57,10 @@
     {
       "source": "/oauth/:provider(youtube|tiktok)/callback",
       "destination": "/api/v1/post?op=callback&provider=:provider"
+    },
+    {
+      "source": "/oauth/twitch/callback",
+      "destination": "/api/hosted?op=twitch_callback"
     },
     {
       "source": "/experiences/:id(exp_[A-Za-z0-9]+)/:rest*",

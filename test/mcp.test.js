@@ -7,9 +7,9 @@ test("every tool sets readOnly, destructive and openWorld hints explicitly", () 
   for (const t of TOOLS) for (const k of ["readOnlyHint", "destructiveHint", "openWorldHint", "idempotentHint"]) assert.equal(typeof t.annotations[k], "boolean", `${t.name}.${k}`);
 });
 
-test("only the board tools and cut_clip write, and none is destructive", () => {
+test("only the board tools, cut/post and the hosted verify/submit write, and none is destructive", () => {
   const writers = TOOLS.filter((t) => !t.annotations.readOnlyHint).map((t) => t.name).sort();
-  assert.deepEqual(writers, ["cut_clip", "post_clip", "posting_account", "report_a_bug", "request_a_feature", "upvote_feature_request", "watch_streamer"]);
+  assert.deepEqual(writers, ["cut_clip", "post_clip", "posting_account", "report_a_bug", "request_a_feature", "submit_clip", "upvote_feature_request", "verify_account", "watch_streamer"]);
   assert.ok(TOOLS.every((t) => t.annotations.destructiveHint === false));
 });
 

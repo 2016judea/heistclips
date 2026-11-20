@@ -1,5 +1,32 @@
 [
   {
+    "id": "campaigns-hosted-on-heistclips",
+    "date": "2026-11-20",
+    "type": "new",
+    "title": "Campaigns hosted on heistclips",
+    "body": "Streamers can now fund a clipping campaign right here at heistclips.com/launch. Clippers verify the account they post from once, post the clip, submit the link from the chat with submit_clip, and check views and pay with my_earnings.",
+    "link": "/launch",
+    "at": "2026-11-20T17:21:10.498Z",
+    "langs": {
+      "de": {
+        "title": "Kampagnen direkt auf heistclips",
+        "body": "Streamer können jetzt eine Clipping-Kampagne direkt auf heistclips.com/launch finanzieren. Clipper bestätigen einmal das Konto, von dem sie posten, posten den Clip, reichen den Link im Chat mit submit_clip ein und sehen Views und Verdienst mit my_earnings."
+      },
+      "fr": {
+        "title": "Des campagnes hébergées sur heistclips",
+        "body": "Les streamers peuvent maintenant financer une campagne de clipping ici, sur heistclips.com/launch. Les clippeurs vérifient une fois le compte d’où ils publient, publient le clip, soumettent le lien depuis le chat avec submit_clip et suivent vues et gains avec my_earnings."
+      },
+      "pt": {
+        "title": "Campanhas hospedadas no heistclips",
+        "body": "Streamers agora podem financiar uma campanha de clipes aqui mesmo, em heistclips.com/launch. Clipadores verificam uma vez a conta de onde postam, postam o clipe, enviam o link pelo chat com submit_clip e veem views e ganhos com my_earnings."
+      },
+      "es": {
+        "title": "Campañas alojadas en heistclips",
+        "body": "Los streamers ya pueden financiar una campaña de clipping aquí mismo, en heistclips.com/launch. Los clippers verifican una vez la cuenta desde la que publican, publican el clip, envían el enlace desde el chat con submit_clip y ven vistas y ganancias con my_earnings."
+      }
+    }
+  },
+  {
     "id": "clip-youtube-streams",
     "date": "2026-11-19",
     "type": "new",

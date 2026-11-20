@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { getJSON, putJSON, secretPath } from "../lib/store.js";
 import { PACKS } from "../lib/render.js";
 import { serverEvent } from "../lib/track.js";
+import { fund } from "../lib/hosted.js";
 
 export const config = { api: { bodyParser: false } };
 
@@ -46,6 +47,7 @@ export default async function handler(req, res) {
   if (ev.type !== "checkout.session.completed") return res.end(JSON.stringify({ ignored: ev.type }));
   const s = ev.data.object;
   if (!s.metadata || s.metadata.product !== "heistclips") return res.end(JSON.stringify({ ignored: "not ours or not paid" }));
+  if (s.metadata.kind === "hosted") return res.end(JSON.stringify(await fund(s, "webhook")));
   const r = await grant(s, "webhook");
   res.end(JSON.stringify(r));
 }

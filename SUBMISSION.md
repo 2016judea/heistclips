@@ -200,3 +200,21 @@ Use cases, data handling and testing answers are locked on a published server (m
   sentence above (Save again; the edit stayed in review, its "Submitted" time reset to just now). The
   Review tab shows both changes, Live vs In review. The one-liner is unchanged. server.json never carried
   the line.
+
+## 2026-11-20: three tools for campaigns hosted on heistclips (19 tools)
+
+Added `verify_account` (readOnly false, destructive false, idempotent true), `submit_clip` (readOnly
+false, destructive false, idempotent false) and `my_earnings` (readOnly true). Each has a `title` and all
+four hints. **None moves money** (directory policy §4A): payouts are made by hand on heistclips.com from
+the weekly CSV; `my_earnings` only reads. Hosted campaigns are ranked by what they pay a clip, exactly
+like every other campaign, and labelled "hosted on heistclips", never "sponsored" (§4C).
+
+Test cases (run against the live endpoint after deploy; a refused outcome is an answer, not isError):
+- verify_account `{platform:"tiktok", handle:"@heistclips_"}` → `verified:false`, a code `hc-xxxxxx`, a new
+  account code, and where to put the code.
+- submit_clip with that account, a hosted campaign id and a post from an unverified account → `accepted:false`,
+  `next` says call verify_account.
+- my_earnings with that account → totals 0, `payout_page` link.
+
+**Listing (Aidan's step):** the directory shows the old tool list until someone opens the full editor →
+Tools & prompts → **Sync from server** → Save. The edit then goes to review; the listing stays Published.

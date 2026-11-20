@@ -48,6 +48,30 @@ email when new clips land.
 | `api/autopilot.js` | The cron, and its cap: 25 channels or 85 s a run, 2 Kick channels, 30 mails a day. |
 | `scripts/dev_local.mjs` | Local server whose storage is a local folder. Use it for anything that writes. |
 
+## Hosted campaigns: fund a campaign on heistclips
+
+`/launch`: a streamer, manager or studio proves their Twitch channel (Twitch sign-in, or a code in
+their bio or a panel), sees what chat flagged in their own last streams, sets a budget, a rate per
+1,000 views, a view floor, a cap per clip, platforms (TikTok, YouTube Shorts) and rules, and pays
+with Stripe Checkout: the budget plus a platform fee (`HOSTED_FEE_PCT`, default 10). The campaign
+is listed with every other one, "hosted on heistclips", ranked only by what it pays a clip.
+
+Clippers use three connector tools: `verify_account` (a code in their TikTok bio or YouTube
+description, read from the public profile), `submit_clip` (the posted link; checks the account,
+freshness, platform, length and required tags) and `my_earnings` (read-only). A cron reads every
+submission's public view count every 30 minutes, keeps the curve and flags sudden jumps for the
+owner without rejecting them. Earnings = rate x views / 1000 past the floor, capped per clip,
+until the budget is spent. **No tool and no endpoint moves money**: payouts are made by hand from
+the weekly CSV (`GET /api/hosted?op=payouts&week=YYYY-Www`, admin only).
+
+| Path | What |
+|---|---|
+| `lib/hosted.js` | Entities, checks, the view curve's suspect flag, the ledger, payout lines, the tracker. |
+| `lib/hostedtool.js` | `verify_account`, `submit_clip`, `my_earnings`. |
+| `lib/hostedpitch.js` | The owner's pitch from their own last streams. |
+| `api/hosted.js` | The owner page's API, Twitch sign-in, Checkout, the dashboard, the cron, the CSV. |
+| `lib/launchpage.js`, `public/js/launch.js`, `public/js/earnings.js` | `/launch` and `/earnings`. |
+
 ## Whop app
 
 heistclips installs into a Whop (app `app_my7kSid9rb0xHU`, in app-store review since 2026-11-19;

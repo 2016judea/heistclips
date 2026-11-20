@@ -581,3 +581,123 @@ came from. Quota math: a live stream polled once a minute = 60 calls × 5 = **30
 hour**; live polling stops at 9,000 of the 10,000, so **~30 stream-hours a day** (e.g. 6
 streams watched for 5 hours), lookups and comment reads (1 unit each, ≤10 a finished stream)
 keep the last 1,000.
+
+# Hosted campaigns — ideal model (written 2026-11-20, before any source was checked)
+
+## Need
+
+Aidan, 2026-11-20: the connector brings clippers (294 Claude accounts in 30 days; 114 of them made
+489 clips) but clippers barely pay (10 hit the free wall, 3 opened checkout, 0 paid). The money in
+clipping sits with whoever funds a campaign, and those owners have almost no way to check the
+views they pay for. So: a streamer, manager or studio funds a campaign **on heistclips**; clippers
+find it, cut it, post it themselves and submit it from inside Claude; we verify each clip, count
+its views and pay clippers weekly on the site. The step we take over for the owner is "is this
+clip real, mine, within my rules, and how many real views did it get". For the clipper it is
+"submit, and know what I earned" without leaving the chat.
+
+## Entities
+
+### Owner — who funds a campaign
+| field | question it answers |
+|---|---|
+| owner key (random, kept in their browser) | who may see this dashboard, with no password |
+| twitch channel: id, login, display name | whose streams are clipped |
+| proof: how ownership was shown (Twitch sign-in, or a code in their bio/panel), when | is this really their channel (nobody funds a campaign for someone else's stream) |
+| email (from Checkout) | who to tell when the budget runs low; who gets a refund |
+| campaigns | what they have running |
+
+### HostedCampaign
+| field | question it answers |
+|---|---|
+| id, slug, title, channel | what clippers are cutting, and the page they land on |
+| budget (clipper money), fee %, fee $, total charged | what the owner paid and what clippers can earn in all |
+| rate per 1K views, view floor, cap per clip | what one clip earns, and from when |
+| platforms | where a clip counts |
+| rules: min/max length, facecam required, required tags, notes | will this clip be accepted |
+| status (draft, funded, ended), funded at, Stripe session | is it live, and is the money real |
+| earned so far, budget left (derived) | how much is left for the next clip |
+| suspect views (derived) | which views should the owner look at before paying |
+
+### ClipperAccount — one verified social account
+| field | question it answers |
+|---|---|
+| heistclips account code (hc_…) | whose earnings these are (the connector's only identity) |
+| platform, handle, channel id (YouTube) | which posts count as theirs |
+| verification code, where it was found (bio), when | did they prove they control it |
+| payout destination (e.g. PayPal email), encrypted | where Aidan sends the money |
+
+### Submission
+| field | question it answers |
+|---|---|
+| id, campaign, clipper account, platform, post URL, post id | which post, for which campaign, by whom |
+| posted at, submitted at | is it fresh (posted after the campaign opened, recently) |
+| author of the post | is it posted from the verified account |
+| length, caption tags present | does it keep the campaign's rules |
+| facecam, right streamer, music | rules a machine cannot read reliably: the owner reviews these |
+| status (counting, rejected by owner) + reason | does it earn |
+
+### ViewReading
+| field | question it answers |
+|---|---|
+| submission, read at, views (public count), source | the view curve |
+| likes, comments at the same moment | do the views look like people (views with no engagement) |
+| viewer country | which views a geo-priced campaign pays for |
+| suspect flag + reason (sudden spike) | which jumps the owner should look at, without auto-rejecting |
+
+### Earning / PayoutLine
+| field | question it answers |
+|---|---|
+| submission, increment, at (from each reading) | when each dollar was earned |
+| budget cap applied | did the budget run out first |
+| week, clipper account, amount, suspect amount | what Aidan pays whom this week |
+| paid at | what is still owed |
+
+## Joins
+Owner → HostedCampaign (owner key hash). HostedCampaign ← Submission (campaign id). Submission →
+ClipperAccount (account code + platform/handle, checked at submit). Submission ← ViewReading
+(submission id). Earnings replay every reading of a campaign in time order against its budget;
+PayoutLine = earnings grouped by ISO week and clipper account. HostedCampaign → the Campaign
+entity above (`marketplace: "heistclips"`), so ranking and plan_my_clips treat it like any other.
+
+## Reality check (filled 2026-11-20, each source read live)
+
+| field | status |
+|---|---|
+| Twitch channel id/login/name | **fills**: anonymous GQL `user(login)` (already used site-wide) |
+| ownership by Twitch sign-in | **fills once a Twitch app is registered** (client id + secret, redirect `https://heistclips.com/oauth/twitch/callback`). Code ships dormant until the env is set |
+| ownership by bio/panel code | **fills**: GQL `user{description panels{... on DefaultPanel{title description linkURL}}}` read anonymously (yourragegaming: bio + 12 panels, 2026-11-20) |
+| pitch: moments chat flagged in their recent VODs | **fills**: `findClipMoments` on their latest VODs (the finder behind /clip) |
+| pitch: how many of those were clipped | **fills for heistclips clips only**: the per-clip trend records (`trend/c/<day>/…~vod~t`), by VOD and 30 s bucket. Clips made elsewhere are not counted; the page says so |
+| owner email | **fills** from Checkout (`customer_details.email`), kept with the funding record in a keyed path |
+| budget, fee, total charged, funded at | **fills**: Stripe Checkout line items + the paid session (webhook via stripe-router, and claim on return) |
+| rate, floor, cap, platforms, length, required tags | **fills**: the owner types them |
+| facecam required | **fills as a rule, can't be checked by machine** in this slice: shown to the owner on each submission as "check" |
+| TikTok: post author, created at, caption, length, play count | **fills from Vercel**: the public video page's `__UNIVERSAL_DATA_FOR_REHYDRATION__` (`author.uniqueId`, `createTime`, `desc`, `video.duration`, `stats.playCount`); read from a throwaway Vercel function in iad1, 2026-11-20, 4 of 4 reads 200 |
+| TikTok: bio for verification | **fills from Vercel**: same blob, `userInfo.user.signature` (2 of 2 profiles) |
+| YouTube: channel, published at, title+description, length, view count | **fills**: Data API `videos.list` part=snippet,statistics,contentDetails, 1 unit per 50 videos (the watch page is bot-walled from Vercel, measured 11/19) |
+| YouTube: channel description for verification | **fills**: `channels.list forHandle` part=snippet, 1 unit |
+| Instagram Reels / X | **can't fill**: no public read of a post's author and views without a login. Left out of the platforms an owner can pick, said on the page |
+| likes/comments beside views | **fills** (TikTok `diggCount`/`commentCount`, YouTube `likeCount`/`commentCount`); stored with each reading |
+| viewer country, bot score | **can't fill**: neither platform publishes a post's audience without the creator's login. Named here; the spike flag is the only bot signal in this slice |
+| payout destination | **fills** when the clipper types it on /earnings; sealed with TOKEN_ENC_KEY |
+| paying the clipper | **not built by design**: Aidan pays from the CSV. No Stripe Connect, and no tool moves money (Claude directory policy §4A) |
+
+### Call
+Build. Every field fills except viewer country / bot score (no public source) and Instagram/X
+(no public author or views); the slice offers TikTok and YouTube Shorts only, and the owner sees
+a curve plus a spike flag rather than a bot score. Twitch sign-in waits on a registered app; the
+bio code covers it until then.
+
+### Expected numbers, written before any result (read them on 2026-12-04)
+
+Base rate for owners: 7 streamer pitches sent 2026-11-19, no campaign funded on heistclips ever.
+- **Funded campaigns by 2026-12-04: 0 to 1.** One is a good result; two or more says owners want
+  this and the pitch should go wider.
+- **Fee revenue: $0** most likely; one campaign at the $100 minimum budget is $10, a $1,000 one
+  is $100 (10% default, `HOSTED_FEE_PCT`).
+- **/launch visitors: 0 to 15**, nearly all from the pitches (no link from the home page yet).
+- **Clipper side, only if a campaign funds:** 3 to 15 verified accounts and 5 to 30 submissions
+  in its first week (base: 114 connector accounts made clips over 30 days, 12 of 107 web makers
+  made 10+ clips in two days). With no funded campaign, verify_account/submit_clip calls ≈ 0.
+- A submission rejected for "not your account" or "not fresh" above 30% of tries says the tool
+  description is unclear, not that clippers cheat.

@@ -10,6 +10,7 @@ import { sitemapUrls } from "./page.js";
 import { sweepOld } from "../lib/blobfiles.js";
 import { archiveEnded } from "../lib/ended.js";
 import { buildTrend } from "../lib/trend.js";
+import { hostedCampaigns } from "../lib/hosted.js";
 
 const SITE = "https://heistclips.com";
 const HOST = "heistclips.com";
@@ -47,7 +48,9 @@ export default async function handler(req, res) {
     return res.end(JSON.stringify({ ok: false, kept_previous: true, crawl: { fetched: crawl.fetched, error: crawl.error, cached: raw.length } }));
   }
   const others = otherCampaigns(mk.cache);
-  const snap = buildSnapshot(raw, Date.now(), others);
+  // Campaigns funded on heistclips (lib/hosted.js), ranked with the rest by what they pay.
+  const hosted = await hostedCampaigns().catch(() => []);
+  const snap = buildSnapshot(raw, Date.now(), others, hosted);
   snap.source = "public campaign pages: Content Rewards (sitemap, /c/discover, its GTA article), Ssemble, Vyro, Clipstake";
   snap.crawl = { fetched: crawl.fetched, freshened: crawl.discover, discover_pages: crawl.discover_pages, renamed: crawl.renamed, new_read: crawl.new_read, live: crawl.live, extra: crawl.extra, error: crawl.error || null, backoff_until: crawl.cache.backoff_until || null, marketplaces: mk.runs };
   let live = [];
