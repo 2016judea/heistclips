@@ -33,9 +33,9 @@ const EN = {
   h1: "Post clips to YouTube and TikTok",
   lede: "Connect once. Then post a clip with its caption from the clip tool, or just ask in Claude: “cut that moment and post it to YouTube”.",
   loading: "Loading…", connect: (p) => `Connect ${p}`, disconnect: "Disconnect",
-  closed: (p) => `Not open yet: waiting on ${p}’s developer approval.`,
+  closed: (p) => `Coming soon: waiting on ${p} to approve heistclips.`,
   how: {
-    youtube: "Google is still reviewing heistclips, so when you connect it shows a “Google hasn’t verified this app” warning. You can still connect: click Advanced, then “Go to heistclips.com”. We only ask for permission to upload. Posts arrive private until the review is done: open YouTube Studio and publish.",
+    youtube: "Google is still reviewing heistclips. Posting to YouTube opens as soon as Google approves it. Until then, download the clip and upload it in YouTube yourself.",
     tiktok: "Posts to your profile, or to your TikTok inbox as a draft. Until TikTok finishes its review, posts arrive private.",
   },
   howH: "How it works",

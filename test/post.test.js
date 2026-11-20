@@ -6,7 +6,7 @@ process.env.TOKEN_ENC_KEY = "ab".repeat(32);
 const { seal, unseal, signState, readState, createAccount, getAccount, keep, creditIds, ACCT, creditCall } = await import("../lib/accounts.js");
 const { pickSegments, filterGraph, hookLines } = await import("../lib/cut.js");
 const { seconds } = await import("../lib/cutjob.js");
-const { storeTokens, accessToken, available } = await import("../lib/social.js");
+const { storeTokens, accessToken, available, COMING_SOON } = await import("../lib/social.js");
 const { postJob } = await import("../lib/postjob.js");
 
 test("OAuth tokens are sealed: the stored value never contains the token, and a wrong key cannot open it", () => {
@@ -55,6 +55,11 @@ test("post_clip says plainly when a platform is not open or not connected, and n
   let r = await postJob({ account: rec.code, clip_id: "a".repeat(40), platform: "youtube", caption: "x" });
   assert.equal(r.ok, false); assert.equal(r.not_open_yet, "youtube");
   process.env.GOOGLE_CLIENT_ID = "id"; process.env.GOOGLE_CLIENT_SECRET = "secret";
+  // YouTube is "coming soon" until Google verifies the app: closed even with credentials set.
+  assert.equal(available("youtube"), false);
+  r = await postJob({ account: rec.code, clip_id: "a".repeat(40), platform: "youtube", caption: "x" });
+  assert.equal(r.not_open_yet, "youtube"); assert.match(r.error, /coming soon/);
+  COMING_SOON.delete("youtube");
   assert.equal(available("youtube"), true);
   r = await postJob({ account: rec.code, clip_id: "a".repeat(40), platform: "youtube", caption: "x" }, "mcp");
   assert.equal(r.needs_connect, "youtube"); assert.match(r.connect, /\/post\?acct=hc_.*&src=mcp$/);
@@ -65,6 +70,7 @@ test("post_clip says plainly when a platform is not open or not connected, and n
   assert.match(r.error, /not on file/);
   assert.equal((await postJob({ account: rec.code, clip_id: "x", platform: "vimeo" })).ok, false);
   delete process.env.GOOGLE_CLIENT_ID; delete process.env.GOOGLE_CLIENT_SECRET;
+  COMING_SOON.add("youtube");
 });
 
 test("the playlist is cut down to the segments that cover the window", () => {
