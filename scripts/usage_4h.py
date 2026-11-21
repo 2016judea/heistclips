@@ -69,9 +69,18 @@ vid = {"production": "fG8DSofZmlrV1q56"}  # STRIPE_SECRET_KEY, production
 req = urllib.request.Request(f"https://api.vercel.com/v1/projects/heistclips/env/{vid['production']}?teamId={TEAM}",
     headers={"Authorization": "Bearer " + E["VERCEL_TOKEN"]})
 SK = json.load(urllib.request.urlopen(req))["value"]
-req = urllib.request.Request("https://api.stripe.com/v1/checkout/sessions?" + urllib.parse.urlencode({"limit": 100, "created[gte]": int(START.timestamp())}),
-    headers={"Authorization": "Basic " + base64.b64encode((SK + ":").encode()).decode()})
-sessions = json.load(urllib.request.urlopen(req))["data"]
+# Paginate: the account is shared, and on 11/20 other products' sessions pushed the 11/19 purchases
+# off a single 100-row page (payments read 3 at 16:02 CT, then 1 at 18:58 CT).
+sessions, after = [], None
+while True:
+    q = {"limit": 100, "created[gte]": int(START.timestamp())}
+    if after: q["starting_after"] = after
+    req = urllib.request.Request("https://api.stripe.com/v1/checkout/sessions?" + urllib.parse.urlencode(q),
+        headers={"Authorization": "Basic " + base64.b64encode((SK + ":").encode()).decode()})
+    page = json.load(urllib.request.urlopen(req))
+    sessions += page["data"]
+    if not page.get("has_more") or not page["data"]: break
+    after = page["data"][-1]["id"]
 TEST_LANG_SESSIONS = {"6687a453-8dc5-4761-8089-9009f095dc63", "98f7dbb9-e675-4ac6-8355-f8ca65bfad89", "7b46103b-d9ab-4b01-adef-013d4fdf2809"}
 # 2026-11-19 21:59-22:05 CT: verifying the per-session branding (f3ccf60) live. Four from a headless
 # Chrome on this Mac (device below, St Paul) and three API calls with no device.
